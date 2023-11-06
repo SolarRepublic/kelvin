@@ -1,0 +1,61 @@
+{
+  "name": "@solar-republic/kelvin",
+  "version": "0.0.1",
+  "description": "Encrypted NoSQL RDBMS",
+  "homepage": "https://starshell.net/",
+  "repository": "github:SolarRepublic/kelvin",
+  "license": "MIT",
+  "author": {
+    "name": "Blake Regalia",
+    "email": "blake.regalia@gmail.com",
+    "url": "https://blake-regalia.com/"
+  },
+  "type": "module",
+  "main": "dist/cjs/main.js",
+  "module": "dist/mjs/main.js",
+  "types": "dist/mjs/main.d.ts",
+  "exports": {
+    ".": {
+      "require": "./dist/cjs/main.js",
+      "import": "./dist/mjs/main.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist/cjs",
+    "dist/mjs"
+  ],
+  "scripts": {
+    "clean": "rm -rf dist/*",
+    "build:mjs": "tsc -p tsconfig.mjs.json && npx tsc-esm-fix --target='dist/mjs'",
+    "build:cjs": "tsc -p tsconfig.cjs.json && npx tsc-esm-fix --target='dist/cjs'",
+    "build": "yarn build:mjs && yarn build:cjs",
+    "preview": "js-beautify dist/main.mjs > dist/main-pretty.mjs",
+    "test": "node --loader ts-node/esm",
+    "test:all": "yarn test test/**.ts",
+    "debug": "node --inspect-brk --loader ts-node/esm"
+  },
+  "devDependencies": {
+    "@blake.regalia/belt": "^0.21.1",
+    "@blake.regalia/eslint-config-elite": "^0.3.3",
+    "@blake.regalia/tsconfig": "^0.1.2",
+    "@solar-republic/types": "^0.1.4",
+    "@types/chai": "^4.3.9",
+    "@types/node": "^20.8.10",
+    "@types/web": "^0.0.119",
+    "@typescript-eslint/parser": "^6.9.1",
+    "chai": "^4.3.10",
+    "chai-bites": "^0.1.2",
+    "esformatter": "^0.11.3",
+    "eslint": "^8.53.0",
+    "ts-toolbelt": "^9.6.0",
+    "tsc-esm-fix": "^2.20.17",
+    "typescript": "^5.2.2"
+  },
+  "dependencies": {
+    "@blake.regalia/belt": "^0.21.1"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
