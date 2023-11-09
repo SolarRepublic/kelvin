@@ -1,13 +1,12 @@
-import type {DomainCode, DomainLabel, ItemIdent, ItemCode, ItemKey, ItemPath, SerVaultHub, IndexLabel, IndexValue, IndexPosition} from './types';
+import type {DomainCode, DomainLabel, ItemIdent, ItemCode, ItemPath, SerVaultHub, IndexLabel, IndexValue, IndexPosition, BucketKey} from './types';
 import type {VaultClient} from './vault-client';
 
-import type {Dict, Nilable} from '@blake.regalia/belt';
+import type {JsonObject, Nilable} from '@blake.regalia/belt';
 
-import {escape_regex, fold, odem, ofe} from '@blake.regalia/belt';
+import {fold, odem, ofe} from '@blake.regalia/belt';
 
 import {b92_to_index, index_to_b92} from './data';
 import {Bug} from './errors';
-import {LockTarget_StorageLocal} from './ids';
 
 
 export type ItemIdentPattern = ItemIdent | RegExp;
@@ -17,45 +16,28 @@ export class VaultHub {
 	protected _a_domains: SerVaultHub['domains'] = [];
 	protected _a_items = [] as unknown as SerVaultHub['items'];
 	protected _h_indexes: SerVaultHub['indexes'] = {};
+	protected _a_buckets = [] as unknown as SerVaultHub['buckets'];
+	protected _a_locations = [] as unknown as SerVaultHub['locations'];
 
 	// caches
 	protected _h_domains: Record<DomainLabel, DomainCode> = {};
 	protected _h_items: Record<ItemIdent, ItemCode> = {};
 
 	// index of first gap in index sequence
-	protected _i_empty = 0;
+	protected _i_next_item = 0;
 
+	// update counter
+	protected _c_updates = 0;
 
 	constructor(
 		protected _k_vault: VaultClient,
 		_g_hub: SerVaultHub
 	) {
-		this._load(_g_hub);
+		this._update(_g_hub);
 	}
 
-	protected _load(g_hub: SerVaultHub): void {
-		// load fields from ser
-		Object.assign(this, {
-			_a_domains: g_hub.domains,
-			_a_items: g_hub.items,
-			_h_indexes: g_hub.indexes,
-		});
-
-		// cache domain lookup
-		this._h_domains = fold(this._a_domains, (si_domain, i_domain) => ({
-			[si_domain]: index_to_b92(i_domain) as DomainCode,
-		}));
-
-		// record non-zero index of first gap if it exists (zero means no gap)
-		let i_empty = 0;
-
-		// cache item lookup; skip empty values
-		this._h_items = fold(this._a_items, (si_item, i_item) => si_item? {
-			[si_item]: i_item as ItemCode,
-		}: (i_empty ||= i_item, {}));
-
-		// save field
-		this._i_empty = i_empty;
+	get vault(): VaultClient {
+		return this._k_vault;
 	}
 
 	// returns the isolated form of the current vault, ready for JSON serialization
@@ -64,10 +46,13 @@ export class VaultHub {
 			domains: this._a_domains,
 			items: this._a_items,
 			indexes: this._h_indexes,
+			buckets: this._a_buckets,
+			locations: this._a_locations,
 		};
 
 		return g_hub;
 	}
+
 
 	/**
 	 * Access the list contained by the given index label at the specified value
@@ -90,6 +75,44 @@ export class VaultHub {
 		return a_list;
 	}
 
+
+	/**
+	 * @internal
+	 * @param g_hub 
+	 */
+	_update(g_hub: SerVaultHub): void {
+		// increment update counter
+		this._c_updates += 1;
+
+		// load fields from ser
+		Object.assign(this, {
+			_a_domains: g_hub.domains,
+			_a_items: g_hub.items,
+			_h_indexes: g_hub.indexes,
+			_a_buckets: g_hub.buckets,
+			_a_locations: g_hub.locations,
+		});
+
+		// cache domain lookup
+		this._h_domains = fold(this._a_domains, (si_domain, i_domain) => ({
+			[si_domain]: index_to_b92(i_domain) as DomainCode,
+		}));
+
+		// record non-zero index of first gap if it exists (zero means no gap)
+		let i_next_item = 0;
+
+		// cache item lookup; skip empty values
+		this._h_items = fold(this._a_items, (si_item, i_item) => si_item? {
+			[si_item]: i_item as ItemCode,
+		}: (i_next_item ||= i_item, {}));
+
+		// save field
+		this._i_next_item = i_next_item;
+
+		// 
+	}
+
+
 	/**
 	 * Encode the given name to its domain code
 	 * @param si_domain - the domain name
@@ -107,12 +130,13 @@ export class VaultHub {
 	}
 
 	/**
-	 * Lookup an item's index by its key. Index starts at 1 so that falsy return value means item not found.
+	 * Encode the given domain and item path to its item code.
+	 * Codes start at 1 so a falsy check on return value means item was not found.
 	 * @param si_domain - the domain name
 	 * @param sr_item - the item path
 	 * @returns the non-zero index of the item if it was found, `undefined` otherwise
 	 */
-	locateItemKey(si_domain: DomainLabel, sr_item: ItemPath): ItemCode | undefined {
+	encodeItem(si_domain: DomainLabel, sr_item: ItemPath): ItemCode | undefined {
 		// encode domain and build item key
 		const si_item = this._h_domains[si_domain]+':'+sr_item as ItemKey;
 
@@ -144,7 +168,7 @@ export class VaultHub {
 		if(i_code) return i_code;
 
 		// a gap exists
-		let i_empty = this._i_empty;
+		let i_empty = this._i_next_item;
 		if(i_empty) {
 			// set index to use
 			i_code = i_empty as ItemCode;
@@ -159,7 +183,7 @@ export class VaultHub {
 			i_empty = this._a_items.indexOf('' as ItemIdent, i_code+1);
 
 			// save to field
-			this._i_empty = i_empty > 0? i_empty: 0;
+			this._i_next_item = i_empty > 0? i_empty: 0;
 		}
 		// no gaps; append
 		else {
@@ -249,7 +273,7 @@ export class VaultHub {
 		]));
 	}
 
-	locateInIndex(si_index: IndexLabel, s_value: IndexValue, z_item: ItemIdentPattern): Nilable<[ItemCode[], [IndexPosition, ItemIdent][]]> {
+	findCodesInIndex(si_index: IndexLabel, s_value: IndexValue, z_item: ItemIdentPattern): Nilable<[ItemCode[], [IndexPosition, ItemIdent][]]> {
 		// access the index
 		const a_list = this._access_index(si_index, s_value);
 
@@ -299,9 +323,9 @@ export class VaultHub {
 		return [a_list, a_found];
 	}
 
-	findInIndex(si_index: IndexLabel, s_value: IndexValue, z_item: ItemIdentPattern): Nilable<ItemIdent[]> {
+	findIdentsInIndex(si_index: IndexLabel, s_value: IndexValue, z_item: ItemIdentPattern): Nilable<ItemIdent[]> {
 		// attempt to match item pattern
-		const a_findings = this.locateInIndex(si_index, s_value, z_item);
+		const a_findings = this.findCodesInIndex(si_index, s_value, z_item);
 
 		// index or its value don't exist
 		if(!a_findings) return a_findings;
@@ -310,16 +334,20 @@ export class VaultHub {
 		return a_findings[1].map(([, si_item]) => si_item);
 	}
 
-	deleteFromIndex(si_index: IndexLabel, s_value: IndexValue, z_item: ItemIdentPattern): Promise<> {
-		const a_findings = this.locateInIndex(si_index, s_value, z_item);
+	getItemBucket(i_code: ItemCode): BucketKey {
+		// get bucket code
+		const i_bucket = this._a_locations[i_code];
 
-		if(!a_findings) return 0;
+		// resolve to bucket key
+		return this._a_buckets[i_bucket];
+	}
 
-		const [a_list, a_found] = a_findings;
+	async replaceItem(i_code: ItemCode, g_item: JsonObject) {
+		// get bucket key for item
+		const si_bucket = this.getItemBucket(i_code);
 
-		for(const i_found of a_found) {
-
-		}
+		// load bucket
+		const [n_version, g_schema] = await this._k_vault.readBucket(si_bucket);
 	}
 }
 

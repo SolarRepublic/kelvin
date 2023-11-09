@@ -1,12 +1,22 @@
+import type {A} from 'ts-toolbelt';
+
 import type {DomainCode, DomainLabel} from './types';
+
+import type {VaultClient} from './vault-client';
 
 import {index_to_b92} from './data';
 import {LockTarget_StorageLocal, SI_KEY_STORAGE_HUB} from './ids';
 import {VaultHub} from './vault-hub';
 
 
-export class WritableHub extends VaultHub {
-	protected async _save_hub() {
+type HeldLock = A.Type<number, 'held-lock'>;
+
+export class Writer {
+	constructor(protected _k_vault: VaultClient) {
+
+	}
+
+	protected async _save_hub(i_lock: HeldLock) {
 		// isolate
 		const g_hub = this._isolate();
 
@@ -43,5 +53,17 @@ export class WritableHub extends VaultHub {
 			// return new domain code
 			return sb92_domain;
 		});
+	}
+
+	deleteFromIndex(si_index: IndexLabel, s_value: IndexValue, z_item: ItemIdentPattern): Promise<> {
+		const a_findings = this.findCodesInIndex(si_index, s_value, z_item);
+
+		if(!a_findings) return 0;
+
+		const [a_list, a_found] = a_findings;
+
+		for(const i_found of a_found) {
+
+		}
 	}
 }

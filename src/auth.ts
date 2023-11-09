@@ -1,11 +1,13 @@
 import type {SerVaultHashParams} from './types';
 
-import {base93_to_buffer, buffer_to_base93, zero_out} from '@blake.regalia/belt';
+import {ATU8_NIL, base93_to_buffer, buffer, buffer_to_base93, concat2, text_to_buffer, zero_out} from '@blake.regalia/belt';
 
 import {ATU8_SHA256_STARSHELL, SensitiveBytes, aes_gcm_decrypt, aes_gcm_encrypt} from '@solar-republic/crypto';
 import {argon2id_hash} from '@solar-republic/crypto/argon2';
 
-import {GC_DERIVE_ROOT_CIPHER, GC_DERIVE_ROOT_SIGNING, GC_HKDF_COMMON, NB_ARGON2_MEMORY, N_ARGON2_ITERATIONS, XG_UINT64_MAX} from './constants';
+import {sha256_sync} from '@solar-republic/crypto/sha256';
+
+import {GC_DERIVE_ROOT_CIPHER, GC_DERIVE_ROOT_SIGNING, GC_HKDF_COMMON, G_DEFAULT_HASHING_PARAMS, NB_ARGON2_MEMORY, N_ARGON2_ITERATIONS, XG_UINT64_MAX} from './constants';
 import {IntegrityCheckError} from './errors';
 
 
@@ -26,17 +28,17 @@ export interface RootKeysData {
 /**
  * Import a crypto key from raw bytes
  * @param atu8_data - the key's raw bytes
- * @param w_kdf - key derivation function
+ * @param w_algorithm - algorithm argument passed to `importKey()`
  * @param a_usages - intended usages
  * @param b_extractable - if `true`, the key will be extractable
  * @returns the imported key
  */
 export const import_key = async(
 	atu8_data: Uint8Array,
-	w_kdf: AlgorithmIdentifier | RsaHashedImportParams | EcKeyImportParams | HmacImportParams | AesKeyAlgorithm,
+	w_algorithm: AlgorithmIdentifier | RsaHashedImportParams | EcKeyImportParams | HmacImportParams | AesKeyAlgorithm,
 	a_usages: KeyUsage[],
 	b_extractable=false
-): Promise<CryptoKey> => crypto.subtle.importKey('raw', atu8_data, w_kdf, b_extractable, a_usages);
+): Promise<CryptoKey> => crypto.subtle.importKey('raw', atu8_data, w_algorithm, b_extractable, a_usages);
 
 
 /**
@@ -189,7 +191,7 @@ export async function derive_tandem_root_keys(
 	atu8_phrase: Uint8Array,
 	atu8_entropy: Uint8Array,
 	xg_nonce_old: bigint,
-	g_params_old: SerVaultHashParams,
+	g_params_old: SerVaultHashParams=G_DEFAULT_HASHING_PARAMS,
 	b_export_new=false
 ): Promise<RootKeysData> {
 	// prep new nonce (this is intended to be reproducible in case program exits while rotating keys)
@@ -218,9 +220,7 @@ export async function derive_tandem_root_keys(
 	// automatic migration; set new params from const
 	const g_params_new: SerVaultHashParams = {
 		...g_params_old,
-		algorithm: 'argon2id',
-		iterations: N_ARGON2_ITERATIONS,
-		memory: NB_ARGON2_MEMORY,
+		...G_DEFAULT_HASHING_PARAMS,
 	};
 
 	// derive the two root byte sequences for this session

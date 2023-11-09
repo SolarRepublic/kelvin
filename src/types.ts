@@ -1,6 +1,6 @@
 import type {A} from 'ts-toolbelt';
 
-import type {Dict, IntStr, JsonObject, JsonValue, NaiveBase64, NaiveHexLower} from '@blake.regalia/belt';
+import type {Dict, IntStr, NaiveBase64, NaiveHexLower, JsonObject, JsonValue, JsonArray} from '@blake.regalia/belt';
 
 
 /**
@@ -24,7 +24,7 @@ export type ItemIdent = A.Type<`${string}:${string}`, 'item-ident'>;
 export type ItemPath = A.Type<string, 'item-path'>;
 
 /**
- * Encodes an Item to a base92 index
+ * Encodes an Item to a uint index
  */
 export type ItemCode = A.Type<number, 'item-code'>;
 
@@ -45,42 +45,31 @@ export type IndexValue = A.Type<string, 'index-value'>;
 export type IndexPosition = A.Type<number, 'index-position'>;
 
 
+/**
+ * Encodes a Bucket to a uint index
+ */
+export type BucketCode = A.Type<number, 'bucket-code'>;
+
+/**
+ * The plaintext storage key of a bucket
+ */
+export type BucketKey = A.Type<string, 'bucket-key'>;
+
+
 export type LockSpecifier = A.Type<string, 'lock-specifier'>;
 
 export type LockId = A.Type<string, 'lock-id'>;
 
 
-/**
- * Describes a compatible backing key-value store
- */
-export interface JsonKeyValueStore<
-	h_schema extends JsonObject=JsonObject,
-> {
-	get<
-		w_value extends JsonValue=JsonValue,
-		si_key extends string=string,
-	>(si_key: si_key): Promise<
-		JsonValue extends w_value
-			? h_schema[si_key]
-			: w_value
-	>;
 
-	getMany<
-		h_types extends Dict<JsonValue>=Dict<JsonValue>,
-	>(a_keys: string[]): Promise<{
-		[si_key in keyof h_types]: h_types[si_key] | undefined;
-	}>;
-
-	getAll(): Promise<Dict<JsonValue>>;
-
-	set(si_key: string, w_value: JsonValue): Promise<void>;
-
-	setMany(h_set: Dict<JsonValue>): Promise<void>;
-
-	onChange<
-		w_value extends JsonValue=JsonValue,
-	>(si_key: string, fk_changed: (w_value: w_value) => void): VoidFunction;
-}
+type Sequence<
+	w_item,
+	w_key extends number=number,
+> = A.Cast<Omit<Array<w_item>, 'shift' | 'unshift' | 'reverse' | 'sort' | 'indexOf' | 'lastIndexOf' | 'push'> & {
+	indexOf(w_find: w_item, i_from?: number): w_key;
+	lastIndexOf(w_find: w_item, i_from?: number): w_key;
+	push(...items: w_item[]): w_key;
+}, JsonArray>;
 
 
 
@@ -102,6 +91,11 @@ export type SerVaultHashParams = {
 	 * The Argon2id memory parameter, in bytes
 	 */
 	memory: number;
+
+	/**
+	 * The Argon2id parallelism parameter
+	 */
+	parallelism: number;
 };
 
 
@@ -143,68 +137,95 @@ export type SerVaultBase = {
 
 
 
-type Sequence<
-	w_item,
-	w_key extends number=number,
-> = Omit<Array<w_item>, 'shift' | 'unshift' | 'reverse' | 'sort' | 'indexOf' | 'lastIndexOf' | 'push'> & {
-	indexOf(w_find: w_item, i_from?: number): w_key;
-	lastIndexOf(w_find: w_item, i_from?: number): w_key;
-	push(...items: w_item[]): w_key;
+/**
+ * 
+ */
+export type SerShapeFieldSwitch = [
+	/**
+	 * Label of the field
+	 */
+	si_field: string,
+
+	/**
+	 * Index of field being switched on
+	 */
+	i_switch: number,
+
+	/**
+	 * Maps switch values to subschemas
+	 */
+	a_options: JsonValue[] | JsonObject,
+];
+
+export type SerShapeFieldTagged = {
+	s: SerShapeFieldSwitch;
 };
 
+export type SerShapeField = string | SerShapeFieldStruct | SerShapeFieldTagged;
+
+export type SerShapeFieldStruct = [s_label: string, ...a_members: SerShapeField[]];
+
+/**
+ * 
+ */
+export type SerShape = [
+	/**
+	 * Identifies the schema version for this shape's encoding
+	 */
+	n_schema: number,
+
+	/**
+	 * Labels for the key parts of the item
+	 */
+	a_keys: string[],
+
+	/**
+	 * Labels and nested structs for the fields of the item
+	 */
+	a_fields: SerShapeField[],
+];
+
+/**
+ * 
+ */
+export type SerBucket = {
+	/**
+	 * Schema shape of stored items
+	 */
+	shape: SerShape;
+
+	/**
+	 * Locates item to its position in the serialized
+	 */
+	items: Record<ItemCode, JsonArray>;
+};
 
 /**
  * Serialized database hub object
  */
 export type SerVaultHub = {
 	/**
-	 * Domain lookup maps domain name to b92 id.
-	 * append-only
+	 * Domain labels stored in sequence
 	 */
-	// domains: Dict;
 	domains: Sequence<DomainLabel>;
 
-
+	/**
+	 * Item idents stored in a sparse sequence
+	 */
 	items: Sequence<ItemIdent, ItemCode>;
 
-
+	/**
+	 * Indexes keyed by their name, storing a dict of item codes keyed by the index's value
+	 */
 	indexes: Dict<Dict<ItemCode[]>>;
 
-	// /**
-	//  * Ref lookup maps serially incrementing ref id to global key.
-	//  * append-mostly, entries can be deleted but keys can never be re-used
-	//  */
-	// refs: Record<ItemIndex, ItemKey>;
+	/**
+	 * Bucket storage keys stored in sequence
+	 */
+	buckets: Sequence<BucketKey, BucketCode>;
 
-	// /**
-	//  * Stores the index number for the next Ref id.
-	//  */
-	// ref_count: number;
-
-	// /**
-	//  * Alias lookup maps global key to its unique ref id.
-	//  * inverse of "refs"
-	//  */
-	// aliases: Record<ItemKey, ItemIndex>;
+	/**
+	 * Locates each item to the Bucket it is stored in
+	 */
+	locations: Sequence<ItemCode, BucketCode>;
 };
-
-// ({
-// 	'a':'x:a:24115128a789aa9182',
-// 	'','','','','','',
-// 	'b':'DATA',
-// })
-
-/*
-
-999
-"x" - 91
-
-9999
-"xx" - 8463
-
-99999
-"xxx" - 778,687
-
-
-
-*/

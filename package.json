@@ -1,7 +1,7 @@
 {
   "name": "@solar-republic/kelvin",
   "version": "0.0.1",
-  "description": "Encrypted NoSQL RDBMS",
+  "description": "Encrypted NoSQL DBMS backed by JSON key-value store written in TypeScript for the Web",
   "homepage": "https://starshell.net/",
   "repository": "github:SolarRepublic/kelvin",
   "license": "MIT",
@@ -36,7 +36,7 @@
     "debug": "node --inspect-brk --loader ts-node/esm"
   },
   "devDependencies": {
-    "@blake.regalia/belt": "^0.21.1",
+    "@blake.regalia/belt": "^0.22.1",
     "@blake.regalia/eslint-config-elite": "^0.3.3",
     "@blake.regalia/tsconfig": "^0.1.2",
     "@solar-republic/types": "^0.1.4",
@@ -50,10 +50,13 @@
     "eslint": "^8.53.0",
     "ts-toolbelt": "^9.6.0",
     "tsc-esm-fix": "^2.20.17",
-    "typescript": "^5.2.2"
+    "typescript": "^5.2.2",
+    "vite": "^4.5.0",
+    "vitest": "^0.34.6"
   },
   "dependencies": {
-    "@blake.regalia/belt": "^0.21.1"
+    "@blake.regalia/belt": "^0.22.1",
+    "@types/chrome": "^0.0.249"
   },
   "publishConfig": {
     "access": "public"

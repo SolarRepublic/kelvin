@@ -3,6 +3,12 @@ import type {A, U} from 'ts-toolbelt';
 
 export type AllValues<h_any> = h_any[keyof h_any];
 
+export type Exactly<g_obj extends object> = g_obj & {
+	[x: string]: never;
+	[x: number]: never;
+	[x: symbol]: never;
+};
+
 export type UnionToIntersection<w_union> = (
 	w_union extends never? never: (w_arg: w_union) => never
 ) extends (w_arg: infer w_infer) => void? w_infer: never;
@@ -22,7 +28,7 @@ export type KvTuplesToObject<a_keys extends readonly any[], a_values extends rea
 
 {
 	/* eslint-disable @typescript-eslint/no-unused-vars */
-	const t_test: A.Compute<KvTuplesToObject<
+	const g_test: A.Compute<KvTuplesToObject<
 		['foo', 'bar'],
 		['FOO', 'BAR']
 	>> = {
