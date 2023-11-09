@@ -1,5 +1,5 @@
 import type {LockTarget_StorageLocal} from './ids';
-import type {JsonKeyValueStore} from './store';
+import type {KelvinKeyValueStore} from './store';
 import type {SerVaultHub, SerVaultBase, SerVaultHashParams, LockSpecifier, BucketKey, SerBucket} from './types';
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -50,8 +50,8 @@ export type SchemaSession = {
 	[SI_KEY_SESSION_AUTH]: NaiveBase64;
 };
 
-type StoreContent = JsonKeyValueStore<SchemaContent>;
-type StoreSession = JsonKeyValueStore<SchemaSession>;
+type StoreContent = KelvinKeyValueStore<SchemaContent>;
+type StoreSession = KelvinKeyValueStore<SchemaSession>;
 
 // stores the private fields of an Vault instance
 const hm_privates = new WeakMap<VaultClient, VaultFields>();
@@ -68,13 +68,12 @@ const hm_privates = new WeakMap<VaultClient, VaultFields>();
  *   - "@params": tunable parameters to password hashing function
  */
 export class VaultClient {
-	static async connect(
-		k_storage: JsonKeyValueStore,
-		k_session: JsonKeyValueStore,
-		y_locks: LockManager
-	): Promise<VaultClient> {
-		return new VaultClient(k_storage as StoreContent, k_session as StoreSession, y_locks).connect();
-	}
+	// static async connect(
+	// 	k_storage: JsonKeyValueStore,
+	// 	k_session: JsonKeyValueStore
+	// ): Promise<VaultClient> {
+	// 	return new VaultClient(k_storage as StoreContent, k_session as StoreSession).connect();
+	// }
 
 	// storage
 	protected _k_content: StoreContent;
@@ -82,6 +81,9 @@ export class VaultClient {
 
 	// connection state
 	protected _xc_connection = ConnectionState.NOT_CONNECTED;
+
+	// database name
+	protected _si_name!: string;
 
 	// unmarshalled base
 	protected _atu8_entropy!: Uint8Array;
@@ -103,9 +105,8 @@ export class VaultClient {
 	protected _b_dirty = false;
 
 	constructor(
-		k_content: JsonKeyValueStore,
-		k_session: JsonKeyValueStore,
-		protected _y_locks: SimpleLockManager=new SingleThreadedLockManager()
+		k_content: KelvinKeyValueStore,
+		k_session: KelvinKeyValueStore
 	) {
 		this._k_content = k_content as StoreContent;
 		this._k_session = k_session as StoreSession;
@@ -125,18 +126,13 @@ export class VaultClient {
 		});
 	}
 
-	// access the raw lock manager
-	get lockManager(): SimpleLockManager {
-		return this._y_locks;
-	}
-
 	// access the raw content storage instance
-	get contentStore(): JsonKeyValueStore {
+	get contentStore(): KelvinKeyValueStore {
 		return this._k_content;
 	}
 
 	// access the raw session storage instance
-	get sessionStore(): JsonKeyValueStore {
+	get sessionStore(): KelvinKeyValueStore {
 		return this._k_session;
 	}
 
@@ -223,7 +219,7 @@ export class VaultClient {
 		} = hm_privates.get(this)!;
 
 		// decrypt entry. let if fail if cipher key is wrongl
-		const atu8_hub_plain = await this._decrypt_entry(SI_KEY_STORAGE_HUB, atu8_hub_cipher, atu8_vector, dk_cipher);
+		const atu8_hub_plain = await this._decrypt_entry(SI_KEY_STORAGE_HUB+'.'+this._si_name, atu8_hub_cipher, atu8_vector, dk_cipher);
 
 		// attempt to decode
 		let g_hub: SerVaultHub;
@@ -383,17 +379,15 @@ export class VaultClient {
 	 * @param g_root_old 
 	 * @param g_root_new 
 	 * @param f_info 
-	 * @returns new cipher key
 	 */
 	async _rotate_root_key(
 		g_root_old: RootKeyStruct,
 		g_root_new: RootKeyStruct,
 		f_info: ((s_state: string) => void)=F_NOOP
-	): Promise<Uint8Array> {
+	): Promise<void> {
 		// destructure fields
 		const {
 			_atu8_salt,
-			_y_locks,
 			_k_content,
 		} = this;
 
@@ -490,12 +484,12 @@ export class VaultClient {
 
 
 	// initialize the connection
-	async connect(): Promise<this> {
+	async connect(si_name: string): Promise<this> {
 		// set connection state
 		this._xc_connection = ConnectionState.CONNECTING;
 
 		// fetch base object
-		const g_base = await this._k_content.getJson<SerVaultBase>(SI_KEY_STORAGE_BASE);
+		const g_base = await this._k_content.getJson<SerVaultBase>(SI_KEY_STORAGE_BASE+'.'+si_name);
 
 		// not exists
 		if(!g_base) {
@@ -510,9 +504,9 @@ export class VaultClient {
 		this._load_base(g_base);
 
 		// fetch root key
-		const a_root_key = await this._k_session.getJson<SerSessionRootKey>(SI_KEY_SESSION_ROOT);
+		const a_root_key = await this._k_session.getJson<SerSessionRootKey>(SI_KEY_SESSION_ROOT+'.'+si_name);
 
-		// load the root root
+		// load the root key
 		await this._load_root_key(a_root_key);
 
 		// done
@@ -584,7 +578,6 @@ export class VaultClient {
 			_xg_nonce,
 			_g_params,
 			_atu8_signature,
-			_y_locks,
 			_k_session,
 		} = this;
 
@@ -594,7 +587,7 @@ export class VaultClient {
 		f_info('Waiting for session lock');
 
 		// obtain write lock to session
-		await _y_locks.request(SI_LOCK_SESSION_ALL, {mode:'exclusive'}, async() => {
+		await this._k_content.lockAll(async() => {
 			// verbose
 			f_info('Deriving root keys');
 
@@ -675,7 +668,7 @@ export class VaultClient {
 			};
 
 			// write to storage (this will trigger a change and call _load_base again -- that's fine)
-			await this._k_content.setJson(SI_KEY_STORAGE_BASE, g_base);
+			await this._k_content.setJson(SI_KEY_STORAGE_BASE+'.'+this._si_name, g_base);
 
 			// verbose
 			f_info('Done');
@@ -688,11 +681,14 @@ export class VaultClient {
 	) {
 		// cannot create on database that already exists
 		if(this.exists()) {
-			throw new RefuseDestructiveActionError('attempted to register new vault where one already exists');
+			throw new RefuseDestructiveActionError(`attempted to register new vault "${this._si_name}" where one already exists`);
 		}
 
+		// verbose
+		f_info('Awaiting write lock');
+
 		// acquire write lock
-		return this._y_locks.request(SI_LOCK_CONTENT_ALL, {mode:'exclusive'}, async() => {
+		return this._k_content.lockAll(async() => {
 			// select 128 bits of entropy at random
 			const atu8_entropy = random_bytes(16);
 
@@ -869,7 +865,8 @@ export class VaultClient {
 
 	async readBucket(si_key: BucketKey): Promise<SerBucket> {
 		// no cipher key
-		if(!this._dk_cipher) {
+		const dk_cipher = hm_privates.get(this)?.dk_cipher;
+		if(!dk_cipher) {
 			throw new VaultClosedError('unable to read bucket');
 		}
 
@@ -902,9 +899,10 @@ export class VaultClient {
 
 	writeBucket(si_key: BucketKey, w_contents: SerBucket): Promise<void> {
 		// obtain write lock
-		return this._y_locks.request(SI_LOCK_CONTENT_ALL, async() => {
+		return this._k_content.lockAll(async() => {
 			// no cipher key
-			if(!this._dk_cipher) {
+			const dk_cipher = hm_privates.get(this)?.dk_cipher;
+			if(!dk_cipher) {
 				throw new VaultClosedError('unable to write bucket');
 			}
 

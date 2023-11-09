@@ -7,6 +7,18 @@ const k_session = new MemoryWrapper();
 
 const k_client: VaultClient = new VaultClient(k_content, k_session);
 
-await k_client.connect();
+// connect to the database
+await k_client.connect('default');
 
-await k_client.register(text_to_buffer('test'));
+// passphrase
+const atu8_phrase = text_to_buffer('test');
+
+// database is empty
+if(!k_client.exists()) {
+	// register 
+	await k_client.register(atu8_phrase);
+}
+
+if(!k_client.isUnlocked()) {
+	k_client.unlock();
+}

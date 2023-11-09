@@ -3,12 +3,17 @@ import type {StorageChanges} from 'src/store';
 
 import {fodemtv} from '@blake.regalia/belt';
 
-import {JsonKeyValueStore, JsonBasedChange} from 'src/store';
+import {KelvinKeyValueStore, JsonBasedChange} from 'src/store';
 
 
-export class WebExtWrapper extends JsonKeyValueStore {
-	constructor(protected _d_area: chrome.storage.StorageArea=chrome.storage.local) {
-		super();
+
+export class WebExtWrapper extends KelvinKeyValueStore {
+	constructor(
+		si_lock_prefix: string,
+		protected _d_area: chrome.storage.StorageArea=chrome.storage.local,
+		y_locks=navigator.locks
+	) {
+		super(y_locks, si_lock_prefix);
 	}
 
 	override async getAllKeys(): Promise<string[]> {

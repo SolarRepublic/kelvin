@@ -126,8 +126,8 @@ export async function derive_root_bits_argon2id(
 		salt: atu8_nonce,
 		iterations: g_params.iterations,
 		memory: g_params.memory,
+		parallelism: g_params.parallelism,
 		hashLen: 32,  // 256 bits
-		parallelism: 2,
 	}));
 }
 

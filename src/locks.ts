@@ -5,8 +5,8 @@ export type SimpleLockManager = {
 	request<w_return>(
 		si_lock: string,
 		gc_req: LockOptions,
-		fk_use: (y_lock: Lock | null) => w_return
-	): Promisable<w_return>;
+		fk_use: (y_lock: Lock | null) => Promisable<w_return>
+	): Promise<w_return>;
 };
 
 type HeldLock = {
@@ -71,7 +71,7 @@ export class SingleThreadedLockManager implements SimpleLockManager {
 				// another lock is pending; execute it
 				const a_pending = this._h_pending[si_name];
 				if(a_pending?.length) {
-					a_pending.shift()!.execute();
+					void a_pending.shift()!.execute();
 				}
 			}
 		};

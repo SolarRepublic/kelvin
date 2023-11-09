@@ -1,9 +1,9 @@
-import type {StorageChanges} from '../store';
+import type {KelvinSchema, StorageChanges} from '../store';
 import type {JsonValue, Dict} from '@blake.regalia/belt';
 
 import {__UNDEFINED, ode} from '@blake.regalia/belt';
 
-import {JsonKeyValueStore, StringBasedChange} from '../store';
+import {KelvinKeyValueStore, KelvinKeyValueWriter, StringBasedChange} from '../store';
 
 // create event listener adder for given storage
 function storage_listener(d_storage: Storage) {
@@ -27,9 +27,59 @@ function storage_listener(d_storage: Storage) {
 	};
 }
 
-export class LocalStorageWrapper extends JsonKeyValueStore {
-	constructor(protected _d_storage=localStorage, protected _f_add_listener=storage_listener(_d_storage)) {
-		super();
+
+export class LocalStorageWriter extends KelvinKeyValueWriter<LocalStorageWrapper> {
+	override setStringMany(h_set: Dict<JsonValue>): Promise<void> {
+		// destructure storage
+		const {_d_storage} = this._k_reader;
+
+		// each item; set synchronously
+		for(const [si_key, w_value] of ode(h_set)) {
+			_d_storage.setItem(si_key, JSON.stringify(w_value));
+		}
+
+		// resolve
+		return Promise.resolve();
+	}
+
+	override removeMany(a_keys: string[]): Promise<void> {
+		// destructure storage
+		const {_d_storage} = this._k_reader;
+
+		// each item, delete synchronously
+		for(const si_key of a_keys) {
+			_d_storage.removeItem(si_key);
+		}
+
+		// resolve
+		return Promise.resolve();
+	}
+
+	override clear(): Promise<void> {
+		// synchronously clear storage
+		this._k_reader._d_storage.clear();
+
+		// resolve
+		return Promise.resolve();
+	}
+}
+
+
+export class LocalStorageWrapper extends KelvinKeyValueStore<LocalStorageWriter> {
+	constructor(
+		/**
+		 * @internal
+		 */
+		public _d_storage=localStorage,
+
+		/**
+		 * @internal
+		 */
+		public _f_add_listener=storage_listener(_d_storage),
+
+		y_locks=navigator.locks
+	) {
+		super(LocalStorageWriter, y_locks);
 	}
 
 	_get_sync(si_key: string): JsonValue {
@@ -74,33 +124,33 @@ export class LocalStorageWrapper extends JsonKeyValueStore {
 		return Promise.resolve(h_values as w_out);
 	}
 
-	override setStringMany(h_set: Dict<JsonValue>): Promise<void> {
-		// each item; set synchronously
-		for(const [si_key, w_value] of ode(h_set)) {
-			this._d_storage.setItem(si_key, JSON.stringify(w_value));
-		}
+	// override setStringMany(h_set: Dict<JsonValue>): Promise<void> {
+	// 	// each item; set synchronously
+	// 	for(const [si_key, w_value] of ode(h_set)) {
+	// 		this._d_storage.setItem(si_key, JSON.stringify(w_value));
+	// 	}
 
-		// resolve
-		return Promise.resolve();
-	}
+	// 	// resolve
+	// 	return Promise.resolve();
+	// }
 
-	override removeMany(a_keys: string[]): Promise<void> {
-		// each item, delete synchronously
-		for(const si_key of a_keys) {
-			this._d_storage.removeItem(si_key);
-		}
+	// override removeMany(a_keys: string[]): Promise<void> {
+	// 	// each item, delete synchronously
+	// 	for(const si_key of a_keys) {
+	// 		this._d_storage.removeItem(si_key);
+	// 	}
 
-		// resolve
-		return Promise.resolve();
-	}
+	// 	// resolve
+	// 	return Promise.resolve();
+	// }
 
-	override clear(): Promise<void> {
-		// synchronously clear storage
-		this._d_storage.clear();
+	// override clear(): Promise<void> {
+	// 	// synchronously clear storage
+	// 	this._d_storage.clear();
 
-		// resolve
-		return Promise.resolve();
-	}
+	// 	// resolve
+	// 	return Promise.resolve();
+	// }
 
 	override onChanged(fk_changed: (h_changes: StorageChanges) => void): VoidFunction {
 		return this._f_add_listener((d_event) => {

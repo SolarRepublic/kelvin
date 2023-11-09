@@ -1,4 +1,4 @@
-import type {JsonKeyValueStore} from './store';
+import type {KelvinKeyValueStore} from './store';
 import type {ItemCode, SerShape} from './types';
 import type {VaultClient} from './vault-client';
 import type {VaultHub} from './vault-hub';
@@ -6,7 +6,7 @@ import type {JsonArray, JsonObject} from '@blake.regalia/belt';
 
 export class Reader {
 	protected _k_vault: VaultClient;
-	protected _k_content: JsonKeyValueStore;
+	protected _k_content: KelvinKeyValueStore;
 
 	constructor(protected _k_hub: VaultHub) {
 		const k_vault = this._k_vault = _k_hub.vault;

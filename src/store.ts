@@ -1,4 +1,10 @@
-import {fodemtv, type Dict, type JsonObject, type JsonValue, fold, base93_to_buffer, type NaiveBase93, buffer_to_base58, buffer_to_base93, json_to_buffer, safe_json, __UNDEFINED} from '@blake.regalia/belt';
+import type {A, C, F} from 'ts-toolbelt';
+
+import type {SimpleLockManager} from './locks';
+
+import type {Promisable, Dict, JsonObject, JsonValue, NaiveBase93} from '@blake.regalia/belt';
+
+import {fodemtv, base93_to_buffer, buffer_to_base93, __UNDEFINED, buffer_to_json} from '@blake.regalia/belt';
 
 import {VaultDamagedError} from './errors';
 
@@ -13,44 +19,127 @@ export type StorageChanges = Record<string, {
 	newValue: ChangeValue;
 }>;
 
-export class StringBasedChange<w_nil extends null | undefined=null> implements ChangeValue {
-	constructor(protected _s_value: string | w_nil) {}
+
+export type KelvinSchema = Dict<JsonValue |Uint8Array>;
+
+
+export class CompliantChange<w_nil extends null | undefined=null> implements ChangeValue {
+	constructor(protected _w_value: JsonValue | Uint8Array | w_nil) {}
 
 	asString(): string | undefined {
-		return this._s_value ?? __UNDEFINED;
+		return this._w_value? this._w_value as string: __UNDEFINED;
 	}
 
 	asJson<w_value extends JsonValue=JsonValue>(): w_value | undefined {
-		return this._s_value? JSON.parse(this._s_value) as w_value: __UNDEFINED;
+		return this._w_value? this._w_value as w_value: __UNDEFINED;
 	}
 
 	asBytes(): Uint8Array | undefined {
-		return this._s_value? base93_to_buffer(this._s_value): __UNDEFINED;
+		return this._w_value? this._w_value as Uint8Array: __UNDEFINED;
 	}
 }
 
-export class JsonBasedChange<w_nil extends null | undefined=null> implements ChangeValue {
-	constructor(protected _w_value: JsonValue<w_nil>) {}
-
-	asString(): string | undefined {
-		return this._w_value as string ?? __UNDEFINED;
+export class StringBasedChange<w_nil extends null | undefined=null> extends CompliantChange<w_nil> {
+	override asJson<w_value extends JsonValue=JsonValue>(): w_value | undefined {
+		return this._w_value? JSON.parse(this._w_value as string) as w_value: __UNDEFINED;
 	}
 
-	asJson<w_value extends JsonValue=JsonValue>(): w_value | undefined {
-		return this._w_value as w_value ?? __UNDEFINED;
-	}
-
-	asBytes(): Uint8Array | undefined {
+	override asBytes(): Uint8Array | undefined {
 		return this._w_value? base93_to_buffer(this._w_value as string): __UNDEFINED;
+	}
+}
+
+export class JsonBasedChange<w_nil extends null | undefined=null> extends CompliantChange<w_nil> {
+	override asBytes(): Uint8Array | undefined {
+		return this._w_value? base93_to_buffer(this._w_value as string): __UNDEFINED;
+	}
+}
+
+export class BytesBasedChange<w_nil extends null | undefined=null> extends CompliantChange<w_nil> {
+	override asString(): string | undefined {
+		return this._w_value? buffer_to_base93(this._w_value as Uint8Array): __UNDEFINED;
+	}
+
+	override asJson<w_value extends JsonValue=JsonValue>(): w_value | undefined {
+		return this._w_value? buffer_to_json(this._w_value as Uint8Array) as w_value: __UNDEFINED;
+	}
+}
+
+
+export abstract class KelvinKeyValueWriter<
+	k_reader extends KelvinKeyValueStore<any>=KelvinKeyValueStore<any>,
+	h_schema extends KelvinSchema=KelvinSchema,
+> {
+	protected _b_destroyed = false;
+
+	constructor(protected _k_reader: k_reader) {}
+
+	abstract setStringMany(h_set: Dict): Promise<void>;
+
+	abstract removeMany(a_keys: string[]): Promise<void>;
+
+	abstract clear(): Promise<void>;
+
+	/**
+	 * @internal
+	 */
+	_destroy() {
+		this._b_destroyed = true;
+
+		// destroy instance to prevent out-of-scope writes
+		Object.setPrototypeOf(this, null);
+	}
+
+
+	setString(si_key: string, s_value: string): Promise<void> {
+		return this.setStringMany({
+			[si_key]: s_value,
+		});
+	}
+
+	setJson(si_key: string, w_value: JsonValue): Promise<void> {
+		return this.setJsonMany({
+			[si_key]: w_value,
+		});
+	}
+
+	setJsonMany(h_set: Dict<JsonValue>): Promise<void> {
+		return this.setStringMany(fodemtv(h_set, w_value => JSON.stringify(w_value)));
+	}
+
+	setBytes(si_key: string, atu8_value: Uint8Array): Promise<void> {
+		return this.setBytesMany({
+			[si_key]: atu8_value,
+		});
+	}
+
+	setBytesMany(h_set: Dict<Uint8Array>): Promise<void> {
+		return this.setStringMany(fodemtv(h_set, atu8_value => buffer_to_base93(atu8_value)));
+	}
+
+	remove(si_key: string): Promise<void> {
+		return this.removeMany([si_key]);
 	}
 }
 
 /**
  * Describes a compatible backing key-value store
  */
-export abstract class JsonKeyValueStore<
-	h_schema extends JsonObject=JsonObject,
+export abstract class KelvinKeyValueStore<
+	k_writer extends KelvinKeyValueWriter,
+	h_schema extends KelvinSchema=KelvinSchema,
 > {
+	constructor(
+		// magical type inferencing to allow referencing an instance of a class that extends self
+		protected _dc_writer: any extends infer k_reader
+			? k_reader extends KelvinKeyValueStore<k_writer, h_schema>
+				? C.Class<[k_reader], k_writer>
+				: never
+			: never,
+		protected _y_locks: SimpleLockManager,
+		protected _si_lock_prefix: string=crypto.randomUUID()
+	) {}
+
 	abstract getAllKeys(): Promise<string[]>;
 
 	abstract getStringMany<
@@ -60,13 +149,30 @@ export abstract class JsonKeyValueStore<
 		},
 	>(a_keys: string[]): Promise<w_out>;
 
-	abstract setStringMany(h_set: Dict): Promise<void>;
+	// abstract setStringMany(h_set: Dict): Promise<void>;
 
-	abstract removeMany(a_keys: string[]): Promise<void>;
+	// abstract removeMany(a_keys: string[]): Promise<void>;
 
-	abstract clear(): Promise<void>;
+	// abstract clear(): Promise<void>;
 
 	abstract onChanged(fk_changed: (h_changes: StorageChanges) => void): VoidFunction;
+
+	lockAll<w_out>(fk_use: (k_writer: k_writer, y_lock: Lock | null) => Promisable<w_out>): Promise<w_out> {
+		// acquire a lock from the lock manager
+		return this._y_locks.request(this._si_lock_prefix, {mode:'exclusive'}, async(y_lock) => {
+			// create new writer instance
+			const k_writer = new this._dc_writer(this);
+
+			// attempt to use the lock with the ad-hoc writer instance
+			try {
+				return await fk_use(k_writer, y_lock);
+			}
+			// destroy the writer before lock is released
+			finally {
+				k_writer._destroy();
+			}
+		});
+	}
 
 	async getString<
 		w_value extends string=string,
@@ -123,35 +229,35 @@ export abstract class JsonKeyValueStore<
 		}) as w_out;
 	}
 
-	setString(si_key: string, s_value: string): Promise<void> {
-		return this.setStringMany({
-			[si_key]: s_value,
-		});
-	}
+	// setString(si_key: string, s_value: string): Promise<void> {
+	// 	return this.setStringMany({
+	// 		[si_key]: s_value,
+	// 	});
+	// }
 
-	setJson(si_key: string, w_value: JsonValue): Promise<void> {
-		return this.setJsonMany({
-			[si_key]: w_value,
-		});
-	}
+	// setJson(si_key: string, w_value: JsonValue): Promise<void> {
+	// 	return this.setJsonMany({
+	// 		[si_key]: w_value,
+	// 	});
+	// }
 
-	setJsonMany(h_set: Dict<JsonValue>): Promise<void> {
-		return this.setStringMany(fodemtv(h_set, w_value => JSON.stringify(w_value)));
-	}
+	// setJsonMany(h_set: Dict<JsonValue>): Promise<void> {
+	// 	return this.setStringMany(fodemtv(h_set, w_value => JSON.stringify(w_value)));
+	// }
 
-	setBytes(si_key: string, atu8_value: Uint8Array): Promise<void> {
-		return this.setBytesMany({
-			[si_key]: atu8_value,
-		});
-	}
+	// setBytes(si_key: string, atu8_value: Uint8Array): Promise<void> {
+	// 	return this.setBytesMany({
+	// 		[si_key]: atu8_value,
+	// 	});
+	// }
 
-	setBytesMany(h_set: Dict<Uint8Array>): Promise<void> {
-		return this.setStringMany(fodemtv(h_set, atu8_value => buffer_to_base93(atu8_value)));
-	}
+	// setBytesMany(h_set: Dict<Uint8Array>): Promise<void> {
+	// 	return this.setStringMany(fodemtv(h_set, atu8_value => buffer_to_base93(atu8_value)));
+	// }
 
-	remove(si_key: string): Promise<void> {
-		return this.removeMany([si_key]);
-	}
+	// remove(si_key: string): Promise<void> {
+	// 	return this.removeMany([si_key]);
+	// }
 
 	onEntryChanged(
 		si_key: string,

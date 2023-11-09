@@ -15,7 +15,7 @@ export const XG_UINT64_MAX = (2n ** 64n) - 1n;
 export const N_ARGON2_ITERATIONS = import.meta.env?.DEV? 8: 21;
 
 // target memory value to use for argon hashing parameter, in bytes
-export const NB_ARGON2_MEMORY = import.meta.env?.DEV? 1024: 32 * 1024;  // 32 KiB
+export const NB_ARGON2_MEMORY = (import.meta.env?.DEV? 16: 32) * 1024;
 
 // target parallelism
 export const N_ARGON2_PARALLELISM = 2;

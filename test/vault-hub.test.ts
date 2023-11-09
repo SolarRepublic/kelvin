@@ -5,7 +5,7 @@ import type {TestFunction} from 'vitest';
 import {ode, type Dict, text_to_buffer} from '@blake.regalia/belt';
 import {VaultClient} from 'src/vault-client';
 import {MemoryWrapper} from 'src/wrappers/memory';
-import {describe, expect, it} from 'vitest';
+import {beforeEach, describe, expect, it, vi} from 'vitest';
 
 const client = () => {
 	const k_content = new MemoryWrapper();
@@ -21,6 +21,13 @@ type Tree<w_leaf> = {
 };
 
 type TestFunctionTree = Tree<TestFunction<{}>>;
+
+declare module 'vitest' {
+	export interface TestContext {
+		k_client: VaultClient;
+	}
+}
+
 
 const tests = (h_tests: TestFunctionTree) => {
 	for(const [si_key, z_value] of ode(h_tests)) {
@@ -59,6 +66,10 @@ describe('nonexistant', () => {
 			},
 
 			...f_throwers(k_client),
+
+			'untilOpened is a promise'() {
+				expect(k_client.untilOpened()).toBeInstanceOf(Promise);
+			},
 		});
 	});
 
@@ -72,17 +83,34 @@ describe('nonexistant', () => {
 			},
 
 			...f_throwers(k_client),
+
+			'untilOpened is a promise'() {
+				expect(k_client.untilOpened()).toBeInstanceOf(Promise);
+			},
 		});
 	});
 });
 
-describe('init', async() => {
-	const {k_client} = client();
-	await k_client.connect();
+describe('init', () => {
+	beforeEach(async(g) => {
+		const k_client = g.k_client = client().k_client;
+		await k_client.connect();
+	});
 
 	tests({
-		'register no info'() {
-			expect(k_client.register(text_to_buffer('passphrase'))).resolves.toBeUndefined;
+		async 'register no info'() {
+			const {k_client} = client();
+			await k_client.connect();
+			await expect(k_client.register(text_to_buffer('passphrase'))).resolves.toBeUndefined();
+		},
+
+		async 'register with info'() {
+			const f_info = vi.fn();
+
+			const {k_client} = client();
+			await k_client.connect();
+			await expect(k_client.register(text_to_buffer('passphrase'), f_info)).resolves.toBeUndefined();
+			expect(f_info).toHaveBeenCalled();
 		},
 	});
 });
