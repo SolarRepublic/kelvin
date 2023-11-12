@@ -4,12 +4,13 @@ import type {DomainCode, DomainLabel} from './types';
 
 import type {VaultClient} from './vault-client';
 
+import type {Subtype} from '@blake.regalia/belt';
+
 import {index_to_b92} from './data';
 import {LockTarget_StorageLocal, SI_KEY_STORAGE_HUB} from './ids';
-import {VaultHub} from './vault-hub';
 
 
-type HeldLock = A.Type<number, 'held-lock'>;
+type HeldLock = Subtype<number, 'held-lock'>;
 
 export class Writer {
 	constructor(protected _k_vault: VaultClient) {

@@ -1,4 +1,4 @@
-import type {KelvinSchema, StorageChanges} from '../store';
+import type {StorageChanges} from '../store';
 import type {JsonValue, Dict} from '@blake.regalia/belt';
 
 import {__UNDEFINED, ode} from '@blake.regalia/belt';
@@ -123,34 +123,6 @@ export class LocalStorageWrapper extends KelvinKeyValueStore<LocalStorageWriter>
 		// return dict
 		return Promise.resolve(h_values as w_out);
 	}
-
-	// override setStringMany(h_set: Dict<JsonValue>): Promise<void> {
-	// 	// each item; set synchronously
-	// 	for(const [si_key, w_value] of ode(h_set)) {
-	// 		this._d_storage.setItem(si_key, JSON.stringify(w_value));
-	// 	}
-
-	// 	// resolve
-	// 	return Promise.resolve();
-	// }
-
-	// override removeMany(a_keys: string[]): Promise<void> {
-	// 	// each item, delete synchronously
-	// 	for(const si_key of a_keys) {
-	// 		this._d_storage.removeItem(si_key);
-	// 	}
-
-	// 	// resolve
-	// 	return Promise.resolve();
-	// }
-
-	// override clear(): Promise<void> {
-	// 	// synchronously clear storage
-	// 	this._d_storage.clear();
-
-	// 	// resolve
-	// 	return Promise.resolve();
-	// }
 
 	override onChanged(fk_changed: (h_changes: StorageChanges) => void): VoidFunction {
 		return this._f_add_listener((d_event) => {

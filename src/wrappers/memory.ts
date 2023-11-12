@@ -1,8 +1,11 @@
+import type {C} from 'ts-toolbelt';
+
 import type {JsonValue, Dict, JsonObject} from '@blake.regalia/belt';
 
 import {__UNDEFINED, fold, ode} from '@blake.regalia/belt';
+import {SingleThreadedLockManager} from 'src/locks';
 
-import {KelvinKeyValueStore, type StorageChanges, CompliantChange, KelvinKeyValueWriter} from 'src/store';
+import {KelvinKeyValueStore, type StorageChanges, CompliantChange, KelvinKeyValueWriter, type CompatibleWriterClass} from 'src/store';
 
 type ListenerCallback = (h_changes: StorageChanges) => void;
 
@@ -93,6 +96,14 @@ export class MemoryWrapper<
 	 */
 	_h_store: Dict<JsonValue | Uint8Array> = {};
 
+	constructor(
+		si_lock_prefix: string,
+		y_locks=new SingleThreadedLockManager(),
+		dc_writer: CompatibleWriterClass<MemoryWriter>=MemoryWriter
+	) {
+		super(dc_writer, y_locks, si_lock_prefix);
+	}
+
 	protected _get_sync(si_key: string): JsonValue | Uint8Array | undefined {
 		return this._h_store[si_key];
 	}
@@ -118,37 +129,6 @@ export class MemoryWrapper<
 			}
 		});
 	}
-
-	// protected _set_many<w_type extends JsonValue | Uint8Array>(
-	// 	h_set: Dict<w_type>
-	// ): Promise<void> {
-	// 	// destructure field(s)
-	// 	const {_h_store} = this;
-
-	// 	// prep changes
-	// 	const h_changes: StorageChanges = {};
-
-	// 	// each entry
-	// 	for(const [si_key, w_value] of ode(h_set)) {
-	// 		// ref old value
-	// 		const w_old = _h_store[si_key] as w_type;
-
-	// 		// add to changes
-	// 		h_changes[si_key] = {
-	// 			oldValue: new CompliantChange(w_old),
-	// 			newValue: new CompliantChange(w_value),
-	// 		};
-
-	// 		// set in store
-	// 		_h_store[si_key] = w_value;
-	// 	}
-
-	// 	// queue change notification
-	// 	this._queue_notify(h_changes);
-
-	// 	// resolve
-	// 	return Promise.resolve();
-	// }
 
 	override getStringMany<
 		h_types extends Dict=Dict,
@@ -180,49 +160,6 @@ export class MemoryWrapper<
 	override getAllKeys(): Promise<string[]> {
 		return Promise.resolve(Object.keys(this._h_store));
 	}
-
-	// override setStringMany(h_set: Dict): Promise<void> {
-	// 	return this._set_many<string>(h_set);
-	// }
-
-	// override setJsonMany(h_set: Dict<JsonValue>): Promise<void> {
-	// 	return this._set_many<JsonValue>(h_set);
-	// }
-
-	// override setBytesMany(h_set: Dict<Uint8Array>): Promise<void> {
-	// 	return this._set_many<Uint8Array>(h_set);
-	// }
-
-	// override clear(): Promise<void> {
-	// 	// remove every entry
-	// 	return this.removeMany(Object.keys(this._h_store));
-	// }
-
-	// override removeMany(a_keys: string[]): Promise<void> {
-	// 	// destructure field(s)
-	// 	const {_h_store} = this;
-
-	// 	// prep changes
-	// 	const h_changes: StorageChanges = {};
-
-	// 	// each key
-	// 	for(const si_key of a_keys) {
-	// 		// add to changes
-	// 		h_changes[si_key] = {
-	// 			oldValue: new CompliantChange(_h_store[si_key]),
-	// 			newValue: new CompliantChange(__UNDEFINED),
-	// 		};
-
-	// 		// delete from store
-	// 		delete _h_store[si_key];
-	// 	}
-
-	// 	// queue change notification
-	// 	this._queue_notify(h_changes);
-
-	// 	// resolve
-	// 	return Promise.resolve();
-	// }
 
 	override onChanged(fk_changed: (h_changes: StorageChanges) => void): VoidFunction {
 		// ref listeners array

@@ -1,4 +1,4 @@
-import type {SerShape, SerShapeField} from './types';
+import type {SerSchema, SerField} from './types';
 
 import {is_dict_es, type Dict, type JsonArray, type JsonObject, type JsonValue} from '@blake.regalia/belt';
 
@@ -20,7 +20,7 @@ type PropertyDescriptorMap = Dict<PropertyDescriptor & ThisType<any>>;
  * @returns 
  */
 export function create_shape_struct(
-	a_fields: SerShapeField[],
+	a_fields: SerField[],
 	s_err_context: string,
 	a_part_keys: string[]=[],
 	h_props: PropertyDescriptorMap={}
@@ -175,7 +175,7 @@ export function create_shape_struct(
 					}
 
 					// recurse
-					w_value = restruct_struct(w_option_value as SerShapeField[], z_value, s_err_context+`.s(${w_switch_value}).["${si_key}"]`);
+					w_value = restruct_struct(w_option_value as SerField[], z_value, s_err_context+`.s(${w_switch_value}).["${si_key}"]`);
 				}
 			}
 			// not handled
@@ -196,7 +196,7 @@ export function create_shape_struct(
 }
 
 export function create_shape_item(
-	a_shape: SerShape,
+	a_shape: SerSchema,
 	s_err_context: string
 ): PropertyDescriptorMap {
 	// destructure shape tuple
@@ -230,15 +230,18 @@ export function create_shape_item(
 
 
 
-const gc_item = {
+// const gc_item = {
 
-	get type(w_set: JsonValue) {
-		this[$_PARTS][0] = w_set;
-	},
-};
+// 	get type(w_set: JsonValue) {
+// 		this[$_PARTS][0] = w_set;
+// 	},
+// };
 
-const g_item_backed = Object.defineProperties({
-	[$_TUPLE]: empty(),
-}, gc_item);
+// const g_item_backed = Object.defineProperties({
+// 	[$_TUPLE]: empty(),
+// }, gc_item);
 
-Object.assign(g_item_backed, g_item_set);
+// Object.assign(g_item_backed, g_item_set);
+
+
+

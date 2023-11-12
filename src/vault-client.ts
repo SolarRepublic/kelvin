@@ -1,21 +1,19 @@
-import type {LockTarget_StorageLocal} from './ids';
-import type {KelvinKeyValueStore} from './store';
-import type {SerVaultHub, SerVaultBase, SerVaultHashParams, LockSpecifier, BucketKey, SerBucket} from './types';
+import type {KelvinKeyValueStore, KelvinKeyValueWriter} from './store';
+import type {SerVaultHub, SerVaultBase, SerVaultHashParams, BucketKey, SerBucket} from './types';
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import type {AesGcmDecryptionError} from '@solar-republic/crypto';
 
-import {base64_to_buffer, base93_to_buffer, bigint_to_buffer_be, buffer_to_base64, buffer_to_json, F_NOOP, is_dict_es, ode, type NaiveBase64, type NaiveBase93, buffer, text_to_buffer, buffer_to_base93, defer, type JsonValue, type JsonObject, json_to_buffer, buffer_to_text, ATU8_NIL, concat2, concat, buffer_to_bigint_be} from '@blake.regalia/belt';
+import {base64_to_buffer, buffer_to_base64, buffer_to_json, F_NOOP, is_dict_es, ode, type NaiveBase64, type NaiveBase93, text_to_buffer, defer, json_to_buffer, ATU8_NIL, concat2, __UNDEFINED} from '@blake.regalia/belt';
 
 import {aes_gcm_decrypt, aes_gcm_encrypt, random_bytes} from '@solar-republic/crypto';
 import {sha256_sync} from '@solar-republic/crypto/sha256';
 
 
-import {derive_cipher_key, derive_tandem_root_keys, generate_root_signature, import_key, verify_root_key, type RootKeyStruct, derive_cipher_nonce, test_encryption_integrity, nonce_for_storage_entry} from './auth';
+import {derive_cipher_key, derive_tandem_root_keys, generate_root_signature, import_key, verify_root_key, type RootKeyStruct, derive_cipher_nonce, test_encryption_integrity} from './auth';
 import {ATU8_DUMMY_PHRASE, G_DEFAULT_HASHING_PARAMS, NB_RECRYPTION_THRESHOLD, NB_SHA256_SALT, N_SYSTEM_VERSION} from './constants';
-import {Bug, InvalidPassphraseError, InvalidSessionError, RecoverableVaultError, RefuseDestructiveActionError, VaultClosedError, VaultCorruptedError, VaultDamagedError} from './errors';
-import {SI_KEY_STORAGE_BASE, SI_KEY_STORAGE_HUB, SI_KEY_SESSION_ROOT, SI_KEY_SESSION_VECTOR, SI_KEY_SESSION_AUTH, SI_LOCK_SESSION_ALL, SI_LOCK_CONTENT_ALL} from './ids';
-import {SingleThreadedLockManager, type SimpleLockManager} from './locks';
+import {Bug, InvalidPassphraseError, InvalidSessionError, RecoverableVaultError, RefuseDestructiveActionError, VaultClosedError, VaultCorruptedError} from './errors';
+import {SI_KEY_STORAGE_BASE, SI_KEY_STORAGE_HUB, SI_KEY_SESSION_ROOT, SI_KEY_SESSION_VECTOR, SI_KEY_SESSION_AUTH} from './ids';
 import {VaultHub} from './vault-hub';
 
 
@@ -50,11 +48,38 @@ export type SchemaSession = {
 	[SI_KEY_SESSION_AUTH]: NaiveBase64;
 };
 
-type StoreContent = KelvinKeyValueStore<SchemaContent>;
-type StoreSession = KelvinKeyValueStore<SchemaSession>;
+type StoreContent = KelvinKeyValueStore<KelvinKeyValueWriter, SchemaContent>;
+type StoreSession = KelvinKeyValueStore<KelvinKeyValueWriter, SchemaSession>;
 
 // stores the private fields of an Vault instance
 const hm_privates = new WeakMap<VaultClient, VaultFields>();
+
+// pattern for executing list of awaiter callbacks
+const callback_awaiters = <w_value>(a_awaiters_src: ((w_value: w_value) => void)[], w_value: w_value) => {
+	// copy list before calling to avoid possible infinite recursion
+	const a_awaiters_copy = a_awaiters_src.slice();
+
+	// clear awaiters list
+	a_awaiters_src.length = 0;
+
+	// start calling
+	for(const fk_opened of a_awaiters_copy) {
+		fk_opened(w_value);
+	}
+};
+
+// pattern for getting awaiter
+const awaiter_from = <w_value>(a_awaiters: ((w_value: w_value) => void)[]) => {
+	// get deferred promise
+	const [dp_open, fk_resolve] = defer();
+
+	// push resolver to list
+	a_awaiters.push(fk_resolve);
+
+	// return promise
+	return dp_open;
+};
+
 
 /**
  * 
@@ -80,7 +105,7 @@ export class VaultClient {
 	protected _k_session: StoreSession;
 
 	// connection state
-	protected _xc_connection = ConnectionState.NOT_CONNECTED;
+	protected _sc_connection = ConnectionState.NOT_CONNECTED;
 
 	// database name
 	protected _si_name!: string;
@@ -96,6 +121,7 @@ export class VaultClient {
 	protected _k_hub!: VaultHub;
 
 	protected _a_awaiting_open: ((k_hub: VaultHub) => any)[] = [];
+	protected _a_awaiting_base: ((g_base: SerVaultBase) => any)[] = [];
 
 	// for removing change event listeners
 	protected _fk_unlisten_base: () => void = F_NOOP;
@@ -110,20 +136,6 @@ export class VaultClient {
 	) {
 		this._k_content = k_content as StoreContent;
 		this._k_session = k_session as StoreSession;
-
-		// monitor changes to base
-		this._fk_unlisten_base = this._k_content.onEntryChanged(SI_KEY_STORAGE_BASE, (g_new, g_old) => {
-			// read as json
-			const g_base = g_new.asJson<SerVaultBase>();
-
-			// base was deleted
-			if(!g_base) {
-				throw new VaultCorruptedError(`base was deleted. in case this was an accident, the previous value can be restored using the following JSON:\n${JSON.stringify(g_old)}`);
-			}
-
-			// load base
-			this._load_base(g_base);
-		});
 	}
 
 	// access the raw content storage instance
@@ -134,6 +146,15 @@ export class VaultClient {
 	// access the raw session storage instance
 	get sessionStore(): KelvinKeyValueStore {
 		return this._k_session;
+	}
+
+	protected _fixed_storage_key(si_target: string): string {
+		return si_target+'.'+this._si_name;
+	}
+
+	protected _next_base_update(): Promise<void> {
+		// return new awaiter
+		return awaiter_from(this._a_awaiting_base);
 	}
 
 	// unmarshall base properties
@@ -175,6 +196,9 @@ export class VaultClient {
 		if(h_params && !is_dict_es(h_params)) {
 			throw new VaultCorruptedError('invalid hash params value');
 		}
+
+		// update success
+		callback_awaiters(this._a_awaiting_base, g_base);
 	}
 
 	// load the root key from session
@@ -219,7 +243,7 @@ export class VaultClient {
 		} = hm_privates.get(this)!;
 
 		// decrypt entry. let if fail if cipher key is wrongl
-		const atu8_hub_plain = await this._decrypt_entry(SI_KEY_STORAGE_HUB+'.'+this._si_name, atu8_hub_cipher, atu8_vector, dk_cipher);
+		const atu8_hub_plain = await this._decrypt_entry(this._fixed_storage_key(SI_KEY_STORAGE_HUB), atu8_hub_cipher, atu8_vector, dk_cipher);
 
 		// attempt to decode
 		let g_hub: SerVaultHub;
@@ -381,15 +405,16 @@ export class VaultClient {
 	 * @param f_info 
 	 */
 	async _rotate_root_key(
+		kw_content: KelvinKeyValueWriter,
 		g_root_old: RootKeyStruct,
 		g_root_new: RootKeyStruct,
 		f_info: ((s_state: string) => void)=F_NOOP
 	): Promise<void> {
-		// destructure fields
-		const {
-			_atu8_salt,
-			_k_content,
-		} = this;
+		// destructure field(s)
+		const {_atu8_salt} = this;
+
+		// ref reader
+		const k_reader = kw_content.reader;
 
 		// destructure old root key properties
 		const {
@@ -425,10 +450,10 @@ export class VaultClient {
 		await this._test_integrity(dk_root_old, atu8_vector_old, atu8_vector_new, _atu8_salt, dk_aes_new);
 
 		// get keys of encrypted entries
-		const a_keys = (await _k_content.getAllKeys()).filter(si_key => /^[#_]/.test(si_key));
+		const a_keys = (await k_reader.getAllKeys()).filter(si_key => /^[#_]/.test(si_key));
 
 		// load entries
-		const h_entries = await _k_content.getBytesMany(a_keys);
+		const h_entries = await k_reader.getBytesMany(a_keys);
 
 		// each entry
 		for(const [si_key, atu8_value] of ode(h_entries)) {
@@ -462,7 +487,7 @@ export class VaultClient {
 				const atu8_replace = await aes_gcm_encrypt(atu8_plain, dk_aes_new, atu8_nonce_new);
 
 				// save encrypted data back to store
-				await _k_content.setBytes(si_key, atu8_replace);
+				await kw_content.setBytes(si_key, atu8_replace);
 
 				// done; clear bytes from pending
 				cb_pending -= atu8_plain.length;
@@ -485,16 +510,40 @@ export class VaultClient {
 
 	// initialize the connection
 	async connect(si_name: string): Promise<this> {
+		const {_k_content} = this;
+
+		// invalid connection state
+		if(this._sc_connection !== ConnectionState.NOT_CONNECTED) {
+			throw new RefuseDestructiveActionError(`vault instance is not accepting connection requests while in state: ${this._sc_connection}`);
+		}
+
 		// set connection state
-		this._xc_connection = ConnectionState.CONNECTING;
+		this._sc_connection = ConnectionState.CONNECTING;
+
+		// accept name
+		this._si_name = si_name;
+
+		// start monitoring changes to base
+		this._fk_unlisten_base = _k_content.onEntryChanged(this._fixed_storage_key(SI_KEY_STORAGE_BASE), (g_new, g_old) => {
+			// read as json
+			const g_base_new = g_new.asJson<SerVaultBase>();
+
+			// base was deleted
+			if(!g_base_new) {
+				throw new VaultCorruptedError(`base was deleted. in case this was an accident, the previous value can be restored using the following JSON:\n${JSON.stringify(g_old)}`);
+			}
+
+			// load base
+			this._load_base(g_base_new);
+		});
 
 		// fetch base object
-		const g_base = await this._k_content.getJson<SerVaultBase>(SI_KEY_STORAGE_BASE+'.'+si_name);
+		const g_base = await _k_content.getJson<SerVaultBase>(this._fixed_storage_key(SI_KEY_STORAGE_BASE));
 
 		// not exists
 		if(!g_base) {
 			// update state
-			this._xc_connection = ConnectionState.NON_EXISTANT;
+			this._sc_connection = ConnectionState.NON_EXISTANT;
 
 			// exit
 			return this;
@@ -504,10 +553,13 @@ export class VaultClient {
 		this._load_base(g_base);
 
 		// fetch root key
-		const a_root_key = await this._k_session.getJson<SerSessionRootKey>(SI_KEY_SESSION_ROOT+'.'+si_name);
+		const a_root_key = await this._k_session.getJson<SerSessionRootKey>(this._fixed_storage_key(SI_KEY_SESSION_ROOT));
 
 		// load the root key
 		await this._load_root_key(a_root_key);
+
+		// set connection state
+		this._sc_connection = ConnectionState.CONNECTED;
 
 		// done
 		return this;
@@ -520,7 +572,7 @@ export class VaultClient {
 	 */
 	exists(): boolean {
 		// depending on connection state
-		switch(this._xc_connection) {
+		switch(this._sc_connection) {
 			// busy or not yet started
 			case ConnectionState.CONNECTING:
 			case ConnectionState.NOT_CONNECTED: {
@@ -535,7 +587,7 @@ export class VaultClient {
 
 			// not handled
 			default: {
-				throw Error(`Unhandled connection state: ${this._xc_connection as string}`);
+				throw Error(`Unhandled connection state: ${this._sc_connection as string}`);
 			}
 		}
 	}
@@ -547,8 +599,8 @@ export class VaultClient {
 	 */
 	isUnlocked(): boolean {
 		// not connected
-		if(ConnectionState.CONNECTED !== this._xc_connection) {
-			throw Error(`Cannot access vault which is not connected: ${this._xc_connection}`);
+		if(ConnectionState.CONNECTED !== this._sc_connection) {
+			throw Error(`Cannot access vault which is not connected: ${this._sc_connection}`);
 		}
 
 		// get root key from private field
@@ -587,7 +639,7 @@ export class VaultClient {
 		f_info('Waiting for session lock');
 
 		// obtain write lock to session
-		await this._k_content.lockAll(async() => {
+		await this._k_content.lockAll(async(kw_content) => {
 			// verbose
 			f_info('Deriving root keys');
 
@@ -613,8 +665,10 @@ export class VaultClient {
 				}
 
 				// set new root key in session
-				await _k_session.setStringMany({
-					[SI_KEY_SESSION_ROOT]: buffer_to_base64(kn_root_new!.data),
+				await _k_session.lockAll(async(kw_session) => {
+					await kw_session.setStringMany({
+						[this._fixed_storage_key(SI_KEY_SESSION_ROOT)]: buffer_to_base64(kn_root_new!.data),
+					});
 				});
 			}
 			// before throwing, zero-out key material
@@ -623,7 +677,7 @@ export class VaultClient {
 			}
 
 			// rotate root key
-			await this._rotate_root_key(g_root_old, g_root_new, f_info);
+			await this._rotate_root_key(kw_content, g_root_old, g_root_new, f_info);
 
 			// update session
 			{
@@ -642,10 +696,10 @@ export class VaultClient {
 				});
 
 				// save to session storage
-				await this._k_session.setStringMany({
-					[SI_KEY_SESSION_VECTOR]: buffer_to_base64(g_root_new.vector),
-					[SI_KEY_SESSION_AUTH]: buffer_to_base64(atu8_auth),
-				});
+				await _k_session.lockAll(kw_session => kw_session.setStringMany({
+					[this._fixed_storage_key(SI_KEY_SESSION_VECTOR)]: buffer_to_base64(g_root_new.vector),
+					[this._fixed_storage_key(SI_KEY_SESSION_AUTH)]: buffer_to_base64(atu8_auth),
+				}));
 			}
 
 			// verbose
@@ -667,8 +721,17 @@ export class VaultClient {
 				params: _g_params,
 			};
 
+			// start waiting for next update
+			const dp_update = this._next_base_update();
+
 			// write to storage (this will trigger a change and call _load_base again -- that's fine)
-			await this._k_content.setJson(SI_KEY_STORAGE_BASE+'.'+this._si_name, g_base);
+			await kw_content.setJson(this._fixed_storage_key(SI_KEY_STORAGE_BASE), g_base);
+
+			// verbose
+			f_info('Waiting for confirmation');
+
+			// wait for that update
+			await dp_update;
 
 			// verbose
 			f_info('Done');
@@ -688,7 +751,7 @@ export class VaultClient {
 		f_info('Awaiting write lock');
 
 		// acquire write lock
-		return this._k_content.lockAll(async() => {
+		return this._k_content.lockAll(async(kw_content) => {
 			// select 128 bits of entropy at random
 			const atu8_entropy = random_bytes(16);
 
@@ -730,8 +793,29 @@ export class VaultClient {
 				params: G_DEFAULT_HASHING_PARAMS,
 			};
 
+			// start waiting for next update
+			const dp_update = this._next_base_update();
+
 			// write to storage (this will trigger a change and call _load_base)
-			await this._k_content.setJson(SI_KEY_STORAGE_BASE, g_base);
+			await kw_content.setJson(this._fixed_storage_key(SI_KEY_STORAGE_BASE), g_base);
+
+			// verbose
+			f_info('Waiting for confirmation');
+
+			// wait for that update
+			await dp_update;
+
+			// save/update private field
+			hm_privates.set(this, {
+				...hm_privates.get(this),
+				dk_root: dk_root_new,
+			});
+
+			// set connection state
+			this._sc_connection = ConnectionState.CONNECTED;
+
+			// verbose
+			f_info('Done');
 		});
 	}
 
@@ -743,10 +827,8 @@ export class VaultClient {
 		// vault is already open
 		if(this._k_hub) return this._k_hub;
 
-		// destructure fields
-		const {
-			_k_content,
-		} = this;
+		// destructure field(s)
+		const {_k_content} = this;
 
 		// get root key from private field
 		const g_privates = hm_privates.get(this);
@@ -757,7 +839,7 @@ export class VaultClient {
 		}
 
 		// listen for hub changes
-		this._fk_unlisten_hub = _k_content.onEntryChanged(SI_KEY_STORAGE_HUB, async(g_new) => {
+		this._fk_unlisten_hub = _k_content.onEntryChanged(this._fixed_storage_key(SI_KEY_STORAGE_HUB), async(g_new) => {
 			// resolve value as bytes
 			const atu8_hub = g_new.asBytes();
 
@@ -767,7 +849,7 @@ export class VaultClient {
 				const g_hub = await this._load_hub(atu8_hub);
 
 				// update hub
-				this._k_hub._update(g_hub);
+				this._k_hub.load(g_hub);
 			}
 			// value was deleted
 			else {
@@ -777,27 +859,29 @@ export class VaultClient {
 
 		// TODO: obtian a read lock?
 
-		// fetch the hub data
-		const atu8_hub = await _k_content.getBytes(SI_KEY_STORAGE_HUB);
-
-		// load hub
-		const g_hub = await this._load_hub(atu8_hub);
-
 		// create hub
-		const k_hub = this._k_hub = new VaultHub(this, g_hub);
+		const k_hub = this._k_hub = new VaultHub(this);
+
+		// fetch the hub data
+		const atu8_hub = await _k_content.getBytes(this._fixed_storage_key(SI_KEY_STORAGE_HUB));
+
+		// hub exists
+		if(atu8_hub) {
+			// load hub data
+			const g_hub = await this._load_hub(atu8_hub);
+
+			// load into hub instance
+			k_hub.load(g_hub);
+		}
+		// hub does not exist
+		else {
+			// save it to storage from hub's initialization
+			await _k_content.lockAll(kw_content => kw_content.setJson(this._fixed_storage_key(SI_KEY_STORAGE_HUB), k_hub.isolate()));
+		}
 
 		// queue calling back awaiters
 		queueMicrotask(() => {
-			// copy list before calling to avoid possible infinite recursion
-			const a_awaiters = this._a_awaiting_open.slice();
-
-			// clear awaiters list
-			this._a_awaiting_open.length = 0;
-
-			// start calling
-			for(const fk_opened of a_awaiters) {
-				fk_opened(k_hub);
-			}
+			callback_awaiters(this._a_awaiting_open, k_hub);
 		});
 
 		// return hub
@@ -812,14 +896,8 @@ export class VaultClient {
 		// already open
 		if(this._k_hub) return Promise.resolve(this._k_hub);
 
-		// get deferred promise
-		const [dp_open, fk_resolve] = defer();
-
-		// push resolver to list
-		this._a_awaiting_open.push(fk_resolve);
-
-		// return promise
-		return dp_open;
+		// return new awaiter
+		return awaiter_from(this._a_awaiting_open);
 	}
 
 	/**
@@ -831,35 +909,6 @@ export class VaultClient {
 		}
 
 		return this._k_hub;
-	}
-
-
-	/**
-	 * @internal
-	 * @param a_specifiers 
-	 * @param f_use 
-	 */
-	acquire<w_return>(a_specifiers: LockSpecifier[], f_use: () => Promise<w_return>): Promise<w_return> {
-		const a_ids: LockId[] = [];
-
-		for(const si_specifier of a_specifiers) {
-			si_specifier;
-		}
-	}
-
-	acquireStorageLocal<w_return>(a_targets: LockTarget_StorageLocal[], f_use: () => Promise<w_return>): Promise<w_return> {
-		// 
-		// this._y_locks.request()
-		/*
-			storage:local:hub:indexes:msg.type
-			storage:local:hub:indexes:*
-			storage:local:hub:*
-			storage:local
-		*/
-
-		for(const si_specifier of a_specifiers) {
-			const a_parts = si_specifier.split(':');
-		}
 	}
 
 
@@ -899,7 +948,7 @@ export class VaultClient {
 
 	writeBucket(si_key: BucketKey, w_contents: SerBucket): Promise<void> {
 		// obtain write lock
-		return this._k_content.lockAll(async() => {
+		return this._k_content.lockAll(async(kw_content) => {
 			// no cipher key
 			const dk_cipher = hm_privates.get(this)?.dk_cipher;
 			if(!dk_cipher) {
@@ -920,7 +969,7 @@ export class VaultClient {
 
 			// attempt to encode bucket contents & write to storage
 			try {
-				await this._k_content.setBytes(si_key, atu8_value);
+				await kw_content.setBytes(si_key, atu8_value);
 			}
 			catch(e_encode) {
 				throw new Bug('unable to encode/write ciphertext bucket contents');

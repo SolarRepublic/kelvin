@@ -1,64 +1,71 @@
-import type {A} from 'ts-toolbelt';
+import type {A, L} from 'ts-toolbelt';
 
-import type {Dict, IntStr, NaiveBase64, NaiveHexLower, JsonObject, JsonValue, JsonArray} from '@blake.regalia/belt';
+import type {PrimitiveDatatype, TaggedDatatype} from './schema';
+import type {Dict, IntStr, NaiveBase64, JsonObject, JsonValue, JsonArray, Subtype} from '@blake.regalia/belt';
 
 
 /**
  * A Domain's unique human-readable label
  */
-export type DomainLabel = A.Type<string, 'domain-label'>;
+export type DomainLabel = Subtype<string, 'domain-label'>;
 
 /**
  * Encodes a Domain to a base92 index
  */
-export type DomainCode = A.Type<string, 'domain-code'>;
+export type DomainCode = Subtype<string, 'domain-code'>;
 
 /**
  * An Item's ID, made up of a {@link DomainCode} and an {@link ItemPath}
  */
-export type ItemIdent = A.Type<`${string}:${string}`, 'item-ident'>;
+export type ItemIdent = Subtype<`${string}:${string}`, 'item-ident'>;
 
 /**
  * The part of an Item's ID that is unique within its domain
  */
-export type ItemPath = A.Type<string, 'item-path'>;
+export type ItemPath = Subtype<string, 'item-path'>;
 
 /**
  * Encodes an Item to a uint index
  */
-export type ItemCode = A.Type<number, 'item-code'>;
+export type ItemCode = Subtype<number, 'item-code'>;
 
 
 /**
  * An Index's unique human-readable label (and key)
  */
-export type IndexLabel = A.Type<string, 'index-label'>;
+export type IndexLabel = Subtype<string, 'index-label'>;
 
 /**
  * A possible value for a particular Index
  */
-export type IndexValue = A.Type<string, 'index-value'>;
+export type IndexValue = Subtype<string, 'index-value'>;
 
 /**
  * The position of an Item ID in an Index list
  */
-export type IndexPosition = A.Type<number, 'index-position'>;
+export type IndexPosition = Subtype<number, 'index-position'>;
 
 
 /**
  * Encodes a Bucket to a uint index
  */
-export type BucketCode = A.Type<number, 'bucket-code'>;
+export type BucketCode = Subtype<number, 'bucket-code'>;
 
 /**
  * The plaintext storage key of a bucket
  */
-export type BucketKey = A.Type<string, 'bucket-key'>;
+export type BucketKey = Subtype<string, 'bucket-key'>;
 
 
-export type LockSpecifier = A.Type<string, 'lock-specifier'>;
+export type ShapeCode = Subtype<number, 'shape-code'>;
 
-export type LockId = A.Type<string, 'lock-id'>;
+
+export type FieldLabel = Subtype<string, 'field-label'>;
+
+
+export type LockSpecifier = Subtype<string, 'lock-specifier'>;
+
+export type LockId = Subtype<string, 'lock-id'>;
 
 
 
@@ -69,7 +76,7 @@ type Sequence<
 	indexOf(w_find: w_item, i_from?: number): w_key;
 	lastIndexOf(w_find: w_item, i_from?: number): w_key;
 	push(...items: w_item[]): w_key;
-}, JsonArray>;
+}, w_item[]>;
 
 
 
@@ -140,12 +147,7 @@ export type SerVaultBase = {
 /**
  * 
  */
-export type SerShapeFieldSwitch = [
-	/**
-	 * Label of the field
-	 */
-	si_field: string,
-
+export type SerFieldSwitch = [
 	/**
 	 * Index of field being switched on
 	 */
@@ -154,35 +156,45 @@ export type SerShapeFieldSwitch = [
 	/**
 	 * Maps switch values to subschemas
 	 */
-	a_options: JsonValue[] | JsonObject,
+	z_options: SerField[] | SerFieldStruct,
 ];
 
-export type SerShapeFieldTagged = {
-	s: SerShapeFieldSwitch;
+export type SerTaggedDatatype =
+	| [TaggedDatatype.REF, DomainLabel]
+	| [TaggedDatatype.ARRAY, SerField]
+	| [TaggedDatatype.TUPLE, SerField[]]
+	| [TaggedDatatype.STRUCT, SerFieldStruct]
+	| [TaggedDatatype.SWITCH, ...SerFieldSwitch];
+
+
+export type SerField = PrimitiveDatatype | SerTaggedDatatype;
+
+export type SerKeyStruct = Record<FieldLabel, PrimitiveDatatype>;
+
+// eslint-disable-next-line @typescript-eslint/consistent-indexed-object-style
+export type SerFieldStruct = {
+	[si_label: FieldLabel]: SerField;
 };
 
-export type SerShapeField = string | SerShapeFieldStruct | SerShapeFieldTagged;
-
-export type SerShapeFieldStruct = [s_label: string, ...a_members: SerShapeField[]];
 
 /**
  * 
  */
-export type SerShape = [
+export type SerSchema = [
 	/**
-	 * Identifies the schema version for this shape's encoding
+	 * Identifies the schema version for this encoding
 	 */
-	n_schema: number,
+	n_version: number,
 
 	/**
-	 * Labels for the key parts of the item
+	 * Schema for key parts of the item
 	 */
-	a_keys: string[],
+	h_keys: SerKeyStruct,
 
 	/**
 	 * Labels and nested structs for the fields of the item
 	 */
-	a_fields: SerShapeField[],
+	h_fields: SerFieldStruct,
 ];
 
 /**
@@ -192,7 +204,7 @@ export type SerBucket = {
 	/**
 	 * Schema shape of stored items
 	 */
-	shape: SerShape;
+	shape: SerSchema;
 
 	/**
 	 * Locates item to its position in the serialized
@@ -227,5 +239,15 @@ export type SerVaultHub = {
 	/**
 	 * Locates each item to the Bucket it is stored in
 	 */
-	locations: Sequence<ItemCode, BucketCode>;
+	locations: Sequence<BucketCode, ItemCode>;
+
+	/**
+	 * Maps bucket codes to shape codes
+	 */
+	buckets_to_shapes: Sequence<ShapeCode, BucketCode>;
+
+	/**
+	 * Shapes stored in sequence
+	 */
+	shapes: Sequence<SerSchema, ShapeCode>;
 };

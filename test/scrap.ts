@@ -1,76 +1,12 @@
 import type {IndexLabel, IndexValue} from '../src/types';
+
+
+import {LocalStorageWrapper} from 'src/wrappers/local-storage';
+import {MemoryWrapper} from 'src/wrappers/memory';
+
+import {createItemController} from '../src/item-controller';
 import {VaultClient} from '../src/vault-client';
 
-import { createItemController } from '../src/item-controller';
-import { LocalStorageWrapper } from 'src/wrappers/local-storage';
-import { MemoryWrapper } from 'src/wrappers/memory';
-
-
-const k_local = new MemoryWrapper();
-const k_session = new MemoryWrapper();
-
-let K_VAULT_CLIENT!: VaultClient = new VaultClient(k_local, k_session);
-
-
-
-enum IncidentType {
-	UNKNOWN,
-	ACCOUNT_CREATED,
-	ACCOUNT_EDITED,
-}
-
-enum ChangeType {
-	UNKNOWN=0,
-	ATTRIBUTE=1,
-	CONTACT=2,
-}
-
-type Contact = {};
-
-const f_subschema_edit = (k, [xc_type]: [ChangeType]) => ({
-	account: k.ref(),
-	type: k.int(xc_type),
-	change: k.switch('type', xc_type, k => ({
-		[ChangeType.UNKNOWN]: k.int(),
-		[ChangeType.ATTRIBUTE]: k.struct(k => ({
-			key: k.str(),
-			old: k.str(),
-			new: k.str(),
-		})),
-		[ChangeType.CONTACT]: k.struct(k => ({
-			edge: k.str(),
-			old: k.ref<Contact>(),
-			new: k.ref<Contact>(),
-		})),
-	})),
-});
-
-export const Incidents = createItemController({
-	client: K_VAULT_CLIENT,
-	domain: 'incidents',
-
-	schema: (k, [xc_type, si_id]: [IncidentType, string]) => ({
-		type: k.int(xc_type),
-		id: k.str(si_id),
-		time: k.int(),
-		data: k.switch('type', xc_type, k => ({
-			[IncidentType.UNKNOWN]: k.int(),
-			[IncidentType.ACCOUNT_CREATED]: k.ref<Account>(),
-			[IncidentType.ACCOUNT_EDITED]: k.struct(f_subschema_edit),
-		})),
-	}),
-
-
-	index: (g_item) => {
-		const h_indexes: Record<IndexLabel, Set<IndexValue>> = {};
-
-		// transaction
-		if([IncidentType.ACCOUNT_CREATED, IncidentType.ACCOUNT_EDITED].includes(g_item.type)) {
-			// index sender
-			h_indexes[''] = 
-		}
-	},
-});
 
 const shape = [
 	1,  // schema version
@@ -83,14 +19,14 @@ const shape = [
 	[
 		'time',
 		{  // switch: field label, switch index
-			"s": ['data', 0, [
+			s: ['data', 0, [
 				'',  // 0: no struct
 				1,   // 1: item ref
 				[    // 2: struct
 					'account',
 					'type',
 					{
-						"s": ['change', 1, [
+						s: ['change', 1, [
 							'',
 							[
 								'key',
@@ -112,11 +48,11 @@ const shape = [
 
 const data = [
 	[161554120, 421]  // ref needs index
-	[161563981, [
-		22,
-		ChangeType.ATTRIBUTE,
-		['name', 'Bob', 'Bobbie'],
-	]]
+		[161563981, [
+			22,
+			ChangeType.ATTRIBUTE,
+			['name', 'Bob', 'Bobbie'],
+		]],
 ];
 
 declare function test<xc_type extends IncidentType>(w_arg: {type: xc_type}): xc_type;

@@ -1,4 +1,4 @@
-import type {DomainCode, DomainLabel, ItemIdent, ItemCode, ItemPath, SerVaultHub, IndexLabel, IndexValue, IndexPosition, BucketKey} from './types';
+import type {DomainCode, DomainLabel, ItemIdent, ItemCode, ItemPath, SerVaultHub, IndexLabel, IndexValue, IndexPosition, BucketKey, BucketCode, ShapeCode, SerSchema} from './types';
 import type {VaultClient} from './vault-client';
 
 import type {JsonObject, Nilable} from '@blake.regalia/belt';
@@ -18,6 +18,8 @@ export class VaultHub {
 	protected _h_indexes: SerVaultHub['indexes'] = {};
 	protected _a_buckets = [] as unknown as SerVaultHub['buckets'];
 	protected _a_locations = [] as unknown as SerVaultHub['locations'];
+	protected _a_buckets_to_shapes = [] as unknown as SerVaultHub['buckets_to_shapes'];
+	protected _a_shapes = [] as unknown as SerVaultHub['shapes'];
 
 	// caches
 	protected _h_domains: Record<DomainLabel, DomainCode> = {};
@@ -30,10 +32,8 @@ export class VaultHub {
 	protected _c_updates = 0;
 
 	constructor(
-		protected _k_vault: VaultClient,
-		_g_hub: SerVaultHub
+		protected _k_vault: VaultClient
 	) {
-		this._update(_g_hub);
 	}
 
 	get vault(): VaultClient {
@@ -41,16 +41,55 @@ export class VaultHub {
 	}
 
 	// returns the isolated form of the current vault, ready for JSON serialization
-	protected _isolate(): SerVaultHub {
+	isolate(): SerVaultHub {
 		const g_hub: SerVaultHub = {
 			domains: this._a_domains,
 			items: this._a_items,
 			indexes: this._h_indexes,
 			buckets: this._a_buckets,
 			locations: this._a_locations,
+			buckets_to_shapes: this._a_buckets_to_shapes,
+			shapes: this._a_shapes,
 		};
 
 		return g_hub;
+	}
+
+	/**
+	 * @param g_hub 
+	 */
+	load(g_hub: SerVaultHub): void {
+		// increment update counter
+		this._c_updates += 1;
+
+		// load fields from ser
+		Object.assign(this, {
+			_a_domains: g_hub.domains,
+			_a_items: g_hub.items,
+			_h_indexes: g_hub.indexes,
+			_a_buckets: g_hub.buckets,
+			_a_locations: g_hub.locations,
+			_a_buckets_to_shapes: g_hub.buckets_to_shapes,
+			_a_shapes: g_hub.shapes,
+		});
+
+		// cache domain lookup
+		this._h_domains = fold(this._a_domains, (si_domain, i_domain) => ({
+			[si_domain]: index_to_b92(i_domain) as DomainCode,
+		}));
+
+		// record non-zero index of first gap if it exists (zero means no gap)
+		let i_next_item = 0;
+
+		// cache item lookup; skip empty values
+		this._h_items = fold(this._a_items, (si_item, i_item) => si_item? {
+			[si_item]: i_item as ItemCode,
+		}: (i_next_item ||= i_item, {}));
+
+		// save field
+		this._i_next_item = i_next_item;
+
+		// 
 	}
 
 
@@ -75,42 +114,6 @@ export class VaultHub {
 		return a_list;
 	}
 
-
-	/**
-	 * @internal
-	 * @param g_hub 
-	 */
-	_update(g_hub: SerVaultHub): void {
-		// increment update counter
-		this._c_updates += 1;
-
-		// load fields from ser
-		Object.assign(this, {
-			_a_domains: g_hub.domains,
-			_a_items: g_hub.items,
-			_h_indexes: g_hub.indexes,
-			_a_buckets: g_hub.buckets,
-			_a_locations: g_hub.locations,
-		});
-
-		// cache domain lookup
-		this._h_domains = fold(this._a_domains, (si_domain, i_domain) => ({
-			[si_domain]: index_to_b92(i_domain) as DomainCode,
-		}));
-
-		// record non-zero index of first gap if it exists (zero means no gap)
-		let i_next_item = 0;
-
-		// cache item lookup; skip empty values
-		this._h_items = fold(this._a_items, (si_item, i_item) => si_item? {
-			[si_item]: i_item as ItemCode,
-		}: (i_next_item ||= i_item, {}));
-
-		// save field
-		this._i_next_item = i_next_item;
-
-		// 
-	}
 
 
 	/**
@@ -138,7 +141,7 @@ export class VaultHub {
 	 */
 	encodeItem(si_domain: DomainLabel, sr_item: ItemPath): ItemCode | undefined {
 		// encode domain and build item key
-		const si_item = this._h_domains[si_domain]+':'+sr_item as ItemKey;
+		const si_item = this._h_domains[si_domain]+':'+sr_item as ItemIdent;
 
 		// locate item code
 		return this._h_items[si_item];
@@ -245,7 +248,11 @@ export class VaultHub {
 	 * @param r_filter - optional regex to filter by {@link ItemIdent}
 	 * @returns an object keyed by {@link DomainLabel} having values that are arrays of {@link ItemPath}s
 	 */
-	getIndex(si_index: IndexLabel, s_value: IndexValue, r_filter?: RegExp): Nilable<Record<DomainLabel, ItemPath[]>> {
+	getIndex(
+		si_index: IndexLabel,
+		s_value: IndexValue,
+		r_filter?: RegExp
+	): Nilable<Record<DomainLabel, ItemPath[]>> {
 		// destructure fields
 		const {
 			_a_domains,
@@ -273,7 +280,11 @@ export class VaultHub {
 		]));
 	}
 
-	findCodesInIndex(si_index: IndexLabel, s_value: IndexValue, z_item: ItemIdentPattern): Nilable<[ItemCode[], [IndexPosition, ItemIdent][]]> {
+	findCodesInIndex(
+		si_index: IndexLabel,
+		s_value: IndexValue,
+		z_item: ItemIdentPattern
+	): Nilable<[ItemCode[], [IndexPosition, ItemIdent][]]> {
 		// access the index
 		const a_list = this._access_index(si_index, s_value);
 
@@ -323,7 +334,11 @@ export class VaultHub {
 		return [a_list, a_found];
 	}
 
-	findIdentsInIndex(si_index: IndexLabel, s_value: IndexValue, z_item: ItemIdentPattern): Nilable<ItemIdent[]> {
+	findIdentsInIndex(
+		si_index: IndexLabel,
+		s_value: IndexValue,
+		z_item: ItemIdentPattern
+	): Nilable<ItemIdent[]> {
 		// attempt to match item pattern
 		const a_findings = this.findCodesInIndex(si_index, s_value, z_item);
 
@@ -334,12 +349,22 @@ export class VaultHub {
 		return a_findings[1].map(([, si_item]) => si_item);
 	}
 
-	getItemBucket(i_code: ItemCode): BucketKey {
-		// get bucket code
-		const i_bucket = this._a_locations[i_code];
+	// get bucket code
+	getItemBucketCode(i_code: ItemCode): BucketCode {
+		return this._a_locations[i_code];
+	}
 
-		// resolve to bucket key
+	// resolve bucket code to bucket key
+	getBucketKey(i_bucket: BucketCode): BucketKey {
 		return this._a_buckets[i_bucket];
+	}
+
+	getBucketShapeCode(i_bucket: BucketCode): ShapeCode {
+		return this._a_buckets_to_shapes[i_bucket];
+	}
+
+	getShape(i_shape: ShapeCode): SerSchema {
+		return this._a_shapes[i_shape];
 	}
 
 	async replaceItem(i_code: ItemCode, g_item: JsonObject) {

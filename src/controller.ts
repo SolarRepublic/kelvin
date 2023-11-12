@@ -1,24 +1,22 @@
 import type {A} from 'ts-toolbelt';
 
-import type {ReduceSchema, SchemaTyper, ItemShapesFromSchema, ExtractedMembers, SelectionCriteria, ExtractWherePartsMatch, SchemaType, StrictSchema, PartFields} from './schema';
-import type {DomainCode, DomainLabel, IndexLabel, IndexValue, ItemPath, SerShape, SerShapeFieldStruct} from './types';
+import type {Exactly} from './meta';
+import type {Reader} from './reader';
+import type {SchemaTyper, ItemShapesFromSchema, ExtractedMembers, SelectionCriteria, StrictSchema} from './schema';
+import type {DomainLabel, ItemCode, ItemIdent, ItemPath, SerSchema} from './types';
 import type {VaultClient} from './vault-client';
 
 import type {VaultHub} from './vault-hub';
-import type {Schema} from 'inspector';
+import type {Dict, JsonPrimitive, JsonObject, JsonValue, JsonArray} from '@blake.regalia/belt';
 
-import {ode, type Dict, type JsonPrimitive, type JsonObject, is_dict_es, F_IDENTITY, type JsonValue, type JsonArray, __UNDEFINED} from '@blake.regalia/belt';
+import {ode, F_IDENTITY, __UNDEFINED} from '@blake.regalia/belt';
 
-import {index_to_b92} from './data';
-import {Bug, SchemaError, VaultCorruptedError, VaultDamagedError} from './errors';
-import type { Exactly } from './meta';
-import type { Reader } from './reader';
-import { $_PARTS, $_TUPLE, create_shape_item } from './item-serde';
+import {NL_MAX_PART_FIELDS} from './constants';
+import {Bug, SchemaError} from './errors';
+
+import {$_PARTS, $_TUPLE, create_shape_item} from './item-serde';
 
 
-const F_STRINGIFY = (w_input: any) => w_input+'';
-
-const F_NUMERIZE = (s_part: string) => +s_part;
 
 type ItemType<
 	a_keys extends readonly JsonPrimitive[],
@@ -30,74 +28,20 @@ type ItemType<
 };
 
 
-type KeyPartDescriptor = {
-	symbol: symbol;
-	keyify: (w_input: any) => string;
-	parse: (s_part: string) => any;
-	type?: 'code' | 'int' | 'str';
-};
 
-type TupleMemberDescriptor = {
-	// only here so that conditions can use discriminated union
-	symbol?: undefined;
-	default: JsonValue;
-	index: number;
-};
-
-type FieldDescriptor = KeyPartDescriptor | TupleMemberDescriptor;
-
-type SchemaInterpretter = {
-	[si_type in keyof SchemaTyper]: (z_code?: symbol) => FieldDescriptor;
-};
-
-
-const schema_counter = (): SchemaInterpretter => {
-	let c_fields = 0;
-
-	const f_simulator = (w_default: JsonValue, f_parse=F_IDENTITY, f_keyify=F_STRINGIFY) => (z_code?: symbol): FieldDescriptor => {
-		if('symbol' === typeof z_code) {
-			return {
-				symbol: z_code,
-				parse: f_parse,
-				keyify: f_keyify,
-			};
-		}
-
-		return {
-			default: w_default,
-			index: c_fields++,
-		};
-	};
-
-	const f_reject = (w_default: JsonValue, s_type: string) => f_simulator(w_default, F_IDENTITY, () => {
-		throw new Bug(`Attempted to use schema type ${s_type} in item key part, which cannot keyify correctly`);
-	});
-
-	const g_interpretter: SchemaInterpretter = {
-		int: f_simulator(0, F_NUMERIZE),
-		str: f_simulator(''),
-		arr: f_reject([], 'arr'),
-		obj: f_reject({}, 'obj'),
-		switch: f_reject(null, 'switch'),
-	};
-
-	return g_interpretter;
-};
-
-
-class ItemController<
-	a_parts extends readonly JsonPrimitive[],
-	g_schema_dummy extends StrictSchema,
-	gc_type extends ItemType<a_parts, g_schema_dummy>,
-	g_schema extends ReturnType<gc_type['schema']>,
-	g_item extends A.Cast<ItemShapesFromSchema<g_schema>, JsonObject>,
-	g_criteria extends A.Cast<SelectionCriteria<a_parts, g_schema>, JsonObject>,
+export class ItemController<
+	a_parts extends readonly JsonPrimitive[]=any,
+	g_schema_dummy extends StrictSchema=any,
+	gc_type extends ItemType<a_parts, g_schema_dummy>=any,
+	g_schema extends ReturnType<gc_type['schema']>=any,
+	g_criteria extends A.Cast<SelectionCriteria<a_parts, g_schema>, JsonObject>=any,
+	g_item extends A.Cast<ItemShapesFromSchema<g_schema>, g_criteria>=any,
 > {
 	protected _k_vault: VaultClient;
 	protected _si_domain!: DomainLabel;
 	// protected _sb92_domain: DomainCode | undefined;
 
-	protected _k_hub!: VaultHub;
+	// protected _k_hub!: VaultHub;
 
 	protected _k_reader!: Reader;
 	// protected _k_writer!: Writer
@@ -116,6 +60,8 @@ class ItemController<
 		default: JsonValue;
 	}[] = [];
 
+	// current shape in isolated form
+	protected _a_shape: Readonly<SerSchema>;
 
 	constructor(gc_type: gc_type) {
 		// destructure config arg
@@ -131,9 +77,6 @@ class ItemController<
 		// domain label
 		this._si_domain = si_domain as DomainLabel;
 
-		// access hub
-		const k_hub = this._k_hub = k_vault.hub();
-
 		// destructure already initialized fields
 		const {
 			_a_key_fields,
@@ -144,13 +87,14 @@ class ItemController<
 		{
 			const k_counter = schema_counter();
 
-			const a_simulators = [
-				Symbol('1'),
-				Symbol('2'),
-				Symbol('3'),
-				Symbol('4'),
-				Symbol('5'),
-			];
+			// TODO: consider checking length of fields by spreading parts params to make them countable?
+			// if(f_schema.length > NL_MAX_PART_FIELDS)
+
+			// allow up to 8 part fields
+			const a_simulators = [];
+			for(let i_part=0; i_part<NL_MAX_PART_FIELDS; i_part++) {
+				a_simulators.push(Symbol(`${si_domain}.part-simulator#${i_part}`));
+			}
 
 			const f_simulate = f_schema as unknown as (k_typer: SchemaInterpretter, a_sims: symbol[]) => Dict<FieldDescriptor>;
 
@@ -177,9 +121,16 @@ class ItemController<
 				}
 			}
 		}
+
+		this._a_shape = [];
 	}
 
-	protected _path_parts(g_criteria: g_criteria): [string[], JsonObject] {
+	// access hub; memoized
+	protected get _k_hub(): VaultHub {
+		return Object.defineProperty(this, '_k_hub', this._k_vault.hub())._k_hub;
+	}
+
+	protected _path_parts(g_criteria: g_criteria): [Readonly<a_parts>, JsonObject] {
 		// shallow copy object
 		const g_copy: JsonObject = {...g_criteria};
 
@@ -192,8 +143,8 @@ class ItemController<
 			delete g_copy[si_label];
 
 			// add to key parts
-			return g_field.keyify(g_criteria[si_label]);
-		}), g_copy];
+			return g_field.keyify(g_criteria[si_label as keyof g_criteria]);
+		}) as unknown as Readonly<a_parts>, g_copy];
 	}
 
 	protected _item_path(g_criteria: g_criteria): [ItemPath, JsonObject] {
@@ -218,7 +169,7 @@ class ItemController<
 			delete g_copy[si_label];
 
 			// add to tuple
-			a_tuple.push(g_item[si_label] || g_field.default);
+			a_tuple.push(g_item[si_label as keyof g_item] || g_field.default);
 		}
 
 		// push any extraneous in object to last tuple member
@@ -229,6 +180,13 @@ class ItemController<
 		return [si_item, a_tuple];
 	}
 
+	get domain(): DomainLabel {
+		return this._si_domain;
+	}
+
+	get shape(): Readonly<SerSchema> {
+		return this._a_shape;
+	}
 
 	has<a_local extends Readonly<a_parts>>(
 		a_parts: a_local
@@ -243,6 +201,42 @@ class ItemController<
 		// 
 		const a_parts = this._path_parts(g_criteria)[0];
 
+		return this.getAt(a_parts);
+	}
+
+	_proto(i_code: ItemCode) {
+		// destructure field(s)
+		const {_k_hub} = this;
+
+		// get item bucket code
+		const i_bucket = _k_hub.getItemBucketCode(i_code);
+
+		// get shape code
+		const i_shape = _k_hub.getBucketShapeCode(i_bucket);
+
+		// bucket was not migrated
+		if(i_shape !== this._i_shape) {
+			throw new SchemaError(`bucket #${i_bucket} for ${this._si_domain} domain is using shape #${i_shape}, which is incompatible with expected shape. migrations need to be handled when vault is opened`);
+		}
+
+		// create property descriptor map
+		const h_props = create_shape_item(a_shape_loaded, `in ${this._si_domain}`);
+
+		// create proto
+		const g_proto = Object.defineProperties({}, h_props);
+
+		// save to cache
+		h_shapes_cache[sx_shape_loaded] = g_proto;
+
+		// TODO: migrate to new schema... otherwise changes to properties not defined
+		// in prototype will not mutate the tuple and thus get lost on serialization
+	}
+
+	async getAt<a_local extends Readonly<a_parts>>(
+		a_parts: a_local
+	): Promise<g_item | undefined> {
+	// Promise<ExtractWherePartsMatch<a_local, g_schema> | undefined> {
+
 		// locate item by its path
 		const i_code = this._k_hub.encodeItem(this._si_domain, a_parts.join(':') as ItemPath);
 
@@ -255,26 +249,26 @@ class ItemController<
 		// canonicalize loaded shape
 		const sx_shape_loaded = JSON.stringify(a_shape_loaded);
 
-		// lookup cached property descriptor map for canonical shape
-		let g_proto = _h_shapes_cache[sx_shape_loaded];
+		// // lookup cached property descriptor map for canonical shape
+		// const g_proto = _h_shapes_cache[sx_shape_loaded];
 
-		// loaded shape not yet cached
-		if(!g_proto) {
-			// create property descriptor map
-			const h_props = create_shape_item(a_shape_loaded, `in ${this._si_domain}`);
+		// // loaded shape not yet cached
+		// if(!g_proto) {
+		// 	// create property descriptor map
+		// 	const h_props = create_shape_item(a_shape_loaded, `in ${this._si_domain}`);
 
-			// create proto
-			const g_proto = Object.defineProperties({}, h_props);
+		// 	// create proto
+		// 	const g_proto = Object.defineProperties({}, h_props);
 
-			// save to cache
-			h_shapes_cache[sx_shape_loaded] = g_proto;
+		// 	// save to cache
+		// 	h_shapes_cache[sx_shape_loaded] = g_proto;
 
-			// TODO: migrate to new schema... otherwise changes to properties not defined
-			// in prototype will not mutate the tuple and thus get lost on serialization
-		}
+		// 	// TODO: migrate to new schema... otherwise changes to properties not defined
+		// 	// in prototype will not mutate the tuple and thus get lost on serialization
+		// }
 
 		// create instance and set its local properties
-		const g_item = Object.create(g_proto, {
+		const g_item = Object.create(this._proto(), {
 			[$_PARTS]: {
 				value: a_parts,
 			},
@@ -287,13 +281,7 @@ class ItemController<
 		return g_item;
 	}
 
-	getAt<a_local extends Readonly<a_parts>>(
-		a_parts: a_local
-	): ExtractWherePartsMatch<a_local, g_schema> | undefined {
-		return undefined;
-	}
-
-	put(g_item: g_item) {
+	async put(g_item: g_item) {
 		const {_k_hub} = this;
 
 		const [sr_item, g_ser] = this._serialize(g_item);
@@ -329,16 +317,16 @@ class ItemController<
 
 	}
 
-	* entries(): AsyncIterableIterator<> {
+	* entries(): AsyncIterableIterator<[ItemIdent, g_item]> {
 
 	}
 }
 
-new ItemController({
-	schema(k, [si_type, si_id]: [string, string]) {
-		type: k.str(si_type),
-		id: k.str(si_id),
-		data: k.str(),
-		other: k.ref<Other>(),
-	},
-})
+// new ItemController({
+// 	schema(k, [si_type, si_id]: [string, string]) {
+// 		type: k.str(si_type),
+// 		id: k.str(si_id),
+// 		data: k.str(),
+// 		other: k.ref<Other>(),
+// 	},
+// })

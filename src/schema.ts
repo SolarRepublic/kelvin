@@ -1,90 +1,157 @@
-import type {A, L, O, U} from 'ts-toolbelt';
+import type {A, C, L, O, U} from 'ts-toolbelt';
 
 import type {Key} from 'ts-toolbelt/out/Any/Key';
 
+import type {ItemController} from './controller';
 import type {AllValues, KvTuplesToObject, UnionToTuple, FilterDrop} from './meta';
-import type {Dict, JsonArray, JsonObject, JsonPrimitive} from '@blake.regalia/belt';
+import type {Dict, ES_TYPE, JsonArray, JsonObject, JsonPrimitive, NaiveBase64} from '@blake.regalia/belt';
 
 
+/**
+ * Describes a primitive datatype in a serialized schema
+ */
+export enum PrimitiveDatatype {
+	UNKNOWN=0,
+	INT=1,
+	BIGINT=2,
+	DOUBLE=3,
+	STRING=4,
+	BYTES=5,
+	OBJECT=6,
+}
 
-declare const SCHEMA_TYPE: unique symbol;
+/**
+ * Describes a tagged datatype in a serialized schema
+ */
+export enum TaggedDatatype {
+	UNKNOWN=0,
+	REF=1,
+	ARRAY=2,
+	TUPLE=3,
+	STRUCT=4,
+	SWITCH=5,
+}
+
+
+declare const DATATYPE: unique symbol;
+declare const SUBTYPE: unique symbol;
 declare const PART_FIELD: unique symbol;
+
+/**
+ * Creates a schema datatype
+ */
+export type SchemaSubtype<
+	w_type,
+	s_id extends string,
+> = {
+	[DATATYPE]: s_id;
+	[SUBTYPE]: w_type;
+} & w_type;
+
+/**
+ * Removes schema datatype metadata
+ */
+export type Unschema<w_type> = w_type extends SchemaSubtype<infer w_estype, infer s_id>? w_estype: never;
+
 
 type SoftBool = 0 | 1;
 
+/**
+ * Acceptable types for a classifier
+ */
 type Classifier = string | number;
 
-export type SchemaType = SchemaTypeCode | SchemaTypeInt | SchemaTypeStr | SchemaTypeArr | SchemaTypeObj | SchemaSwitch;
+/**
+ * Union of all schema datatypes
+ */
+export type Datatype =
+	| DatatypeInt
+	| DatatypeBigint
+	| DatatypeDouble
+	| DatatypeStr
+	| DatatypeArr
+	| DatatypeTuple
+	| DatatypeObj
+	| SchemaSwitch;
 
-export type StrictSchema = Dict<SchemaType>;
+export type StrictSchema = Dict<Datatype>;
 
-export type FlexibleSchema = SchemaType | Dict<JsonPrimitive | SchemaType>;
+// export type FlexibleSchema = Datatype | Dict<JsonPrimitive | Datatype>;
 
 
 /**
  * Reinterprets the given type as being JSON-compatible
  */
 export type ReduceSchema<z_test> =
-	z_test extends SchemaTypeCode<infer w_subtype>
-		? ReduceSchema<w_subtype>
-		: z_test extends SchemaTypeStr<infer w_subtype>
-			? ReduceSchema<w_subtype>
-			: z_test extends SchemaTypeInt<infer w_subtype>
-				? ReduceSchema<w_subtype>
-				: z_test extends SchemaTypeArr<infer w_subtype>
-					? ReduceSchema<w_subtype>
-					: z_test extends SchemaTypeObj<infer w_subtype>
-						? ReduceSchema<w_subtype>
-						: z_test extends JsonPrimitive? z_test
-							: z_test extends Array<infer w_type>
-								? ReduceSchema<w_type>[]
-								: {
-									[si_each in keyof z_test]: ReduceSchema<z_test[si_each]>;
-								};
+	z_test extends SchemaSubtype<infer w_estype, infer s_id>? ReduceSchema<w_estype>
+		: z_test extends {[ES_TYPE]: any}? z_test
+			: z_test extends JsonPrimitive? z_test
+				: z_test extends Array<infer w_type>
+					? ReduceSchema<w_type>[]
+					: {
+						[si_each in keyof z_test]: ReduceSchema<z_test[si_each]>;
+					};
 
 
-export type SchemaTypeCode<
+export type DatatypeInt<
 	w_subtype extends number=number,
 	b_part_field extends SoftBool=SoftBool,
-> = w_subtype & {
-	[SCHEMA_TYPE]: 'code';
+> = SchemaSubtype<w_subtype, 'int'> & {
 	[PART_FIELD]: b_part_field;
 };
 
-export type SchemaTypeInt<
-	w_subtype extends number=number,
+export type DatatypeBigint<
+	w_subtype extends bigint=bigint,
 	b_part_field extends SoftBool=SoftBool,
-> = w_subtype & {
-	[SCHEMA_TYPE]: 'int';
+> = SchemaSubtype<w_subtype, 'bigint'> & {
 	[PART_FIELD]: b_part_field;
 };
 
-export type SchemaTypeStr<
+export type DatatypeDouble<
+	w_subtype extends number=number,
+> = SchemaSubtype<w_subtype, 'double'>;
+
+export type DatatypeStr<
 	w_subtype extends string=string,
 	b_part_field extends SoftBool=SoftBool,
-> = w_subtype & {
-	[SCHEMA_TYPE]: 'str';
+> = SchemaSubtype<w_subtype, 'str'> & {
 	[PART_FIELD]: b_part_field;
 };
 
-export type SchemaTypeArr<
-	w_subtype extends JsonArray=JsonArray,
-> = w_subtype & {
-	[SCHEMA_TYPE]: 'arr';
-};
+export type DatatypeBytes<
+	w_subtype extends Uint8Array=Uint8Array,
+> = SchemaSubtype<w_subtype, 'str'>;
 
-export type SchemaTypeObj<
+export type DatatypeObj<
 	w_subtype extends JsonObject=JsonObject,
-> = w_subtype & {
-	[SCHEMA_TYPE]: 'obj';
-};
+> = SchemaSubtype<w_subtype, 'obj'>;
+
+export type DatatypeRef<
+	g_ref extends ItemController,
+> = SchemaSubtype<g_ref, 'ref'>;
+
+export type DatatypeArr<
+	w_subtype extends JsonArray=JsonArray,
+> = SchemaSubtype<w_subtype, 'arr'>;
+
+export type DatatypeTuple<
+	w_subtype extends JsonArray=JsonArray,
+> = SchemaSubtype<w_subtype, 'tuple'>;
+
+export type DatatypeStruct<
+	w_subtype extends JsonObject=JsonObject,
+> = SchemaSubtype<w_subtype, 'struct'>;
 
 type SchemaSwitch<
 	si_dep extends string=string,
 	w_classifier extends Classifier=Classifier,
-	h_switch extends Record<w_classifier, FlexibleSchema>=Record<w_classifier, {}>,
+	h_switch extends {
+		[w_key in w_classifier]: SchemaBuilder;
+	}={
+		[w_key in w_classifier]: SchemaBuilder;
+	},
 > = {
-	[SCHEMA_TYPE]: 'switch';
+	[DATATYPE]: 'switch';
 	dep: si_dep;
 	code: w_classifier;
 	switch: h_switch;
@@ -161,29 +228,129 @@ export type ExtractedMembers<
 > = Omit<ExtractWherePartsMatch<a_parts, g_schema>, keyof PartFields<g_schema>>;
 
 
+export type SchemaSimulator<w_return=any> = {
+	int(w_part?: number): w_return;
+	bigint(w_part?: bigint): w_return;
+	double(): w_return;
+	str(w_part?: string): w_return;
+	bytes(): w_return;
+	obj(): w_return;
+	ref(g_item: ItemController): w_return;
+	arr(f_sub: SubschemaSpecifier<SchemaSimulator<w_return>, w_return>): w_return;
+	tuple(f_sub: SubschemaSpecifier<SchemaSimulator<w_return[]>>): w_return;
+	// struct(f_sub: SubschemaSpecifier<SchemaSimulator<w_return>, Dict<w_return>>): w_return;
+	struct(f_sub: SubschemaBuilder<w_return>): w_return;
+	switch(
+		si_dep: string,
+		w_classifier: Classifier,
+		h_switch: {
+			// [w_key in typeof w_classifier]: SubschemaSpecifier<SchemaSimulator<w_return>, Dict<w_return>>;
+			[w_key in typeof w_classifier]: SubschemaBuilder<w_return>;
+		}
+	): w_return;
+};
 
-export type SchemaTyper = {
-	// code<w_subtype extends number>(xc_part?: w_subtype): SchemaTypeCode<w_subtype>;
+// export type SubSchema<w_return=any, w_out=w_return> = (k: SchemaSimulator<w_return>) => w_out;
 
-	int<w_subtype extends number=number>(): SchemaTypeInt<w_subtype, 0>;
-	int<w_subtype extends number>(n_part: w_subtype): SchemaTypeInt<w_subtype, 1>;
+/**
+ * Top-level schema builder for a domain, accepting key part arguments
+ */
+export type SchemaBuilder<
+	k_spec extends SchemaSimulator=SchemaSimulator,
+	a_parts extends Key[]=Key[],
+	w_return=any,
+> = (k: k_spec, a_parts: a_parts) => Dict<w_return>;
 
-	str<w_subtype extends string=string>(si_part?: w_subtype): SchemaTypeStr<w_subtype>;
+/**
+ * Sub-level schema specifier for nested fields
+ */
+export type SubschemaSpecifier<
+	k_spec extends SchemaSimulator=SchemaSimulator,
+	w_return=any,
+> = (k: k_spec) => w_return;
 
-	arr<w_subtype extends JsonArray=JsonArray>(): SchemaTypeArr<w_subtype>;
+/**
+ * Sub-level schema builder for nested fields
+ */
+export type SubschemaBuilder<
+	w_return,
+	k_spec extends SchemaSimulator<w_return>=SchemaSimulator<w_return>,
+> = (k: k_spec) => Dict<w_return>;
 
-	obj<w_subtype extends JsonObject=JsonObject>(): SchemaTypeObj<w_subtype>;
 
-	switch<si_dep extends string, w_classifier extends Classifier, h_switch extends Record<w_classifier, FlexibleSchema>>(
+
+/**
+ * Used to ensure that the type implements all the schema datatypes correctly
+ */
+export type ImplementsSchemaTypes<g_impl extends SchemaSimulator> = g_impl;
+
+
+/**
+ * Represents a dummy type assigned to the callback parameter of a `schema` function declaration.
+ */
+export type SchemaSpecifier = ImplementsSchemaTypes<{
+	int<w_subtype extends number=number>(): DatatypeInt<w_subtype, 0>;
+	int<w_subtype extends number>(n_part: w_subtype): DatatypeInt<w_subtype, 1>;
+
+	bigint<w_subtype extends bigint=bigint>(): DatatypeBigint<w_subtype, 0>;
+	bigint<w_subtype extends bigint>(xg_part: w_subtype): DatatypeBigint<w_subtype, 1>;
+
+	double<w_subtype extends number=number>(): DatatypeDouble<w_subtype>;
+
+	str<w_subtype extends string=string>(si_part?: w_subtype): DatatypeStr<w_subtype>;
+
+	bytes<w_subtype extends Uint8Array=Uint8Array>(): DatatypeBytes<w_subtype>;
+
+	obj<w_subtype extends JsonObject=JsonObject>(): DatatypeObj<w_subtype>;
+
+	ref<g_ref extends ItemController>(g_item: ItemController): DatatypeRef<g_ref>;
+
+	arr<w_subtype extends JsonArray=JsonArray>(
+		f_sub: (k: SchemaSimulator) => DatatypeArr<w_subtype>,
+	): DatatypeArr<w_subtype>;
+
+	struct<w_subtype extends JsonObject=JsonObject>(
+		f_sub: SubschemaBuilder<SchemaSimulator<DatatypeStruct<w_subtype>>>,
+	): DatatypeStruct<w_subtype>;
+
+	switch<
+		si_dep extends string,
+		w_classifier extends Classifier,
+		h_switch extends {
+			[w_key in w_classifier]: SubschemaBuilder<any>;
+		},
+	>(
 		si_dep: si_dep,
 		w_classifier: w_classifier,
 		h_switch: h_switch,
 	): SchemaSwitch<si_dep, w_classifier, h_switch>;
+}>;
 
-	// // aliases with different meanings on ES side
-	// text<w_subtype extends string=string>(si_part?: w_subtype): SchemaTypeStr<w_subtype>;
+/* Tests */
+{
+	enum ItemType {
+		UNKNOWN=0,
+		THING=1,
+		OTHER=2,
+	}
 
-	// uint<w_subtype extends number=number>(n_part?: w_subtype): SchemaTypeCode<w_subtype>;
-};
+	type cat = DatatypeInt<0 | 1, 1>;
 
+	type start = {
+		category: DatatypeInt<ItemType, 1>;
+		type: DatatypeStr<'sample', 1>;
+		id: DatatypeStr<'s', 1>;
+		data: DatatypeStr<NaiveBase64, 0>;
+	} | {
+		category: DatatypeInt<ItemType, 1>;
+		type: DatatypeStr<'net', 1>;
+		id: DatatypeStr<'s', 1>;
+		data: DatatypeStr<NaiveBase64, 0>;
+	};
 
+	type reduced = ReduceSchema<start>;
+
+	type shape = ItemShapesFromSchema<start>;
+
+	type ss = A.Cast<SelectionCriteria<[ItemType, string, string], start>, JsonObject>;
+}

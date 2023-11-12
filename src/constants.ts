@@ -1,10 +1,13 @@
 import type {SerVaultHashParams} from './types';
 
-import {buffer, text_to_buffer} from '@blake.regalia/belt';
+import {text_to_buffer} from '@blake.regalia/belt';
 import {ATU8_SHA256_STARSHELL, random_bytes} from '@solar-republic/crypto';
 
 // uint specifying system version for database compatibility
 export const N_SYSTEM_VERSION = 2;
+
+// maximum number of part fields allowed
+export const NL_MAX_PART_FIELDS = 8;
 
 
 // maximum value of an unsigned 64-bit integer
