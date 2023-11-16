@@ -1,8 +1,9 @@
-import type {A, C, L, O, U} from 'ts-toolbelt';
+import type {A} from 'ts-toolbelt';
 
 import type {Key} from 'ts-toolbelt/out/Any/Key';
 
 import type {ItemController} from './controller';
+import type {RuntimeItem} from './item-proto';
 import type {AllValues, KvTuplesToObject, UnionToTuple, FilterDrop} from './meta';
 import type {Dict, ES_TYPE, JsonArray, JsonObject, JsonPrimitive, NaiveBase64} from '@blake.regalia/belt';
 
@@ -32,6 +33,26 @@ export enum TaggedDatatype {
 	SWITCH=5,
 }
 
+export type PartableDatatype = PrimitiveDatatype.INT | PrimitiveDatatype.BIGINT | PrimitiveDatatype.STRING;
+
+export type PrimitiveDatatypeToEsType<xc_type extends PrimitiveDatatype> = {
+	[PrimitiveDatatype.UNKNOWN]: unknown;
+	[PrimitiveDatatype.INT]: number;
+	[PrimitiveDatatype.BIGINT]: bigint;
+	[PrimitiveDatatype.DOUBLE]: number;
+	[PrimitiveDatatype.STRING]: string;
+	[PrimitiveDatatype.BYTES]: Uint8Array;
+	[PrimitiveDatatype.OBJECT]: JsonObject;
+}[xc_type];
+
+export type TaggedDatatypeToEsType<xc_type extends TaggedDatatype> = {
+	[TaggedDatatype.UNKNOWN]: unknown;
+	[TaggedDatatype.REF]: RuntimeItem;
+	[TaggedDatatype.ARRAY]: any[];
+	[TaggedDatatype.TUPLE]: any[];
+	[TaggedDatatype.STRUCT]: object;
+	[TaggedDatatype.SWITCH]: any;
+}[xc_type];
 
 declare const DATATYPE: unique symbol;
 declare const SUBTYPE: unique symbol;
@@ -75,8 +96,6 @@ export type Datatype =
 	| SchemaSwitch;
 
 export type StrictSchema = Dict<Datatype>;
-
-// export type FlexibleSchema = Datatype | Dict<JsonPrimitive | Datatype>;
 
 
 /**
@@ -238,19 +257,16 @@ export type SchemaSimulator<w_return=any> = {
 	ref(g_item: ItemController): w_return;
 	arr(f_sub: SubschemaSpecifier<SchemaSimulator<w_return>, w_return>): w_return;
 	tuple(f_sub: SubschemaSpecifier<SchemaSimulator<w_return[]>>): w_return;
-	// struct(f_sub: SubschemaSpecifier<SchemaSimulator<w_return>, Dict<w_return>>): w_return;
 	struct(f_sub: SubschemaBuilder<w_return>): w_return;
 	switch(
 		si_dep: string,
 		w_classifier: Classifier,
 		h_switch: {
-			// [w_key in typeof w_classifier]: SubschemaSpecifier<SchemaSimulator<w_return>, Dict<w_return>>;
 			[w_key in typeof w_classifier]: SubschemaBuilder<w_return>;
 		}
 	): w_return;
 };
 
-// export type SubSchema<w_return=any, w_out=w_return> = (k: SchemaSimulator<w_return>) => w_out;
 
 /**
  * Top-level schema builder for a domain, accepting key part arguments
@@ -297,7 +313,8 @@ export type SchemaSpecifier = ImplementsSchemaTypes<{
 
 	double<w_subtype extends number=number>(): DatatypeDouble<w_subtype>;
 
-	str<w_subtype extends string=string>(si_part?: w_subtype): DatatypeStr<w_subtype>;
+	str<w_subtype extends string=string>(): DatatypeStr<w_subtype, 0>;
+	str<w_subtype extends string=string>(si_part: w_subtype): DatatypeStr<w_subtype, 1>;
 
 	bytes<w_subtype extends Uint8Array=Uint8Array>(): DatatypeBytes<w_subtype>;
 
@@ -306,8 +323,12 @@ export type SchemaSpecifier = ImplementsSchemaTypes<{
 	ref<g_ref extends ItemController>(g_item: ItemController): DatatypeRef<g_ref>;
 
 	arr<w_subtype extends JsonArray=JsonArray>(
-		f_sub: (k: SchemaSimulator) => DatatypeArr<w_subtype>,
+		f_sub: (k: SchemaSimulator) => Datatype,
 	): DatatypeArr<w_subtype>;
+
+	tuple<w_subtype extends JsonArray=JsonArray>(
+		f_sub: (k: SchemaSimulator) => Datatype[],
+	): DatatypeTuple<w_subtype>;
 
 	struct<w_subtype extends JsonObject=JsonObject>(
 		f_sub: SubschemaBuilder<SchemaSimulator<DatatypeStruct<w_subtype>>>,

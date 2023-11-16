@@ -2,8 +2,8 @@ import type {A} from 'ts-toolbelt';
 
 import type {Exactly} from './meta';
 import type {Reader} from './reader';
-import type {SchemaTyper, ItemShapesFromSchema, ExtractedMembers, SelectionCriteria, StrictSchema} from './schema';
-import type {DomainLabel, ItemCode, ItemIdent, ItemPath, SerSchema} from './types';
+import type {SchemaTyper, ItemShapesFromSchema, ExtractedMembers, SelectionCriteria, StrictSchema, SchemaBuilder, SchemaSimulator} from './schema-types';
+import type {DomainLabel, ItemCode, ItemIdent, ItemPath, SerFieldStruct, SerKeyStruct, SerSchema} from './types';
 import type {VaultClient} from './vault-client';
 
 import type {VaultHub} from './vault-hub';
@@ -15,6 +15,7 @@ import {NL_MAX_PART_FIELDS} from './constants';
 import {Bug, SchemaError} from './errors';
 
 import {$_PARTS, $_TUPLE, create_shape_item} from './item-serde';
+import {interpret_schema} from './schema-impl';
 
 
 
@@ -48,27 +49,15 @@ export class ItemController<
 
 	protected _h_shapes_cache: Dict<object> = {};
 
-	// names of fields that belong to item's key
-	protected _a_key_fields: {
-		label: string;
-		keyify: (w_in: any) => string;
-	}[] = [];
-
-	// names of fields that are stored in serial tuple
-	protected _a_serial_fields: {
-		label: string;
-		default: JsonValue;
-	}[] = [];
-
 	// current shape in isolated form
-	protected _a_shape: Readonly<SerSchema>;
+	protected _a_schema: Readonly<SerSchema>;
 
 	constructor(gc_type: gc_type) {
 		// destructure config arg
 		const {
 			client: k_vault,
 			domain: si_domain,
-			schema: f_schema,
+			schema: f_builder,
 		} = gc_type;
 
 		// save to fields
@@ -77,52 +66,22 @@ export class ItemController<
 		// domain label
 		this._si_domain = si_domain as DomainLabel;
 
-		// destructure already initialized fields
-		const {
-			_a_key_fields,
-			_a_serial_fields,
-		} = this;
+		// interpret schema
+		const a_schema = this._a_schema = interpret_schema(si_domain, f_builder as unknown as SchemaBuilder<SchemaSimulator, A.Key[]>);
 
-		// run simulation on schema
-		{
-			const k_counter = schema_counter();
+		// build prototype
 
-			// TODO: consider checking length of fields by spreading parts params to make them countable?
-			// if(f_schema.length > NL_MAX_PART_FIELDS)
 
-			// allow up to 8 part fields
-			const a_simulators = [];
-			for(let i_part=0; i_part<NL_MAX_PART_FIELDS; i_part++) {
-				a_simulators.push(Symbol(`${si_domain}.part-simulator#${i_part}`));
-			}
+		// serialize
+		JSON.stringify(a_schema);
+	}
 
-			const f_simulate = f_schema as unknown as (k_typer: SchemaInterpretter, a_sims: symbol[]) => Dict<FieldDescriptor>;
+	get _schema_parts(): SerKeyStruct {
+		return this._a_schema[1];
+	}
 
-			// locate fields that can be ommitted from serialized form
-			const g_probe = f_simulate(k_counter, a_simulators);
-			for(const [si_key, g_descriptor] of ode(g_probe)) {
-				// key part
-				if(g_descriptor.symbol) {
-					// omit from serialized form
-					delete g_probe[si_key];
-
-					// save key field at its approrpriate index
-					_a_key_fields[a_simulators.indexOf(g_descriptor.symbol)] = {
-						label: si_key,
-						keyify: g_descriptor.keyify,
-					};
-				}
-				// tuple member
-				else {
-					_a_serial_fields[g_descriptor.index] = {
-						label: si_key,
-						default: g_descriptor.default,
-					};
-				}
-			}
-		}
-
-		this._a_shape = [];
+	get _schema_fields(): SerFieldStruct {
+		return this._a_schema[2];
 	}
 
 	// access hub; memoized
@@ -135,7 +94,7 @@ export class ItemController<
 		const g_copy: JsonObject = {...g_criteria};
 
 		// construct item key
-		return [this._a_key_fields.map((g_field) => {
+		return [this._schema_parts.map((g_field) => {
 			// ref label
 			const si_label = g_field.label;
 
@@ -153,39 +112,39 @@ export class ItemController<
 		return [a_parts.join(':') as ItemPath, g_copy];
 	}
 
-	protected _serialize(g_item: g_item): [ItemPath, JsonArray] {
-		// serialize key and get remaining fields
-		const [si_item, g_copy] = this._item_path(g_item);
+	// protected _serialize(g_item: g_item): [ItemPath, JsonArray] {
+	// 	// serialize key and get remaining fields
+	// 	const [si_item, g_copy] = this._item_path(g_item);
 
-		// prep serialized tuple
-		const a_tuple: JsonArray = [];
+	// 	// prep serialized tuple
+	// 	const a_tuple: JsonArray = [];
 
-		// each field in item
-		for(const g_field of this._a_serial_fields) {
-			// ref label
-			const si_label = g_field.label;
+	// 	// each field in item
+	// 	for(const g_field of this._a_serial_fields) {
+	// 		// ref label
+	// 		const si_label = g_field.label;
 
-			// remove from copy
-			delete g_copy[si_label];
+	// 		// remove from copy
+	// 		delete g_copy[si_label];
 
-			// add to tuple
-			a_tuple.push(g_item[si_label as keyof g_item] || g_field.default);
-		}
+	// 		// add to tuple
+	// 		a_tuple.push(g_item[si_label as keyof g_item] || g_field.default);
+	// 	}
 
-		// push any extraneous in object to last tuple member
-		if(Object.keys(g_copy)) {
-			a_tuple.push(g_copy);
-		}
+	// 	// push any extraneous in object to last tuple member
+	// 	if(Object.keys(g_copy)) {
+	// 		a_tuple.push(g_copy);
+	// 	}
 
-		return [si_item, a_tuple];
-	}
+	// 	return [si_item, a_tuple];
+	// }
 
 	get domain(): DomainLabel {
 		return this._si_domain;
 	}
 
 	get shape(): Readonly<SerSchema> {
-		return this._a_shape;
+		return this._a_schema;
 	}
 
 	has<a_local extends Readonly<a_parts>>(
@@ -204,42 +163,7 @@ export class ItemController<
 		return this.getAt(a_parts);
 	}
 
-	_proto(i_code: ItemCode) {
-		// destructure field(s)
-		const {_k_hub} = this;
-
-		// get item bucket code
-		const i_bucket = _k_hub.getItemBucketCode(i_code);
-
-		// get shape code
-		const i_shape = _k_hub.getBucketShapeCode(i_bucket);
-
-		// bucket was not migrated
-		if(i_shape !== this._i_shape) {
-			throw new SchemaError(`bucket #${i_bucket} for ${this._si_domain} domain is using shape #${i_shape}, which is incompatible with expected shape. migrations need to be handled when vault is opened`);
-		}
-
-		// create property descriptor map
-		const h_props = create_shape_item(a_shape_loaded, `in ${this._si_domain}`);
-
-		// create proto
-		const g_proto = Object.defineProperties({}, h_props);
-
-		// save to cache
-		h_shapes_cache[sx_shape_loaded] = g_proto;
-
-		// TODO: migrate to new schema... otherwise changes to properties not defined
-		// in prototype will not mutate the tuple and thus get lost on serialization
-	}
-
-	async getAt<a_local extends Readonly<a_parts>>(
-		a_parts: a_local
-	): Promise<g_item | undefined> {
-	// Promise<ExtractWherePartsMatch<a_local, g_schema> | undefined> {
-
-		// locate item by its path
-		const i_code = this._k_hub.encodeItem(this._si_domain, a_parts.join(':') as ItemPath);
-
+	async getByCode(i_code: ItemCode | undefined): Promise<g_item | undefined> {
 		// item not found
 		if(!i_code) return Promise.resolve(__UNDEFINED);
 
@@ -279,6 +203,43 @@ export class ItemController<
 
 		// return instance
 		return g_item;
+	}
+
+	_proto(i_code: ItemCode) {
+		// destructure field(s)
+		const {_k_hub} = this;
+
+		// get item bucket code
+		const i_bucket = _k_hub.getItemBucketCode(i_code);
+
+		// get shape code
+		const i_shape = _k_hub.getBucketShapeCode(i_bucket);
+
+		// bucket was not migrated
+		if(i_shape !== this._i_shape) {
+			throw new SchemaError(`bucket #${i_bucket} for ${this._si_domain} domain is using shape #${i_shape}, which is incompatible with expected shape. migrations need to be handled when vault is opened`);
+		}
+
+		// create property descriptor map
+		const h_props = create_shape_item(a_shape_loaded, `in ${this._si_domain}`);
+
+		// create proto
+		const g_proto = Object.defineProperties({}, h_props);
+
+		// save to cache
+		h_shapes_cache[sx_shape_loaded] = g_proto;
+
+		// TODO: migrate to new schema... otherwise changes to properties not defined
+		// in prototype will not mutate the tuple and thus get lost on serialization
+	}
+
+	async getAt<a_local extends Readonly<a_parts>>(
+		a_parts: a_local
+	): Promise<g_item | undefined> {
+	// Promise<ExtractWherePartsMatch<a_local, g_schema> | undefined> {
+
+		// locate item by its path
+		return this.getByCode(this._k_hub.encodeItem(this._si_domain, a_parts.join(':') as ItemPath));
 	}
 
 	async put(g_item: g_item) {

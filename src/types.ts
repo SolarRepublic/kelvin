@@ -1,6 +1,6 @@
 import type {A, L} from 'ts-toolbelt';
 
-import type {PrimitiveDatatype, TaggedDatatype} from './schema';
+import type {PartableDatatype, PrimitiveDatatype, TaggedDatatype} from './schema-types';
 import type {Dict, IntStr, NaiveBase64, JsonObject, JsonValue, JsonArray, Subtype} from '@blake.regalia/belt';
 
 
@@ -61,6 +61,8 @@ export type ShapeCode = Subtype<number, 'shape-code'>;
 
 
 export type FieldLabel = Subtype<string, 'field-label'>;
+
+export type FieldCode = Subtype<number, 'field-code'>;
 
 
 export type LockSpecifier = Subtype<string, 'lock-specifier'>;
@@ -169,7 +171,7 @@ export type SerTaggedDatatype =
 
 export type SerField = PrimitiveDatatype | SerTaggedDatatype;
 
-export type SerKeyStruct = Record<FieldLabel, PrimitiveDatatype>;
+export type SerKeyStruct = Record<FieldLabel, PartableDatatype>;
 
 // eslint-disable-next-line @typescript-eslint/consistent-indexed-object-style
 export type SerFieldStruct = {

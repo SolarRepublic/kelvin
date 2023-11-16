@@ -1,6 +1,6 @@
 import type {A} from 'ts-toolbelt';
 
-import type {ReduceSchema, SchemaTyper, ItemShapesFromSchema, ExtractedMembers, SelectionCriteria, ExtractWherePartsMatch, SchemaType, StrictSchema, PartFields} from './schema';
+import type {ReduceSchema, SchemaTyper, ItemShapesFromSchema, ExtractedMembers, SelectionCriteria, ExtractWherePartsMatch, SchemaType, StrictSchema, PartFields} from './schema-types';
 import type {IndexLabel, IndexValue, ItemPath} from './types';
 import type {VaultClient} from './vault-client';
 

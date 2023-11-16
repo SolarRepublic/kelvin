@@ -37,6 +37,8 @@ export class Bug extends BasicError('SOFTWARE BUG: Please report this issue') {}
 
 export class TypeFieldNotWritableError extends BasicError('Cannot modify field that is part of item identity') {}
 
+export class UnparseableSchemaError extends BasicError('Unable to parse schema') {}
+
 export class SchemaError extends BasicError('CRITICAL SCHEMA ERROR') {}
 
 export class SchemaWarning extends BasicError('Schema warning') {}
