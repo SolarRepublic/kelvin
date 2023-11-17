@@ -1,8 +1,6 @@
 import type {L} from 'ts-toolbelt';
 
-import type {Key} from 'ts-toolbelt/out/Any/Key';
-
-import type {SchemaSimulator, SchemaBuilder} from './schema-types';
+import type {SchemaSimulator, SchemaBuilder, SchemaSpecifier, AcceptablePartTuples, StrictSchema} from './schema-types';
 import type {FieldLabel, SerField, SerFieldStruct, SerKeyStruct, SerSchema, SerTaggedDatatype} from './types';
 
 import type {Dict, Arrayable, DiscriminatedUnion} from '@blake.regalia/belt';
@@ -15,11 +13,15 @@ import {Bug, SchemaError} from './errors';
 import {PrimitiveDatatype, TaggedDatatype} from './schema-types';
 
 
-const $_COUNTER = Symbol('field-counter');
+type SchemaCounter = SchemaBuilder<SchemaSimulator, symbol[], Dict<CountedValues>>;
 
+type SchemaSerializer = SchemaBuilder<ReturnType<typeof spec_for_ser>, symbol[], Dict<any>>;
+
+
+const $_COUNTER = Symbol('field-counter');
 const $_COUNT = Symbol('field-count');
 
-// type CountedValues = symbol | number | [number, CountedValues];
+
 export type CountedValues = {
 	[$_COUNT]: number;
 	subcounts?: {
@@ -136,19 +138,18 @@ const spec_for_ser: (g_shape: ShapedFields, i_field?: number) => SchemaSimulator
 		const g_subshape = bind_shaper(g_shape.access(++i_field).tuple!);
 		return [i_field, [TaggedDatatype.TUPLE, f_sub(spec_for_ser(g_subshape) as unknown as SchemaSimulator<ShapeDescriptor[]>)]];
 	},
-	// @ts-expect-error bc i said so
 	struct: (f_sub) => {
 		const g_subshape = bind_shaper(g_shape.access(++i_field).struct!);
 		return [i_field, [TaggedDatatype.STRUCT, f_sub(spec_for_ser(g_subshape))]];
 	},
 	switch: (si_dep, w_classifier, h_switch) => {
-		const h_positions = g_shape.access(++i_field).switch;
+		const h_positions = g_shape.access(++i_field).switch!;
 
 		return [i_field, [
 			TaggedDatatype.SWITCH,
 			g_shape.fieldIndex(si_dep),
 			fodemtv(h_switch, (f_sub, w_key) => {
-				const g_subshape = bind_shaper([h_positions[w_key]]);
+				const g_subshape = bind_shaper([h_positions[w_key!]]);
 				return f_sub(spec_for_ser(g_subshape));
 			}),
 		]];
@@ -314,7 +315,7 @@ function reshape_tagged_value([xc_type, w_info, w_extra]: SerTaggedDatatype, sr_
 
 function reshape_fields(
 	sr_path: string,
-	h_shape: ReturnType<SchemaBuilder<ReturnType<typeof spec_for_ser>>>,
+	h_shape: ReturnType<SchemaSerializer>,
 	a_simulators?: symbol[]
 ): {
 		keys: SerKeyStruct;
@@ -396,25 +397,26 @@ function reshape_fields(
 	};
 }
 
+
 /**
  * Takes a schema builder and produces the serialized representation of that schema
  * @param si_domain 
  * @param f_schema 
  * @returns 
  */
-export function interpret_schema(
+export function interpret_schema<a_parts extends AcceptablePartTuples>(
 	si_domain: string,
-	f_schema: SchemaBuilder<SchemaSimulator, Key[]>
+	f_schema: SchemaBuilder<SchemaSpecifier, a_parts, StrictSchema>
 ): SerSchema {
 	// allow up to 8 part fields
-	const a_simulators = [];
+	const a_simulators: symbol[] = [];
 	for(let i_part=0; i_part<NL_MAX_PART_FIELDS; i_part++) {
 		a_simulators.push(Symbol(`${si_domain}.part-simulator#${i_part+1}`));
 	}
 
 	// locate fields that can be ommitted from serialized form
 	const g_counter = spec_for_count();
-	const h_probe = f_schema(g_counter, a_simulators);
+	const h_probe = (f_schema as unknown as SchemaCounter)(g_counter, ...a_simulators);
 
 	// 
 	assert_counts_match_in_struct(h_probe, g_counter, si_domain);
@@ -423,7 +425,7 @@ export function interpret_schema(
 	const g_shape = bind_shaper(h_probe);
 
 	// build 
-	const h_shape = (f_schema as SchemaBuilder<ReturnType<typeof spec_for_ser>>)(spec_for_ser(g_shape), a_simulators);
+	const h_shape = (f_schema as unknown as SchemaSerializer)(spec_for_ser(g_shape), ...a_simulators);
 
 	// extract keys and fields
 	const {

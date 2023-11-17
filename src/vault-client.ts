@@ -1,10 +1,11 @@
+import type {ItemController} from './controller';
 import type {KelvinKeyValueStore, KelvinKeyValueWriter} from './store';
-import type {SerVaultHub, SerVaultBase, SerVaultHashParams, BucketKey, SerBucket} from './types';
+import type {SerVaultHub, SerVaultBase, SerVaultHashParams, BucketKey, SerBucket, DomainLabel} from './types';
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import type {AesGcmDecryptionError} from '@solar-republic/crypto';
 
-import {base64_to_buffer, buffer_to_base64, buffer_to_json, F_NOOP, is_dict_es, ode, type NaiveBase64, type NaiveBase93, text_to_buffer, defer, json_to_buffer, ATU8_NIL, concat2, __UNDEFINED} from '@blake.regalia/belt';
+import {base64_to_buffer, buffer_to_base64, buffer_to_json, F_NOOP, is_dict_es, ode, type NaiveBase64, type NaiveBase93, text_to_buffer, defer, json_to_buffer, ATU8_NIL, concat2, __UNDEFINED, type Dict} from '@blake.regalia/belt';
 
 import {aes_gcm_decrypt, aes_gcm_encrypt, random_bytes} from '@solar-republic/crypto';
 import {sha256_sync} from '@solar-republic/crypto/sha256';
@@ -129,6 +130,9 @@ export class VaultClient {
 
 	// dirty indicator
 	protected _b_dirty = false;
+
+	// controllers
+	protected _h_controllers: Record<DomainLabel, ItemController> = {};
 
 	constructor(
 		k_content: KelvinKeyValueStore,
@@ -975,5 +979,29 @@ export class VaultClient {
 				throw new Bug('unable to encode/write ciphertext bucket contents');
 			}
 		});
+	}
+
+	/**
+	 * Registers an item controller instance for its domain
+	 */
+	registerController(si_domain: DomainLabel, k_controller: ItemController): void {
+		// destructure
+		const {_h_controllers} = this;
+
+		// already registered
+		if(_h_controllers[si_domain]) {
+			throw Error(`An item controller for the "${si_domain}" domain has already been registered`);
+		}
+
+		// accept
+		_h_controllers[si_domain] = k_controller;
+	}
+
+
+	/**
+	 * Retrieves the registered item controller for a given domain
+	 */
+	controllerFor(si_domain: DomainLabel): ItemController | undefined {
+		return this._h_controllers[si_domain];
 	}
 }

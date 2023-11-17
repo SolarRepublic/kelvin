@@ -97,7 +97,7 @@ export class MemoryWrapper<
 	_h_store: Dict<JsonValue | Uint8Array> = {};
 
 	constructor(
-		si_lock_prefix: string,
+		si_lock_prefix?: string,
 		y_locks=new SingleThreadedLockManager(),
 		dc_writer: CompatibleWriterClass<MemoryWriter>=MemoryWriter
 	) {

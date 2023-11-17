@@ -1,63 +1,61 @@
-import type {A} from 'ts-toolbelt';
+import type {A, F} from 'ts-toolbelt';
 
 import type {Exactly} from './meta';
 import type {Reader} from './reader';
-import type {SchemaTyper, ItemShapesFromSchema, ExtractedMembers, SelectionCriteria, StrictSchema, SchemaBuilder, SchemaSimulator} from './schema-types';
+import type {ItemShapesFromSchema, ExtractedMembers, StrictSchema, SchemaSimulator, SchemaSpecifier, AcceptablePartTuples, SchemaBuilder} from './schema-types';
 import type {DomainLabel, ItemCode, ItemIdent, ItemPath, SerFieldStruct, SerKeyStruct, SerSchema} from './types';
-import type {VaultClient} from './vault-client';
+
 
 import type {VaultHub} from './vault-hub';
-import type {Dict, JsonPrimitive, JsonObject, JsonValue, JsonArray} from '@blake.regalia/belt';
+import type {Dict, JsonObject} from '@blake.regalia/belt';
 
-import {ode, F_IDENTITY, __UNDEFINED} from '@blake.regalia/belt';
+import type {ChainNamespace} from 'test/chains';
 
-import {NL_MAX_PART_FIELDS} from './constants';
-import {Bug, SchemaError} from './errors';
+import {__UNDEFINED} from '@blake.regalia/belt';
 
+import {SchemaError} from './errors';
+
+import {item_prototype} from './item-proto';
 import {$_PARTS, $_TUPLE, create_shape_item} from './item-serde';
 import {interpret_schema} from './schema-impl';
-
-
-
-type ItemType<
-	a_keys extends readonly JsonPrimitive[],
-	g_schema extends StrictSchema,
-> = {
-	client: VaultClient;
-	domain: string;
-	schema: (k_typer: SchemaTyper, a_parts: a_keys) => g_schema;
-};
-
+import {VaultClient} from './vault-client';
 
 
 export class ItemController<
-	a_parts extends readonly JsonPrimitive[]=any,
-	g_schema_dummy extends StrictSchema=any,
-	gc_type extends ItemType<a_parts, g_schema_dummy>=any,
-	g_schema extends ReturnType<gc_type['schema']>=any,
-	g_criteria extends A.Cast<SelectionCriteria<a_parts, g_schema>, JsonObject>=any,
-	g_item extends A.Cast<ItemShapesFromSchema<g_schema>, g_criteria>=any,
+	si_domain extends DomainLabel,
+	a_parts extends AcceptablePartTuples,
+	g_schema extends StrictSchema,
+	f_schema extends SchemaBuilder<SchemaSpecifier, a_parts, g_schema>,
+	g_item extends ItemShapesFromSchema<g_schema>,
+	g_proto,
 > {
 	protected _k_vault: VaultClient;
 	protected _si_domain!: DomainLabel;
-	// protected _sb92_domain: DomainCode | undefined;
-
-	// protected _k_hub!: VaultHub;
-
 	protected _k_reader!: Reader;
-	// protected _k_writer!: Writer
 
 	protected _h_shapes_cache: Dict<object> = {};
 
 	// current shape in isolated form
 	protected _a_schema: Readonly<SerSchema>;
+	protected _g_descriptor_schema: PropertyDescriptorMap;
+	protected _g_descriptor_proto: PropertyDescriptorMap;
 
-	constructor(gc_type: gc_type) {
+	protected _g_prototype: object;
+
+	constructor(gc_type: {
+		client: VaultClient;
+		domain: si_domain;
+		schema: F.NoInfer<f_schema>;
+		proto?: (
+			f_cast: <h_extension>(w_this: h_extension) => g_item & h_extension,
+		) => g_proto;
+	}) {
 		// destructure config arg
 		const {
 			client: k_vault,
 			domain: si_domain,
 			schema: f_builder,
+			proto: h_proto,
 		} = gc_type;
 
 		// save to fields
@@ -67,13 +65,22 @@ export class ItemController<
 		this._si_domain = si_domain as DomainLabel;
 
 		// interpret schema
-		const a_schema = this._a_schema = interpret_schema(si_domain, f_builder as unknown as SchemaBuilder<SchemaSimulator, A.Key[]>);
+		const a_schema = this._a_schema = interpret_schema(si_domain, f_builder);
 
-		// build prototype
+		// build schema descriptor
+		const g_descriptor_schema = this._g_descriptor_schema = item_prototype(a_schema, this);
 
+		// get descriptor from proto
+		const g_descriptor_proto = this._g_descriptor_proto = h_proto? Object.getOwnPropertyDescriptors(h_proto): {};
+
+		// merge and create prototype
+		this._g_prototype = Object.create({}, Object.assign({}, g_descriptor_proto, g_descriptor_schema));
 
 		// serialize
 		JSON.stringify(a_schema);
+
+		// register controller with client
+		this._k_vault.registerController(this._si_domain, this);
 	}
 
 	get _schema_parts(): SerKeyStruct {
@@ -147,6 +154,10 @@ export class ItemController<
 		return this._a_schema;
 	}
 
+	get hub(): VaultHub {
+		return this._k_hub;
+	}
+
 	has<a_local extends Readonly<a_parts>>(
 		a_parts: a_local
 	): boolean {
@@ -170,29 +181,8 @@ export class ItemController<
 		// 
 		const [a_shape_loaded, a_tuple] = await this._k_reader.getItemContent(i_code);
 
-		// canonicalize loaded shape
-		const sx_shape_loaded = JSON.stringify(a_shape_loaded);
-
-		// // lookup cached property descriptor map for canonical shape
-		// const g_proto = _h_shapes_cache[sx_shape_loaded];
-
-		// // loaded shape not yet cached
-		// if(!g_proto) {
-		// 	// create property descriptor map
-		// 	const h_props = create_shape_item(a_shape_loaded, `in ${this._si_domain}`);
-
-		// 	// create proto
-		// 	const g_proto = Object.defineProperties({}, h_props);
-
-		// 	// save to cache
-		// 	h_shapes_cache[sx_shape_loaded] = g_proto;
-
-		// 	// TODO: migrate to new schema... otherwise changes to properties not defined
-		// 	// in prototype will not mutate the tuple and thus get lost on serialization
-		// }
-
 		// create instance and set its local properties
-		const g_item = Object.create(this._proto(), {
+		const g_item = Object.create(this._g_prototype, {
 			[$_PARTS]: {
 				value: a_parts,
 			},
@@ -291,3 +281,34 @@ export class ItemController<
 // 		other: k.ref<Other>(),
 // 	},
 // })
+
+
+export type GenericItemController = ItemController<
+	DomainLabel,
+	AcceptablePartTuples,
+	StrictSchema,
+	any,
+	ItemShapesFromSchema<StrictSchema>,
+	any
+>;
+
+const k_client = new VaultClient();
+
+const Chains1 = new ItemController({
+	client: k_client,
+	domain: 'chains' as DomainLabel,
+	schema: (k0, xc_ns: ChainNamespace, si_ref: string) => ({
+		ns: k0.int(xc_ns),
+		ref: k0.str(si_ref),
+		data: k0.str(),
+	}),
+	proto: cast => ({
+		test() {
+			cast(this).ns;
+		},
+
+		get caip2(): string {
+			return cast(this).ref;
+		},
+	}),
+});

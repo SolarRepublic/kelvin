@@ -2,8 +2,10 @@ import type {A} from 'ts-toolbelt';
 
 import type {Key} from 'ts-toolbelt/out/Any/Key';
 
-import type {ItemController} from './controller';
+import type {GenericItemController, ItemController} from './controller';
+import type {FieldArray} from './field-array';
 import type {RuntimeItem} from './item-proto';
+import type {ItemRef} from './item-ref';
 import type {AllValues, KvTuplesToObject, UnionToTuple, FilterDrop} from './meta';
 import type {Dict, ES_TYPE, JsonArray, JsonObject, JsonPrimitive, NaiveBase64} from '@blake.regalia/belt';
 
@@ -33,8 +35,6 @@ export enum TaggedDatatype {
 	SWITCH=5,
 }
 
-export type PartableDatatype = PrimitiveDatatype.INT | PrimitiveDatatype.BIGINT | PrimitiveDatatype.STRING;
-
 export type PrimitiveDatatypeToEsType<xc_type extends PrimitiveDatatype> = {
 	[PrimitiveDatatype.UNKNOWN]: unknown;
 	[PrimitiveDatatype.INT]: number;
@@ -45,9 +45,36 @@ export type PrimitiveDatatypeToEsType<xc_type extends PrimitiveDatatype> = {
 	[PrimitiveDatatype.OBJECT]: JsonObject;
 }[xc_type];
 
-export type TaggedDatatypeToEsType<xc_type extends TaggedDatatype> = {
+
+export type PartableDatatype = PrimitiveDatatype.INT | PrimitiveDatatype.BIGINT | PrimitiveDatatype.STRING;
+
+export type PartableEsType = PrimitiveDatatypeToEsType<PartableDatatype>;
+
+export type AcceptablePartTuples = Readonly<
+	| []
+	| [PartableEsType]
+	| [PartableEsType, PartableEsType]
+	| [PartableEsType, PartableEsType, PartableEsType]
+	| [PartableEsType, PartableEsType, PartableEsType, PartableEsType]
+	| [PartableEsType, PartableEsType, PartableEsType, PartableEsType, PartableEsType]
+	| [PartableEsType, PartableEsType, PartableEsType, PartableEsType, PartableEsType, PartableEsType]
+	| [PartableEsType, PartableEsType, PartableEsType, PartableEsType, PartableEsType, PartableEsType, PartableEsType]
+	| [PartableEsType, PartableEsType, PartableEsType, PartableEsType, PartableEsType, PartableEsType, PartableEsType, PartableEsType]
+>;
+
+
+export type TaggedDatatypeToEsTypeGetter<xc_type extends TaggedDatatype> = {
 	[TaggedDatatype.UNKNOWN]: unknown;
-	[TaggedDatatype.REF]: RuntimeItem;
+	[TaggedDatatype.REF]: ItemRef;
+	[TaggedDatatype.ARRAY]: FieldArray;
+	[TaggedDatatype.TUPLE]: any[];
+	[TaggedDatatype.STRUCT]: object;
+	[TaggedDatatype.SWITCH]: any;
+}[xc_type];
+
+export type TaggedDatatypeToEsTypeSetter<xc_type extends TaggedDatatype> = {
+	[TaggedDatatype.UNKNOWN]: unknown;
+	[TaggedDatatype.REF]: RuntimeItem | ItemRef;
 	[TaggedDatatype.ARRAY]: any[];
 	[TaggedDatatype.TUPLE]: any[];
 	[TaggedDatatype.STRUCT]: object;
@@ -146,7 +173,7 @@ export type DatatypeObj<
 > = SchemaSubtype<w_subtype, 'obj'>;
 
 export type DatatypeRef<
-	g_ref extends ItemController,
+	g_ref extends GenericItemController,
 > = SchemaSubtype<g_ref, 'ref'>;
 
 export type DatatypeArr<
@@ -254,7 +281,7 @@ export type SchemaSimulator<w_return=any> = {
 	str(w_part?: string): w_return;
 	bytes(): w_return;
 	obj(): w_return;
-	ref(g_item: ItemController): w_return;
+	ref(g_controller: GenericItemController): w_return;
 	arr(f_sub: SubschemaSpecifier<SchemaSimulator<w_return>, w_return>): w_return;
 	tuple(f_sub: SubschemaSpecifier<SchemaSimulator<w_return[]>>): w_return;
 	struct(f_sub: SubschemaBuilder<w_return>): w_return;
@@ -273,9 +300,10 @@ export type SchemaSimulator<w_return=any> = {
  */
 export type SchemaBuilder<
 	k_spec extends SchemaSimulator=SchemaSimulator,
-	a_parts extends Key[]=Key[],
+	a_parts extends readonly any[]=AcceptablePartTuples,
 	w_return=any,
-> = (k: k_spec, a_parts: a_parts) => Dict<w_return>;
+> = (k: k_spec, ...a_parts: a_parts) => w_return;
+
 
 /**
  * Sub-level schema specifier for nested fields
@@ -320,7 +348,7 @@ export type SchemaSpecifier = ImplementsSchemaTypes<{
 
 	obj<w_subtype extends JsonObject=JsonObject>(): DatatypeObj<w_subtype>;
 
-	ref<g_ref extends ItemController>(g_item: ItemController): DatatypeRef<g_ref>;
+	ref<g_ref extends GenericItemController>(g_controller: GenericItemController): DatatypeRef<g_ref>;
 
 	arr<w_subtype extends JsonArray=JsonArray>(
 		f_sub: (k: SchemaSimulator) => Datatype,

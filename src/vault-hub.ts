@@ -1,9 +1,10 @@
+import type {ItemController} from './controller';
 import type {DomainCode, DomainLabel, ItemIdent, ItemCode, ItemPath, SerVaultHub, IndexLabel, IndexValue, IndexPosition, BucketKey, BucketCode, ShapeCode, SerSchema} from './types';
 import type {VaultClient} from './vault-client';
 
-import type {JsonObject, Nilable} from '@blake.regalia/belt';
+import type {Dict, JsonObject, Nilable} from '@blake.regalia/belt';
 
-import {fold, odem, ofe} from '@blake.regalia/belt';
+import {fold, ode, odem, ofe} from '@blake.regalia/belt';
 
 import {b92_to_index, index_to_b92} from './data';
 import {Bug} from './errors';
@@ -115,7 +116,6 @@ export class VaultHub {
 	}
 
 
-
 	/**
 	 * Encode the given name to its domain code
 	 * @param si_domain - the domain name
@@ -145,6 +145,16 @@ export class VaultHub {
 
 		// locate item code
 		return this._h_items[si_item];
+	}
+
+
+	/**
+	 * Retrieves an item' ident by its code.
+	 * @param i_code 
+	 * @returns 
+	 */
+	decodeItem(i_code: ItemCode): ItemIdent | undefined {
+		return this._a_items[i_code];
 	}
 
 

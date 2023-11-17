@@ -161,7 +161,21 @@ export type SerFieldSwitch = [
 	z_options: SerField[] | SerFieldStruct,
 ];
 
+export type SerTaggedDatatypeMap = {
+	[TaggedDatatype.UNKNOWN]: [...unknown[]];
+	[TaggedDatatype.REF]: [DomainLabel];
+	[TaggedDatatype.ARRAY]: [SerField];
+	[TaggedDatatype.TUPLE]: [SerField[]];
+	[TaggedDatatype.STRUCT]: [SerFieldStruct];
+	[TaggedDatatype.SWITCH]: [...SerFieldSwitch];
+};
+
+// export type SerTaggedDatatype = {
+// 	[xc_type in keyof SerTaggedDatatypeMap]: [xc_type, ...SerTaggedDatatypeMap[xc_type]];
+// }[keyof SerTaggedDatatypeMap]
+
 export type SerTaggedDatatype =
+	| [TaggedDatatype.UNKNOWN, ...unknown[]]
 	| [TaggedDatatype.REF, DomainLabel]
 	| [TaggedDatatype.ARRAY, SerField]
 	| [TaggedDatatype.TUPLE, SerField[]]

@@ -1,6 +1,8 @@
-import {interpret_schema, type CountedValues} from 'src/schema-impl';
-import {PrimitiveDatatype, TaggedDatatype, type SchemaBuilder} from 'src/schema-types';
-import {expect} from 'vitest';
+import {ItemController} from 'src/controller';
+import {item_prototype} from 'src/item-proto';
+import {interpret_schema} from 'src/schema-impl';
+import {PrimitiveDatatype, TaggedDatatype, type SchemaBuilderDeprecated} from 'src/schema-types';
+import {describe, expect, it} from 'vitest';
 
 enum Category {
 	UNKNOWN=0,
@@ -13,7 +15,7 @@ enum Category {
 }
 
 // @ts-expect-error backwards inference for parts
-const kitch_sink: SchemaBuilder = (k, [xc_cat, s_id]: [Category, string]) => ({
+const kitch_sink: SchemaBuilderDeprecated = (k, [xc_cat, s_id]: [Category, string]) => ({
 	part_int: k.int(xc_cat),
 	part_str: k.str(s_id),
 	int: k.int(),
@@ -60,33 +62,7 @@ const kitch_sink: SchemaBuilder = (k, [xc_cat, s_id]: [Category, string]) => ({
 	}),
 });
 
-// let i_top = 0;
-// const inc = (w_subcounts?: CountedValues | undefined) => ({count:++i_top, subcounts:w_subcounts});
-// const g_subcount_1 = {count:1};
-
-// const h_counted = {
-// 	part_int: inc(),
-// 	part_str: inc(),
-// 	int: inc(),
-// 	bigint: inc(),
-// 	double: inc(),
-// 	str: inc(),
-// 	bytes: inc(),
-// 	obj: inc(),
-// 	arr_int: inc(g_subcount_1),
-// 	arr_bigint: inc(g_subcount_1),
-// 	arr_double: inc(g_subcount_1),
-// 	arr_str: inc(g_subcount_1),
-// 	arr_bytes: inc(g_subcount_1),
-// 	arr_obj: inc(g_subcount_1),
-// 	arr_arr_str: [++i_top, [1, [1, 1]]],
-// 	arr_arr_arr_str: [++i_top, [1, [1, [1, 1]]]],
-// 	tuple_int: [++i_top, [1]],
-// 	tuple_int_str: [++i_top, [1, 2]],
-// };
-
 const a_actual = interpret_schema('test', kitch_sink);
-debugger;
 
 // dest:
 const a_expect = [1, {
@@ -106,7 +82,8 @@ const a_expect = [1, {
 	arr_str: [TaggedDatatype.ARRAY, PrimitiveDatatype.STRING],
 	arr_bytes: [TaggedDatatype.ARRAY, PrimitiveDatatype.BYTES],
 	arr_obj: [TaggedDatatype.ARRAY, PrimitiveDatatype.OBJECT],
-	arr_arr_int: [TaggedDatatype.ARRAY, [TaggedDatatype.ARRAY, PrimitiveDatatype.INT]],
+	arr_arr_str: [TaggedDatatype.ARRAY, [TaggedDatatype.ARRAY, PrimitiveDatatype.STRING]],
+	arr_arr_arr_str: [TaggedDatatype.ARRAY, [TaggedDatatype.ARRAY, [TaggedDatatype.ARRAY, PrimitiveDatatype.STRING]]],
 	tuple_int: [TaggedDatatype.TUPLE, [PrimitiveDatatype.INT]],
 	tuple_int_str: [TaggedDatatype.TUPLE, [PrimitiveDatatype.INT, PrimitiveDatatype.STRING]],
 	tuple_int_str_arr_bytes: [TaggedDatatype.TUPLE, [
@@ -140,6 +117,9 @@ const a_expect = [1, {
 	}],
 }];
 
-expect(a_actual).toMatchObject(a_expect);
+describe('kitch sink', () => {
+	it('schema matches', () => {
+		expect(a_actual).toMatchObject(a_expect);
+	});
+});
 
-debugger;
