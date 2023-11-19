@@ -3,10 +3,8 @@ import type {SerSchema, SerField} from './types';
 import {is_dict_es, type Dict, type JsonArray, type JsonObject, type JsonValue} from '@blake.regalia/belt';
 
 import {SchemaError, VaultCorruptedError, Bug, TypeFieldNotWritableError} from './errors';
+import {$_PARTS, $_TUPLE} from './item-proto';
 
-
-export const $_TUPLE = Symbol('item-shape-tuple');
-export const $_PARTS = Symbol('item-shape-parts');
 
 
 type PropertyDescriptorMap = Dict<PropertyDescriptor & ThisType<any>>;

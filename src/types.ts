@@ -57,7 +57,7 @@ export type BucketCode = Subtype<number, 'bucket-code'>;
 export type BucketKey = Subtype<string, 'bucket-key'>;
 
 
-export type ShapeCode = Subtype<number, 'shape-code'>;
+export type SchemaCode = Subtype<number, 'shape-code'>;
 
 
 export type FieldLabel = Subtype<string, 'field-label'>;
@@ -146,6 +146,8 @@ export type SerVaultBase = {
 
 
 
+export type SerItem = JsonArray;
+
 /**
  * 
  */
@@ -170,6 +172,7 @@ export type SerTaggedDatatypeMap = {
 	[TaggedDatatype.SWITCH]: [...SerFieldSwitch];
 };
 
+// // though it would be convenient to define it this way, it creates a problematic circular reference
 // export type SerTaggedDatatype = {
 // 	[xc_type in keyof SerTaggedDatatypeMap]: [xc_type, ...SerTaggedDatatypeMap[xc_type]];
 // }[keyof SerTaggedDatatypeMap]
@@ -185,7 +188,10 @@ export type SerTaggedDatatype =
 
 export type SerField = PrimitiveDatatype | SerTaggedDatatype;
 
-export type SerKeyStruct = Record<FieldLabel, PartableDatatype>;
+// eslint-disable-next-line @typescript-eslint/consistent-indexed-object-style
+export type SerKeyStruct = {
+	[si_label: FieldLabel]: PartableDatatype;
+};
 
 // eslint-disable-next-line @typescript-eslint/consistent-indexed-object-style
 export type SerFieldStruct = {
@@ -214,28 +220,49 @@ export type SerSchema = [
 ];
 
 /**
- * 
+ * Locates item to its position in the serialized
  */
-export type SerBucket = {
+export type SerBucket = Record<ItemCode, SerItem>;
+
+export type SerBucketMetadata = [
 	/**
-	 * Schema shape of stored items
+	 * Bucket key
 	 */
-	shape: SerSchema;
+	code: BucketKey,
 
 	/**
-	 * Locates item to its position in the serialized
+	 * Byte length of the unpadded bucket contents
 	 */
-	items: Record<ItemCode, JsonArray>;
-};
+	size: number,
+];
+
+
+export enum DomainStorageStrategy {
+	DEFAULT=0,
+	MINIMIZE=1,
+	APPEND=2,
+}
+
+export type SerDomainMetadata = [
+	buckets: BucketCode[],
+
+	strategy: DomainStorageStrategy,
+];
 
 /**
  * Serialized database hub object
  */
 export type SerVaultHub = {
 	/**
-	 * Domain labels stored in sequence
+	 * Target bucket length
 	 */
-	domains: Sequence<DomainLabel>;
+	bucket_length: number;
+
+	/**
+	 * Domain labels associated to bucket codes, order matters
+	 */
+	// domains: Sequence<DomainLabel>;
+	domains: Record<DomainLabel, SerDomainMetadata>;
 
 	/**
 	 * Item idents stored in a sparse sequence
@@ -250,7 +277,12 @@ export type SerVaultHub = {
 	/**
 	 * Bucket storage keys stored in sequence
 	 */
-	buckets: Sequence<BucketKey, BucketCode>;
+	buckets: Sequence<SerBucketMetadata, BucketCode>;
+
+	// /**
+	//  * 
+	//  */
+	// domains_to_buckets: Record<DomainCode, BucketKey[]>;
 
 	/**
 	 * Locates each item to the Bucket it is stored in
@@ -258,12 +290,12 @@ export type SerVaultHub = {
 	locations: Sequence<BucketCode, ItemCode>;
 
 	/**
-	 * Maps bucket codes to shape codes
+	 * Maps bucket codes to schema codes
 	 */
-	buckets_to_shapes: Sequence<ShapeCode, BucketCode>;
+	buckets_to_schemas: Sequence<SchemaCode, BucketCode>;
 
 	/**
-	 * Shapes stored in sequence
+	 * Schemas stored in sequence
 	 */
-	shapes: Sequence<SerSchema, ShapeCode>;
+	schemas: Sequence<SerSchema, SchemaCode>;
 };

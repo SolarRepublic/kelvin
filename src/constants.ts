@@ -9,9 +9,32 @@ export const N_SYSTEM_VERSION = 2;
 // maximum number of part fields allowed
 export const NL_MAX_PART_FIELDS = 8;
 
+// pad character byte
+export const XB_CHAR_PAD = ' '.charCodeAt(0);
 
 // maximum value of an unsigned 64-bit integer
 export const XG_UINT64_MAX = (2n ** 64n) - 1n;
+
+// number of random bytes to use for bucket labels
+export const NB_BUCKET_LABEL = 16;
+
+// default bucket contents length
+export const NB_BUCKET_CONTENTS = 8 * (1 << 10);  // 8 KiB
+
+// size of the bare container, i.e., `{}`
+export const NB_BUCKET_CONTAINER = 2;
+
+// minimum size for the hub 
+export const NB_HUB_MINIMUM = 8 * (1 << 10);  // 8 KiB
+
+// growth factor for the hub 
+export const NB_HUB_GROWTH = 8 * (1 << 10);  // 8 KiB
+
+// amount of time to wait after a write before rotating buckets
+export const XT_ROTATION_DEBOUNCE = 500;  // 500 ms
+
+// maximum amount of time allowed to pass while waiting for rotation
+export const XT_ROTATION_WAIT_MAX = 2e3;  // 2 seconds
 
 
 // target number of argon hashing iterations

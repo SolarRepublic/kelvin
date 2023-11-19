@@ -401,5 +401,7 @@ export type SchemaSpecifier = ImplementsSchemaTypes<{
 
 	type shape = ItemShapesFromSchema<start>;
 
+	type test = PartFields<start>;
+
 	type ss = A.Cast<SelectionCriteria<[ItemType, string, string], start>, JsonObject>;
 }

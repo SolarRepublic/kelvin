@@ -1,29 +1,39 @@
-import type {ItemController} from './controller';
-import type {DomainCode, DomainLabel, ItemIdent, ItemCode, ItemPath, SerVaultHub, IndexLabel, IndexValue, IndexPosition, BucketKey, BucketCode, ShapeCode, SerSchema} from './types';
+import type {KelvinKeyValueWriter} from './store';
+import type {DomainCode, DomainLabel, ItemIdent, ItemCode, ItemPath, SerVaultHub, IndexLabel, IndexValue, IndexPosition, BucketKey, BucketCode, SchemaCode, SerSchema, SerItem, SerBucketMetadata, SerBucket} from './types';
 import type {VaultClient} from './vault-client';
 
-import type {Dict, JsonObject, Nilable} from '@blake.regalia/belt';
+import type {Nilable} from '@blake.regalia/belt';
 
-import {fold, ode, odem, ofe} from '@blake.regalia/belt';
+import {buffer_to_base93, fodemtv, fold, odem, ofe, text_to_buffer} from '@blake.regalia/belt';
 
-import {b92_to_index, index_to_b92} from './data';
-import {Bug} from './errors';
+import {random_bytes} from '@solar-republic/crypto';
+
+import {NB_BUCKET_CONTAINER, NB_BUCKET_CONTENTS, NB_BUCKET_LABEL, XT_ROTATION_DEBOUNCE, XT_ROTATION_WAIT_MAX} from './constants';
+import {index_to_b92} from './data';
+import {Bug, SchemaWarning} from './errors';
+import {DomainStorageStrategy} from './types';
+
 
 
 export type ItemIdentPattern = ItemIdent | RegExp;
 
+// creates a new random bucket key
+const new_bucket_key = () => '_'+buffer_to_base93(random_bytes(NB_BUCKET_LABEL)) as BucketKey;
+
 export class VaultHub {
 	// decrypted and unmarshalled hub
-	protected _a_domains: SerVaultHub['domains'] = [];
+	protected _h_domains: SerVaultHub['domains'] = {};
 	protected _a_items = [] as unknown as SerVaultHub['items'];
 	protected _h_indexes: SerVaultHub['indexes'] = {};
 	protected _a_buckets = [] as unknown as SerVaultHub['buckets'];
 	protected _a_locations = [] as unknown as SerVaultHub['locations'];
-	protected _a_buckets_to_shapes = [] as unknown as SerVaultHub['buckets_to_shapes'];
-	protected _a_shapes = [] as unknown as SerVaultHub['shapes'];
+	protected _a_buckets_to_schemas = [] as unknown as SerVaultHub['buckets_to_schemas'];
+	protected _a_schemas = [] as unknown as SerVaultHub['schemas'];
+	protected _nb_bucket: SerVaultHub['bucket_length'] = NB_BUCKET_CONTENTS;
 
 	// caches
-	protected _h_domains: Record<DomainLabel, DomainCode> = {};
+	protected _h_domain_codes: Record<DomainLabel, DomainCode> = {};
+	protected _h_domain_labels: Record<DomainCode, DomainLabel> = {};
 	protected _h_items: Record<ItemIdent, ItemCode> = {};
 
 	// index of first gap in index sequence
@@ -32,25 +42,93 @@ export class VaultHub {
 	// update counter
 	protected _c_updates = 0;
 
+	// scheduled tasks
+	protected _i_task_rotate = 0;
+	protected _xt_since_rotate = 0;
+
+	// bucket bypass queue
+	protected _as_buckets_bypass = new Set<BucketKey>();
+
+	// bucket prune queue
+	protected _as_buckets_prune = new Set<BucketKey>();
+
+
 	constructor(
 		protected _k_vault: VaultClient
 	) {
+	}
+
+	protected _schedule_rotation(): void {
+		// already scheduled
+		if(this._i_task_rotate) {
+			// max wait time exceeded; do not postpone any longer
+			if(Date.now() - this._xt_since_rotate > XT_ROTATION_WAIT_MAX) return;
+
+			// clear old timeout
+			clearTimeout(this._i_task_rotate);
+		}
+		// nothing scheduled
+		else {
+			// record time at which this original task was scheduled
+			this._xt_since_rotate = Date.now();
+		}
+
+		// schedule
+		this._i_task_rotate = (setTimeout as Window['setTimeout'])(async() => {
+			// destructure fields
+			const {_k_vault, _nb_bucket, _a_buckets, _as_buckets_bypass, _as_buckets_prune} = this;
+
+			// obtain write lock
+			await _k_vault.withExclusive(async(kw_content) => {
+				// each bucket defined in hub
+				for(const [i_bucket, [si_bucket_old]] of this._a_buckets.entries()) {
+					// bypass bucket from rotation
+					if(_as_buckets_bypass.has(si_bucket_old)) continue;
+
+					// read contents
+					const h_bucket = await _k_vault.readBucket(si_bucket_old);
+
+					// generate new key
+					const si_bucket_new = new_bucket_key();
+
+					// update bucket key
+					_a_buckets[i_bucket as BucketCode][0] = si_bucket_new;
+
+					// write contents to new bucket
+					await _k_vault.writeBucket(si_bucket_new, h_bucket, _nb_bucket, kw_content);
+
+					// add old bucket to prune list
+					_as_buckets_prune.add(si_bucket_old);
+				}
+
+				// write hub
+				await this._write_hub(kw_content);
+
+				// prune all old buckets at once
+				await kw_content.removeMany([..._as_buckets_prune]);
+			});
+		}, XT_ROTATION_DEBOUNCE);
 	}
 
 	get vault(): VaultClient {
 		return this._k_vault;
 	}
 
+	async _write_hub(kw_content: KelvinKeyValueWriter): Promise<void> {
+		return await this._k_vault.writeHub(this.isolate(), kw_content);
+	}
+
 	// returns the isolated form of the current vault, ready for JSON serialization
 	isolate(): SerVaultHub {
 		const g_hub: SerVaultHub = {
-			domains: this._a_domains,
+			domains: this._h_domains,
 			items: this._a_items,
 			indexes: this._h_indexes,
 			buckets: this._a_buckets,
 			locations: this._a_locations,
-			buckets_to_shapes: this._a_buckets_to_shapes,
-			shapes: this._a_shapes,
+			buckets_to_schemas: this._a_buckets_to_schemas,
+			schemas: this._a_schemas,
+			bucket_length: this._nb_bucket,
 		};
 
 		return g_hub;
@@ -65,19 +143,21 @@ export class VaultHub {
 
 		// load fields from ser
 		Object.assign(this, {
-			_a_domains: g_hub.domains,
+			_h_domains: g_hub.domains,
 			_a_items: g_hub.items,
 			_h_indexes: g_hub.indexes,
 			_a_buckets: g_hub.buckets,
 			_a_locations: g_hub.locations,
-			_a_buckets_to_shapes: g_hub.buckets_to_shapes,
-			_a_shapes: g_hub.shapes,
+			_a_buckets_to_schemas: g_hub.buckets_to_schemas,
+			_a_shapes: g_hub.schemas,
+			_nb_bucket: g_hub.bucket_length,
 		});
 
-		// cache domain lookup
-		this._h_domains = fold(this._a_domains, (si_domain, i_domain) => ({
-			[si_domain]: index_to_b92(i_domain) as DomainCode,
-		}));
+		// create lookup from domain label to domain code
+		this._h_domain_codes = fodemtv(this._h_domains, (w_metadata, si_domain, i_domain) => index_to_b92(i_domain) as DomainCode);
+
+		// create lookup from domain code to domain label
+		this._h_domain_labels = ofe(odem(this._h_domains, ([si_domain], i_domain) => [index_to_b92(i_domain), si_domain]));
 
 		// record non-zero index of first gap if it exists (zero means no gap)
 		let i_next_item = 0;
@@ -92,7 +172,6 @@ export class VaultHub {
 
 		// 
 	}
-
 
 	/**
 	 * Access the list contained by the given index label at the specified value
@@ -115,7 +194,6 @@ export class VaultHub {
 		return a_list;
 	}
 
-
 	/**
 	 * Encode the given name to its domain code
 	 * @param si_domain - the domain name
@@ -123,7 +201,7 @@ export class VaultHub {
 	 */
 	encodeDomain(si_domain: DomainLabel): DomainCode | null {
 		// encode domain
-		const sb92_domain = this._h_domains[si_domain];
+		const sb92_domain = this._h_domain_codes[si_domain];
 
 		// domain exists; return its key
 		if(sb92_domain) return sb92_domain;
@@ -133,20 +211,27 @@ export class VaultHub {
 	}
 
 	/**
-	 * Encode the given domain and item path to its item code.
+	 * Encode the given domain and item path to its item ident.
+	 * @param si_domain - the domain name
+	 * @param sr_item - the item path
+	 * @returns the non-zero index of the item if it was found, `undefined` otherwise
+	 */
+	itemIdent(si_domain: DomainLabel, sr_item: ItemPath): ItemIdent {
+		// encode domain and build item ident
+		return this._h_domain_codes[si_domain]+':'+sr_item as ItemIdent;
+	}
+
+	/**
+	 * Looks up the given ident in the item registry and returns its code if found.
 	 * Codes start at 1 so a falsy check on return value means item was not found.
 	 * @param si_domain - the domain name
 	 * @param sr_item - the item path
 	 * @returns the non-zero index of the item if it was found, `undefined` otherwise
 	 */
-	encodeItem(si_domain: DomainLabel, sr_item: ItemPath): ItemCode | undefined {
-		// encode domain and build item key
-		const si_item = this._h_domains[si_domain]+':'+sr_item as ItemIdent;
-
+	itemCode(si_item: ItemIdent): ItemCode | undefined {
 		// locate item code
 		return this._h_items[si_item];
 	}
-
 
 	/**
 	 * Retrieves an item' ident by its code.
@@ -157,16 +242,17 @@ export class VaultHub {
 		return this._a_items[i_code];
 	}
 
-
 	/**
 	 * Adds the given item key to the global index, or no-op if it already exists.
-	 * @param si_domain - the domain name
-	 * @param sr_item - the item path
-	 * @returns the non-zero index of the new/existing item
+	* @param si_domain - the domain name
+	* @param sr_item - the item path
+	 * @returns a tuple where:
+	 *   - 0: the non-zero index of the new/existing item
+	 *   - 1: `true` if the item already exists, `false` otherwise
 	 */
-	addItemKey(si_domain: DomainLabel, sr_item: ItemPath): ItemCode {
+	addItemKey(si_domain: DomainLabel, sr_item: ItemPath): [ItemCode, boolean] {
 		// encode domain
-		const sb92_domain = this._h_domains[si_domain];
+		const sb92_domain = this._h_domain_codes[si_domain];
 
 		// no such domain
 		if(!sb92_domain) throw new Bug(`Attempted to add an item to non-existant domain "${si_domain}"`);
@@ -178,7 +264,7 @@ export class VaultHub {
 		let i_code = this._h_items[si_item];
 
 		// return existing
-		if(i_code) return i_code;
+		if(i_code) return [i_code, true];
 
 		// a gap exists
 		let i_empty = this._i_next_item;
@@ -204,9 +290,8 @@ export class VaultHub {
 		}
 
 		// return new index
-		return i_code;
+		return [i_code, false];
 	}
-
 
 	/**
 	 * Scans the list of values contained by the given index having the specified value
@@ -265,7 +350,7 @@ export class VaultHub {
 	): Nilable<Record<DomainLabel, ItemPath[]>> {
 		// destructure fields
 		const {
-			_a_domains,
+			_h_domain_labels,
 		} = this;
 
 		// prep groups for results
@@ -285,7 +370,7 @@ export class VaultHub {
 
 		// transform group by mapping domain codes to labels
 		return ofe(odem(h_groups, ([sb92_domain, a_items]) => [
-			_a_domains[b92_to_index(sb92_domain)],
+			_h_domain_labels[sb92_domain],
 			a_items,
 		]));
 	}
@@ -312,7 +397,7 @@ export class VaultHub {
 		// exact item id given
 		if('string' === typeof z_item) {
 			// map to item code
-			const i_code = _a_items.indexOf(z_item);
+			const i_code = _a_items.indexOf(z_item) as ItemCode;
 
 			// item exists
 			if(i_code > 0) {
@@ -359,30 +444,186 @@ export class VaultHub {
 		return a_findings[1].map(([, si_item]) => si_item);
 	}
 
-	// get bucket code
+	/**
+	 * Gets the code of the bucket containing the given item code
+	 * @param i_code 
+	 * @returns 
+	 */
 	getItemBucketCode(i_code: ItemCode): BucketCode {
 		return this._a_locations[i_code];
 	}
 
 	// resolve bucket code to bucket key
-	getBucketKey(i_bucket: BucketCode): BucketKey {
+	getBucketMetadata(i_bucket: BucketCode): SerBucketMetadata {
 		return this._a_buckets[i_bucket];
 	}
 
-	getBucketShapeCode(i_bucket: BucketCode): ShapeCode {
-		return this._a_buckets_to_shapes[i_bucket];
+	getBucketSchemaCode(i_bucket: BucketCode): SchemaCode {
+		return this._a_buckets_to_schemas[i_bucket];
 	}
 
-	getShape(i_shape: ShapeCode): SerSchema {
-		return this._a_shapes[i_shape];
+	getSchema(i_schema: SchemaCode): SerSchema {
+		return this._a_schemas[i_schema];
 	}
 
-	async replaceItem(i_code: ItemCode, g_item: JsonObject) {
-		// get bucket key for item
-		const si_bucket = this.getItemBucket(i_code);
+	_new_bucket(si_domain: DomainLabel): [BucketCode, BucketKey, SerBucket] {
+		// create new bucket key
+		const si_bucket = new_bucket_key();
 
-		// load bucket
-		const [n_version, g_schema] = await this._k_vault.readBucket(si_bucket);
+		// acquire immutable bucket code
+		const i_bucket = this._a_buckets.length as BucketCode;
+
+		// add bucket to sequence
+		this._a_buckets[i_bucket] = [si_bucket, 2];  // 2 for surrounding `{}`
+
+		// add bucket to domain map
+		(this._h_domains[si_domain][0] ??= []).push(i_bucket);
+
+		// return code and key as tuple
+		return [i_bucket, si_bucket, {}];
+	}
+
+	async _select_bucket_for_insert(si_domain: DomainLabel, nb_item: number): Promise<[BucketCode, BucketKey, SerBucket, BucketKey?]> {
+		// destructure fields
+		const {
+			_nb_bucket,
+			_a_buckets,
+		} = this;
+
+		// destructure domain metadatas
+		const [a_bucket_codes, xc_strategy] = this._h_domains[si_domain];
+
+		// prep bucket selection
+		let i_bucket = -1 as BucketCode;
+
+		// default/minimize mode
+		if([DomainStorageStrategy.DEFAULT, DomainStorageStrategy.MINIMIZE].includes(xc_strategy)) {
+			// find first slot item can fit
+			for(const i_bucket_test of a_bucket_codes) {
+				// destructure bucket metadata
+				const [, nb_size] = _a_buckets[i_bucket_test];
+
+				// there is room to add item
+				if(_nb_bucket - nb_size > nb_item) {
+					i_bucket = i_bucket_test;
+					break;
+				}
+			}
+		}
+		// append mode
+		else if(DomainStorageStrategy.APPEND === xc_strategy) {
+			// take last bucket
+			const i_bucket_test = a_bucket_codes.at(-1)!;
+
+			// destructure bucket metadata
+			const [, nb_size] = _a_buckets[i_bucket_test];
+
+			// there is room to add item
+			if(_nb_bucket - nb_size > nb_item) {
+				i_bucket = i_bucket_test;
+			}
+		}
+		// unrecognized option
+		else {
+			throw new Bug(`Unrecognized domain storage strategy #${xc_strategy}`);
+		}
+
+		// an existing bucket was selected
+		if(i_bucket >= 0) {
+			// get bucket key
+			const si_bucket = this.getBucketMetadata(i_bucket)[0];
+
+			// load bucket contents
+			const h_bucket = await this._k_vault.readBucket(si_bucket);
+
+			// return all bucket info
+			return [i_bucket, new_bucket_key(), h_bucket, si_bucket];
+		}
+
+		// no bucket was selected, add new one
+		return this._new_bucket(si_domain);
+	}
+
+	async putItem(si_domain: DomainLabel, sr_item: ItemPath, w_item: SerItem) {
+		// obtain lock
+		await this._k_vault.withExclusive(async(kw_content) => {
+			// add item key
+			const [i_item, b_exists] = this.addItemKey(si_domain, sr_item);
+
+			// serialize item to calculate its length
+			const nb_item = text_to_buffer(`"${i_item}":${JSON.stringify(w_item)}`).length;
+
+			// item is larger than capacity
+			if(nb_item + NB_BUCKET_CONTAINER > this._nb_bucket) {
+				console.warn(new SchemaWarning(`Item being stored to ${si_domain}:${sr_item} exceeds bucket capacity. This can lead to degradation of privacy.`));
+			}
+
+			// which bucket item is being place in
+			let i_bucket: BucketCode;
+			let si_bucket: BucketKey;
+			let h_bucket: SerBucket;
+
+			// in case an old bucket needs to be deleted
+			let si_bucket_delete: BucketKey | undefined;
+
+			// item already exists
+			if(b_exists) {
+				// get bucket code
+				const i_bucket_exist = this.getItemBucketCode(i_item);
+
+				// get bucket metadata
+				const [si_bucket_exist, nb_bucket_exist] = this.getBucketMetadata(i_bucket_exist);
+
+				// load bucket
+				const h_bucket_exist = await this._k_vault.readBucket(si_bucket_exist);
+
+				// calculate size of existing item
+				const nb_item_exist = text_to_buffer(JSON.stringify(h_bucket_exist[i_item])).length;
+
+				// new item will fit (adding 1 for comma)
+				if(nb_item + 1 <= nb_item_exist || (nb_bucket_exist - nb_item_exist + nb_item + 1) <= this._nb_bucket) {
+					// select bucket as destination
+					[i_bucket, h_bucket] = [i_bucket_exist, h_bucket_exist];
+
+					// mark old bucket for deletion
+					si_bucket_delete = si_bucket_exist;
+
+					// create new bucket key
+					si_bucket = new_bucket_key();
+				}
+				// item won't fit
+				else {
+					// create new bucket and select as destination
+					[i_bucket, si_bucket, h_bucket] = this._new_bucket(si_domain);
+
+					// set schema association
+					this._a_buckets_to_schemas[i_bucket] = i_schema;
+				}
+			}
+			// new item
+			else {
+				// determine which bucket to place item in
+				[i_bucket, si_bucket, h_bucket, si_bucket_delete] = await this._select_bucket_for_insert(si_domain, nb_item);
+			}
+
+			// place item into bucket
+			h_bucket[i_item] = w_item;
+
+			// save item location
+			this._a_locations[i_item] = i_bucket;
+
+			// first, write the new bucket
+			await this._k_vault.writeBucket(si_bucket, h_bucket, this._nb_bucket, kw_content);
+
+			// next, update the hub
+			await this._write_hub(kw_content);
+
+			// add old bucket to deletion queue
+			if(si_bucket_delete) this._a_deletion.push(si_bucket_delete);
+
+			// schedule a bucket rotation
+			this._schedule_rotation();
+		});
 	}
 }
 

@@ -76,7 +76,7 @@ const spec_for_count = (): SchemaSimulator<Arrayable<CountedValues>> & {[$_COUNT
 			[$_COUNT]: ++c_fields,
 			subcounts: {
 				switch: fodemtv(h_switch, (w_value, si_key): CountedValues => {
-					const z_simulation = h_switch[si_key!](spec_for_count()) as unknown as CountedValues;
+					const z_simulation = h_switch[si_key](spec_for_count()) as unknown as CountedValues;
 
 					// tuple shorthand
 					if(Array.isArray(z_simulation)) {
@@ -149,7 +149,7 @@ const spec_for_ser: (g_shape: ShapedFields, i_field?: number) => SchemaSimulator
 			TaggedDatatype.SWITCH,
 			g_shape.fieldIndex(si_dep),
 			fodemtv(h_switch, (f_sub, w_key) => {
-				const g_subshape = bind_shaper([h_positions[w_key!]]);
+				const g_subshape = bind_shaper([h_positions[w_key]]);
 				return f_sub(spec_for_ser(g_subshape));
 			}),
 		]];

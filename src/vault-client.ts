@@ -1,18 +1,18 @@
-import type {ItemController} from './controller';
+import type {GenericItemController, ItemController} from './controller';
 import type {KelvinKeyValueStore, KelvinKeyValueWriter} from './store';
 import type {SerVaultHub, SerVaultBase, SerVaultHashParams, BucketKey, SerBucket, DomainLabel} from './types';
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import type {AesGcmDecryptionError} from '@solar-republic/crypto';
 
-import {base64_to_buffer, buffer_to_base64, buffer_to_json, F_NOOP, is_dict_es, ode, type NaiveBase64, type NaiveBase93, text_to_buffer, defer, json_to_buffer, ATU8_NIL, concat2, __UNDEFINED, type Dict} from '@blake.regalia/belt';
+import {base64_to_buffer, buffer_to_base64, buffer_to_json, F_NOOP, is_dict_es, ode, type NaiveBase64, type NaiveBase93, text_to_buffer, defer, json_to_buffer, ATU8_NIL, concat2, __UNDEFINED, type Dict, type Promisable, buffer} from '@blake.regalia/belt';
 
 import {aes_gcm_decrypt, aes_gcm_encrypt, random_bytes} from '@solar-republic/crypto';
 import {sha256_sync} from '@solar-republic/crypto/sha256';
 
 
 import {derive_cipher_key, derive_tandem_root_keys, generate_root_signature, import_key, verify_root_key, type RootKeyStruct, derive_cipher_nonce, test_encryption_integrity} from './auth';
-import {ATU8_DUMMY_PHRASE, G_DEFAULT_HASHING_PARAMS, NB_RECRYPTION_THRESHOLD, NB_SHA256_SALT, N_SYSTEM_VERSION} from './constants';
+import {ATU8_DUMMY_PHRASE, G_DEFAULT_HASHING_PARAMS, NB_HUB_GROWTH, NB_HUB_MINIMUM, NB_RECRYPTION_THRESHOLD, NB_SHA256_SALT, N_SYSTEM_VERSION, XB_CHAR_PAD} from './constants';
 import {Bug, InvalidPassphraseError, InvalidSessionError, RecoverableVaultError, RefuseDestructiveActionError, VaultClosedError, VaultCorruptedError} from './errors';
 import {SI_KEY_STORAGE_BASE, SI_KEY_STORAGE_HUB, SI_KEY_SESSION_ROOT, SI_KEY_SESSION_VECTOR, SI_KEY_SESSION_AUTH} from './ids';
 import {VaultHub} from './vault-hub';
@@ -132,7 +132,7 @@ export class VaultClient {
 	protected _b_dirty = false;
 
 	// controllers
-	protected _h_controllers: Record<DomainLabel, ItemController> = {};
+	protected _h_controllers: Record<DomainLabel, GenericItemController> = {};
 
 	constructor(
 		k_content: KelvinKeyValueStore,
@@ -388,7 +388,7 @@ export class VaultClient {
 	// encrypt an entry
 	protected async _encrypt_entry(
 		si_key: string,
-		atu8_cipher: Uint8Array,
+		atu8_plain: Uint8Array,
 		atu8_vector?: Uint8Array,
 		dk_cipher?: CryptoKey
 	): Promise<Uint8Array> {
@@ -396,7 +396,7 @@ export class VaultClient {
 		const g_privates = hm_privates.get(this)!;
 
 		// derive the nonce
-		const [atu8_nonce, atu8_value] = await this._write_nonce_for_entry(si_key, atu8_cipher, atu8_vector || g_privates.atu8_vector!);
+		const [atu8_nonce, atu8_value] = await this._write_nonce_for_entry(si_key, atu8_plain, atu8_vector || g_privates.atu8_vector!);
 
 		// decrypt the value
 		return await aes_gcm_encrypt(atu8_value, dk_cipher || g_privates.dk_cipher!, atu8_nonce);
@@ -745,7 +745,7 @@ export class VaultClient {
 	async register(
 		atu8_phrase: Uint8Array,
 		f_info: ((s_state: string) => void)=F_NOOP
-	) {
+	): Promise<void> {
 		// cannot create on database that already exists
 		if(this.exists()) {
 			throw new RefuseDestructiveActionError(`attempted to register new vault "${this._si_name}" where one already exists`);
@@ -828,11 +828,11 @@ export class VaultClient {
 	 * @returns a {@link VaultHub}
 	 */
 	async open(): Promise<VaultHub> {
-		// vault is already open
-		if(this._k_hub) return this._k_hub;
-
 		// destructure field(s)
-		const {_k_content} = this;
+		const {_k_content, _k_hub} = this;
+
+		// vault is already open
+		if(_k_hub) return _k_hub;
 
 		// get root key from private field
 		const g_privates = hm_privates.get(this);
@@ -880,7 +880,7 @@ export class VaultClient {
 		// hub does not exist
 		else {
 			// save it to storage from hub's initialization
-			await _k_content.lockAll(kw_content => kw_content.setJson(this._fixed_storage_key(SI_KEY_STORAGE_HUB), k_hub.isolate()));
+			await this._k_content.lockAll(kw_content => this._k_hub._write_hub(kw_content));
 		}
 
 		// queue calling back awaiters
@@ -913,6 +913,34 @@ export class VaultClient {
 		}
 
 		return this._k_hub;
+	}
+
+	async writeHub(g_hub: SerVaultHub, kw_content: KelvinKeyValueWriter): Promise<void> {
+		// attempt to encode
+		let atu8_hub_plain: Uint8Array;
+		try {
+			atu8_hub_plain = text_to_buffer(JSON.stringify(g_hub));
+		}
+		// bug in hub json?
+		catch(e_encode) {
+			throw new Bug('unable to encode hub', e_encode);
+		}
+
+		// pad with spaces
+		let nb_out = NB_HUB_MINIMUM;
+		for(; nb_out<atu8_hub_plain.length; nb_out+=NB_HUB_GROWTH);
+		const atu8_hub_padded = buffer(nb_out);
+		atu8_hub_padded.fill(XB_CHAR_PAD, atu8_hub_plain.length);
+		atu8_hub_padded.set(atu8_hub_plain, 0);
+
+		// construct hub key
+		const si_key_hub = this._fixed_storage_key(SI_KEY_STORAGE_HUB);
+
+		// encrypt entry
+		const atu8_hub_value = await this._encrypt_entry(si_key_hub, atu8_hub_padded);
+
+		// write to storage
+		await kw_content.setBytes(si_key_hub, atu8_hub_value);
 	}
 
 
@@ -950,41 +978,57 @@ export class VaultClient {
 		return w_contents;
 	}
 
-	writeBucket(si_key: BucketKey, w_contents: SerBucket): Promise<void> {
-		// obtain write lock
-		return this._k_content.lockAll(async(kw_content) => {
-			// no cipher key
-			const dk_cipher = hm_privates.get(this)?.dk_cipher;
-			if(!dk_cipher) {
-				throw new VaultClosedError('unable to write bucket');
-			}
+	async writeBucket(si_key: BucketKey, w_contents: SerBucket, nb_bucket_target: number, kw_content: KelvinKeyValueWriter): Promise<number> {
+		// no cipher key
+		const dk_cipher = hm_privates.get(this)?.dk_cipher;
+		if(!dk_cipher) {
+			throw new VaultClosedError('unable to write bucket');
+		}
 
-			// attempt to encode bucket contents
-			let atu8_bucket_plain: Uint8Array;
-			try {
-				atu8_bucket_plain = json_to_buffer(w_contents);
-			}
-			catch(e_encode) {
-				throw new Bug('unable to encode plaintext bucket contents while writing');
-			}
+		// attempt to encode bucket contents
+		let atu8_bucket_plain: Uint8Array;
+		try {
+			atu8_bucket_plain = json_to_buffer(w_contents);
+		}
+		catch(e_encode) {
+			throw new Bug('unable to encode plaintext bucket contents while writing');
+		}
 
-			// encrypt
-			const atu8_value = await this._encrypt_entry(si_key, atu8_bucket_plain);
+		// pad with spaces
+		const nb_out = Math.max(atu8_bucket_plain.length, nb_bucket_target);
+		const atu8_bucket_padded = buffer(nb_out);
+		atu8_bucket_padded.fill(XB_CHAR_PAD, atu8_bucket_plain.length);
+		atu8_bucket_padded.set(atu8_bucket_plain, 0);
 
-			// attempt to encode bucket contents & write to storage
-			try {
-				await kw_content.setBytes(si_key, atu8_value);
-			}
-			catch(e_encode) {
-				throw new Bug('unable to encode/write ciphertext bucket contents');
-			}
-		});
+		// encrypt
+		const atu8_value = await this._encrypt_entry(si_key, atu8_bucket_padded);
+
+		// attempt to encode bucket contents & write to storage
+		try {
+			await kw_content.setBytes(si_key, atu8_value);
+		}
+		catch(e_encode) {
+			throw new Bug('unable to encode/write ciphertext bucket contents');
+		}
+
+		// return the plaintext length of the bucket's contents before padding
+		return atu8_bucket_plain.length;
 	}
 
 	/**
+	 * Obtains an exclusive write lock in order to conduct a transaction
+	 * @param f_use 
+	 * @returns 
+	 */
+	async withExclusive(f_use: (k_writer: KelvinKeyValueWriter, y_lock: Lock | null) => Promisable<any>): Promise<ReturnType<typeof f_use>> {
+		return await this._k_content.lockAll(f_use);
+	}
+
+	/**
+	 * @internal
 	 * Registers an item controller instance for its domain
 	 */
-	registerController(si_domain: DomainLabel, k_controller: ItemController): void {
+	registerController(si_domain: DomainLabel, k_controller: GenericItemController): void {
 		// destructure
 		const {_h_controllers} = this;
 
@@ -999,9 +1043,10 @@ export class VaultClient {
 
 
 	/**
-	 * Retrieves the registered item controller for a given domain
+	 * @internal
+	 * Retrieves the registered (weakly typed) item controller for a given domain
 	 */
-	controllerFor(si_domain: DomainLabel): ItemController | undefined {
+	controllerFor(si_domain: DomainLabel): GenericItemController | undefined {
 		return this._h_controllers[si_domain];
 	}
 }
