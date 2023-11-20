@@ -50,7 +50,7 @@ export type PartableDatatype = PrimitiveDatatype.INT | PrimitiveDatatype.BIGINT 
 
 export type PartableEsType = PrimitiveDatatypeToEsType<PartableDatatype>;
 
-export type AcceptablePartTuples = Readonly<
+export type AcceptablePartTuples =
 	| []
 	| [PartableEsType]
 	| [PartableEsType, PartableEsType]
@@ -59,8 +59,7 @@ export type AcceptablePartTuples = Readonly<
 	| [PartableEsType, PartableEsType, PartableEsType, PartableEsType, PartableEsType]
 	| [PartableEsType, PartableEsType, PartableEsType, PartableEsType, PartableEsType, PartableEsType]
 	| [PartableEsType, PartableEsType, PartableEsType, PartableEsType, PartableEsType, PartableEsType, PartableEsType]
-	| [PartableEsType, PartableEsType, PartableEsType, PartableEsType, PartableEsType, PartableEsType, PartableEsType, PartableEsType]
->;
+	| [PartableEsType, PartableEsType, PartableEsType, PartableEsType, PartableEsType, PartableEsType, PartableEsType, PartableEsType];
 
 
 export type TaggedDatatypeToEsTypeGetter<xc_type extends TaggedDatatype> = {
@@ -300,7 +299,7 @@ export type SchemaSimulator<w_return=any> = {
  */
 export type SchemaBuilder<
 	k_spec extends SchemaSimulator=SchemaSimulator,
-	a_parts extends readonly any[]=AcceptablePartTuples,
+	a_parts extends any[]=AcceptablePartTuples,
 	w_return=any,
 > = (k: k_spec, ...a_parts: a_parts) => w_return;
 

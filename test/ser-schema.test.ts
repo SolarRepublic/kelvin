@@ -1,7 +1,7 @@
-import {ItemController} from 'src/controller';
-import {item_prototype} from 'src/item-proto';
+import type {SchemaBuilder, SchemaSpecifier} from 'src/schema-types';
+
 import {interpret_schema} from 'src/schema-impl';
-import {PrimitiveDatatype, TaggedDatatype, type SchemaBuilderDeprecated} from 'src/schema-types';
+import {PrimitiveDatatype, TaggedDatatype} from 'src/schema-types';
 import {describe, expect, it} from 'vitest';
 
 enum Category {
@@ -14,8 +14,8 @@ enum Category {
 	STRUCT_SHORTHAND=6,
 }
 
-// @ts-expect-error backwards inference for parts
-const kitch_sink: SchemaBuilderDeprecated = (k, [xc_cat, s_id]: [Category, string]) => ({
+// @ts-expect-error lone declaration
+const kitch_sink: SchemaBuilder = (k: SchemaSpecifier, xc_cat: Category, s_id: string) => ({
 	part_int: k.int(xc_cat),
 	part_str: k.str(s_id),
 	int: k.int(),

@@ -1,16 +1,19 @@
+import type {GenericItemController} from './controller';
 import type {KelvinKeyValueWriter} from './store';
-import type {DomainCode, DomainLabel, ItemIdent, ItemCode, ItemPath, SerVaultHub, IndexLabel, IndexValue, IndexPosition, BucketKey, BucketCode, SchemaCode, SerSchema, SerItem, SerBucketMetadata, SerBucket} from './types';
-import type {VaultClient} from './vault-client';
+import type {DomainCode, DomainLabel, ItemIdent, ItemCode, ItemPath, SerVaultHub, IndexLabel, IndexValue, IndexPosition, BucketKey, BucketCode, SchemaCode, SerSchema, SerItem, SerBucketMetadata, SerBucket, DbVersionId, DomainVersionId} from './types';
+import type {Migration, Vault} from './vault';
 
-import type {Nilable} from '@blake.regalia/belt';
+import type {NaiveBase93, NaiveJsonString, Nilable} from '@blake.regalia/belt';
 
-import {buffer_to_base93, fodemtv, fold, odem, ofe, text_to_buffer} from '@blake.regalia/belt';
+import {base93_to_buffer, buffer_to_base93, concat, fodemtv, fold, ode, odem, ofe, text_to_buffer} from '@blake.regalia/belt';
 
 import {random_bytes} from '@solar-republic/crypto';
 
+import {sha256_sync} from '@solar-republic/crypto/sha256';
+
 import {NB_BUCKET_CONTAINER, NB_BUCKET_CONTENTS, NB_BUCKET_LABEL, XT_ROTATION_DEBOUNCE, XT_ROTATION_WAIT_MAX} from './constants';
 import {index_to_b92} from './data';
-import {Bug, SchemaWarning} from './errors';
+import {Bug, ClientBehindError, MigrationError, MissingMigrationError, MissingMigrationRouterError, SchemaError, SchemaWarning} from './errors';
 import {DomainStorageStrategy} from './types';
 
 
@@ -22,6 +25,7 @@ const new_bucket_key = () => '_'+buffer_to_base93(random_bytes(NB_BUCKET_LABEL))
 
 export class VaultHub {
 	// decrypted and unmarshalled hub
+	protected _n_db_version = 0 as SerVaultHub['db_version'];
 	protected _h_domains: SerVaultHub['domains'] = {};
 	protected _a_items = [] as unknown as SerVaultHub['items'];
 	protected _h_indexes: SerVaultHub['indexes'] = {};
@@ -54,11 +58,217 @@ export class VaultHub {
 
 
 	constructor(
-		protected _k_vault: VaultClient
-	) {
+		protected _k_vault: Vault,
+		protected _h_controllers: Record<DomainLabel, GenericItemController>
+	) {}
+
+	get vault(): Vault {
+		return this._k_vault;
 	}
 
-	protected _schedule_rotation(): void {
+	async _write_hub(kw_content: KelvinKeyValueWriter): Promise<void> {
+		return await this._k_vault.writeHub(this.isolate(), kw_content);
+	}
+
+	// returns the isolated form of the current vault, ready for JSON serialization
+	isolate(): SerVaultHub {
+		const g_hub: SerVaultHub = {
+			db_version: this._n_db_version,
+			bucket_length: this._nb_bucket,
+			domains: this._h_domains,
+			items: this._a_items,
+			indexes: this._h_indexes,
+			buckets: this._a_buckets,
+			locations: this._a_locations,
+			buckets_to_schemas: this._a_buckets_to_schemas,
+			schemas: this._a_schemas,
+		};
+
+		return g_hub;
+	}
+
+	/**
+	 * @param g_hub 
+	 */
+	load(g_hub: SerVaultHub): void {
+		// increment update counter
+		this._c_updates += 1;
+
+		// load fields from ser
+		Object.assign(this, {
+			_n_database: g_hub.db_version,
+			_nb_bucket: g_hub.bucket_length,
+			_h_domains: g_hub.domains,
+			_a_items: g_hub.items,
+			_h_indexes: g_hub.indexes,
+			_a_buckets: g_hub.buckets,
+			_a_locations: g_hub.locations,
+			_a_buckets_to_schemas: g_hub.buckets_to_schemas,
+			_a_shapes: g_hub.schemas,
+		});
+
+		// create lookup from domain label to domain code
+		this._h_domain_codes = fodemtv(this._h_domains, (w_metadata, si_domain, i_domain) => index_to_b92(i_domain) as DomainCode);
+
+		// create lookup from domain code to domain label
+		this._h_domain_labels = ofe(odem(this._h_domains, ([si_domain], i_domain) => [index_to_b92(i_domain), si_domain]));
+
+		// record non-zero index of first gap if it exists (zero means no gap)
+		let i_next_item = 0;
+
+		// cache item lookup; skip empty values
+		this._h_items = fold(this._a_items, (si_item, i_item) => si_item? {
+			[si_item]: i_item as ItemCode,
+		}: (i_next_item ||= i_item, {}));
+
+		// save field
+		this._i_next_item = i_next_item;
+
+		// 
+	}
+
+	// db_version_id(): DbVersionId {
+	// 	const {_h_domains} = this;
+
+	// 	// sort keys lexicographically
+	// 	const a_keys = Object.keys(_h_domains).sort() as DomainLabel[];
+
+	// 	// prep list of version identifiers
+	// 	const a_versions: Uint8Array[] = [];
+
+	// 	// each entry in sorted order
+	// 	for(const si_key of a_keys) {
+	// 		// destructure metadata
+	// 		const [,, sb93_version] = _h_domains[si_key];
+
+	// 		// add to list of identifiers
+	// 		a_versions.push(base93_to_buffer(sb93_version));
+	// 	}
+
+	// 	// hash concatenated list
+	// 	return '_'+buffer_to_base93(sha256_sync(concat(a_versions))) as DbVersionId;
+	// }
+
+	// domain_version_id(si_domain: DomainLabel, sx_schema: NaiveJsonString): DomainVersionId {
+	// 	return `#${si_domain}:${buffer_to_base93(sha256_sync(text_to_buffer(sx_schema)))}` as DomainVersionId;
+	// }
+
+	async _init(kw_content: KelvinKeyValueWriter, h_migrations?: Record<number, Migration>): Promise<void> {
+		// db version the app is targetting
+		const n_db_version_app = this._k_vault.dbVersion;
+
+		// version of the database in storage
+		const n_db_version_storage = this._n_db_version;
+
+		// prep discrepancy error msg
+		const s_discrepancy_msg = `database version: #${n_db_version_storage}; your version: #${n_db_version_app}`;
+
+		// storage is behind
+		if(n_db_version_storage < n_db_version_app) {
+			// no migration router
+			if(!h_migrations) {
+				throw new MissingMigrationRouterError(s_discrepancy_msg);
+			}
+
+			// process migrations
+			for(let n_version=n_db_version_storage; n_version<n_db_version_app; n_version++) {
+				// ref migration
+				const f_migrate = h_migrations[n_version];
+
+				// prep error message info
+				const s_version_msg = `from version #${n_version} to version #${n_version+1}`;
+
+				// migration handler not found
+				if(!f_migrate) throw new MissingMigrationError(s_version_msg);
+
+				// call migration
+				try {
+					debugger;
+
+					await f_migrate({
+						domain(si_domain) {
+							throw new Error(`Not yet implemented`);
+						},
+					});
+				}
+				catch(e_migrate) {
+					throw new MigrationError(s_version_msg, e_migrate);
+				}
+			}
+		}
+		// storage is ahead
+		else if(n_db_version_storage > n_db_version_app) {
+			throw new ClientBehindError(s_discrepancy_msg);
+		}
+
+		// destructure fields
+		const {_h_domains, _h_domain_codes, _h_domain_labels, _a_buckets_to_schemas, _a_schemas} = this;
+
+		// each registered domain/controller pair
+		for(const [si_domain, k_controller] of ode(this._h_controllers)) {
+			// serialize latest schema
+			const sx_schema_new = JSON.stringify(k_controller.schema);
+
+			// domain not defined in hub
+			if(!_h_domains[si_domain]) {
+				// compute domain code
+				const sc_domain = index_to_b92(Object.keys(_h_domains).length) as DomainCode;
+
+				// add domain
+				_h_domains[si_domain] = [
+					[],  // no buckets yet
+					k_controller.strategy,
+					// this.domain_version_id(si_domain, sx_schema_new),  // domain version id
+				];
+
+				// update code and label
+				_h_domain_codes[si_domain] = sc_domain;
+				_h_domain_labels[sc_domain] = si_domain;
+
+				// find next spot for schema
+				let i_schema = _a_schemas.indexOf(0);
+
+				// no open spots, append new spot to end
+				if(i_schema < 0) i_schema = _a_schemas.length;
+			}
+			// domain exists
+			else {
+				// destructure it
+				const [a_bucket_codes] = _h_domains[si_domain];
+
+				//
+				let i_schema_latest = -1;
+
+				// each bucket
+				for(const i_bucket of a_bucket_codes) {
+					// lookup its schema
+					const i_schema_check = _a_buckets_to_schemas[i_bucket];
+
+					// schema is up-to-date; skip
+					if(i_schema_check === i_schema_latest) continue;
+
+					// serialize its schema
+					const sx_schema_old = JSON.stringify(_a_schemas[i_schema_check]);
+
+					// same as latest
+					if(sx_schema_old === sx_schema_new) {
+						// capture schema code
+						i_schema_latest = i_schema_check;
+
+						// next
+						continue;
+					}
+
+					// discrepancy
+					throw new SchemaError(`Schema for '${si_domain}' domain changed but items were not migrated`);
+				}
+			}
+		}
+
+		// 
+	}
+
+	_schedule_rotation(): void {
 		// already scheduled
 		if(this._i_task_rotate) {
 			// max wait time exceeded; do not postpone any longer
@@ -108,69 +318,6 @@ export class VaultHub {
 				await kw_content.removeMany([..._as_buckets_prune]);
 			});
 		}, XT_ROTATION_DEBOUNCE);
-	}
-
-	get vault(): VaultClient {
-		return this._k_vault;
-	}
-
-	async _write_hub(kw_content: KelvinKeyValueWriter): Promise<void> {
-		return await this._k_vault.writeHub(this.isolate(), kw_content);
-	}
-
-	// returns the isolated form of the current vault, ready for JSON serialization
-	isolate(): SerVaultHub {
-		const g_hub: SerVaultHub = {
-			domains: this._h_domains,
-			items: this._a_items,
-			indexes: this._h_indexes,
-			buckets: this._a_buckets,
-			locations: this._a_locations,
-			buckets_to_schemas: this._a_buckets_to_schemas,
-			schemas: this._a_schemas,
-			bucket_length: this._nb_bucket,
-		};
-
-		return g_hub;
-	}
-
-	/**
-	 * @param g_hub 
-	 */
-	load(g_hub: SerVaultHub): void {
-		// increment update counter
-		this._c_updates += 1;
-
-		// load fields from ser
-		Object.assign(this, {
-			_h_domains: g_hub.domains,
-			_a_items: g_hub.items,
-			_h_indexes: g_hub.indexes,
-			_a_buckets: g_hub.buckets,
-			_a_locations: g_hub.locations,
-			_a_buckets_to_schemas: g_hub.buckets_to_schemas,
-			_a_shapes: g_hub.schemas,
-			_nb_bucket: g_hub.bucket_length,
-		});
-
-		// create lookup from domain label to domain code
-		this._h_domain_codes = fodemtv(this._h_domains, (w_metadata, si_domain, i_domain) => index_to_b92(i_domain) as DomainCode);
-
-		// create lookup from domain code to domain label
-		this._h_domain_labels = ofe(odem(this._h_domains, ([si_domain], i_domain) => [index_to_b92(i_domain), si_domain]));
-
-		// record non-zero index of first gap if it exists (zero means no gap)
-		let i_next_item = 0;
-
-		// cache item lookup; skip empty values
-		this._h_items = fold(this._a_items, (si_item, i_item) => si_item? {
-			[si_item]: i_item as ItemCode,
-		}: (i_next_item ||= i_item, {}));
-
-		// save field
-		this._i_next_item = i_next_item;
-
-		// 
 	}
 
 	/**
@@ -286,7 +433,8 @@ export class VaultHub {
 		}
 		// no gaps; append
 		else {
-			i_code = this._a_items.push(si_item) - 1 as ItemCode;
+			// assignment from push result intentional, codes start at `1`
+			i_code = this._a_items.push(si_item) as ItemCode;
 		}
 
 		// return new index
@@ -619,7 +767,7 @@ export class VaultHub {
 			await this._write_hub(kw_content);
 
 			// add old bucket to deletion queue
-			if(si_bucket_delete) this._a_deletion.push(si_bucket_delete);
+			if(si_bucket_delete) this._as_buckets_prune.add(si_bucket_delete);
 
 			// schedule a bucket rotation
 			this._schedule_rotation();

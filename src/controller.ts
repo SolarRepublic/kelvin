@@ -1,28 +1,27 @@
 import type {F} from 'ts-toolbelt';
 
+import type {VaultHub} from './hub';
 import type {RuntimeItem} from './item-proto';
 import type {Reader} from './reader';
 import type {ItemShapesFromSchema, ExtractedMembers, StrictSchema, SchemaSpecifier, AcceptablePartTuples, SchemaBuilder, PartFields, PartableEsType} from './schema-types';
-import type {DomainLabel, ItemCode, ItemIdent, ItemPath, SerFieldStruct, SerItem, SerKeyStruct, SerSchema} from './types';
 
 
-import type {VaultClient} from './vault-client';
-import type {VaultHub} from './vault-hub';
+
+import type {Vault} from './vault';
 import type {Dict, JsonArray, JsonObject} from '@blake.regalia/belt';
 
 import {F_IDENTITY, __UNDEFINED} from '@blake.regalia/belt';
-import {ChainNamespace} from 'test/chains';
 
-
-import {SchemaError} from './errors';
 
 import {$_CODE, $_DOMAIN, $_PARTS, $_TUPLE, item_prototype} from './item-proto';
 import {interpret_schema} from './schema-impl';
+import {DomainStorageStrategy, type DomainLabel, type ItemCode, type ItemIdent, type ItemPath, type SerFieldStruct, type SerItem, type SerKeyStruct, type SerSchema} from './types';
 
 const is_runtime_item = (g_item: object): g_item is RuntimeItem => !!(g_item as RuntimeItem)[$_TUPLE];
 
 export class ItemController<
-	si_domain extends DomainLabel,
+	s_domain extends string,
+	si_domain extends s_domain & DomainLabel,
 	a_parts extends AcceptablePartTuples,
 	g_schema extends StrictSchema,
 	f_schema extends SchemaBuilder<SchemaSpecifier, a_parts, g_schema>,
@@ -31,8 +30,9 @@ export class ItemController<
 	g_runtime extends g_item & g_proto,
 	g_criteria extends PartFields<g_schema>,
 > {
-	protected _k_vault: VaultClient;
-	protected _si_domain!: DomainLabel;
+	protected _k_vault: Vault;
+	protected _si_domain!: si_domain;
+	protected _xc_strategy: DomainStorageStrategy;
 	protected _k_reader!: Reader;
 
 	protected _h_shapes_cache: Dict<object> = {};
@@ -46,8 +46,9 @@ export class ItemController<
 	protected _g_loader: object;
 
 	constructor(gc_type: {
-		client: VaultClient;
-		domain: si_domain;
+		client: Vault;
+		domain: s_domain;
+		strategy?: DomainStorageStrategy;
 		schema: F.NoInfer<f_schema>;
 		proto?: (
 			f_cast: <h_extension>(w_this: h_extension) => g_item & h_extension,
@@ -57,6 +58,7 @@ export class ItemController<
 		const {
 			client: k_vault,
 			domain: si_domain,
+			strategy: xc_strategy=DomainStorageStrategy.DEFAULT,
 			schema: f_builder,
 			proto: f_proto,
 		} = gc_type;
@@ -65,7 +67,10 @@ export class ItemController<
 		this._k_vault = k_vault;
 
 		// domain label
-		this._si_domain = si_domain as DomainLabel;
+		this._si_domain = si_domain as unknown as si_domain;
+
+		// domain storage strategy
+		this._xc_strategy = xc_strategy;
 
 		// interpret schema
 		const a_schema = this._a_schema = interpret_schema(si_domain, f_builder);
@@ -82,11 +87,16 @@ export class ItemController<
 		// create loader prototype
 		this._g_loader = Object.create({}, item_prototype(a_schema, this as GenericItemController, true));
 
-		// serialize
-		JSON.stringify(a_schema);
-
 		// register controller with client
 		this._k_vault.registerController(this._si_domain, this);
+	}
+
+	get strategy(): DomainStorageStrategy {
+		return this._xc_strategy;
+	}
+
+	get schema(): Readonly<SerSchema> {
+		return this._a_schema;
 	}
 
 	get _h_schema_parts(): SerKeyStruct {
@@ -99,7 +109,9 @@ export class ItemController<
 
 	// access hub; memoized
 	protected get _k_hub(): VaultHub {
-		return Object.defineProperty(this, '_k_hub', this._k_vault.hub())._k_hub;
+		return Object.defineProperty(this, '_k_hub', {
+			value: this._k_vault.hub(),
+		})._k_hub;
 	}
 
 	protected _path_parts(g_criteria: g_criteria): [Readonly<a_parts>, JsonObject] {
@@ -139,7 +151,7 @@ export class ItemController<
 		};
 	}
 
-	get domain(): DomainLabel {
+	get domain(): si_domain {
 		return this._si_domain;
 	}
 
@@ -208,7 +220,7 @@ export class ItemController<
 
 		// return serialized item
 		return [
-			g_runtime[$_PARTS].join(':') as ItemPath,
+			g_runtime[$_PARTS].slice(1).join(':') as ItemPath,
 			g_runtime[$_TUPLE],
 		];
 	}
@@ -299,6 +311,7 @@ export class ItemController<
 }
 
 export type GenericItemController = ItemController<
+	string,
 	DomainLabel,
 	AcceptablePartTuples,
 	StrictSchema,

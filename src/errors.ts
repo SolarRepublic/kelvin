@@ -42,3 +42,11 @@ export class UnparseableSchemaError extends BasicError('Unable to parse schema')
 export class SchemaError extends BasicError('CRITICAL SCHEMA ERROR') {}
 
 export class SchemaWarning extends BasicError('Schema warning') {}
+
+export class MissingMigrationError extends BasicError('Missing database migration handler') {}
+
+export class MigrationError extends BasicError('Error encountered while attempting to migrate database') {}
+
+export class ClientBehindError extends BasicError('Your client software is older than the version that created the database') {}
+
+export class MissingMigrationRouterError extends BasicError('Missing migration router where expected') {}

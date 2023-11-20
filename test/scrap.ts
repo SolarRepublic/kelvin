@@ -5,7 +5,7 @@ import {LocalStorageWrapper} from 'src/wrappers/local-storage';
 import {MemoryWrapper} from 'src/wrappers/memory';
 
 import {createItemController} from '../src/item-controller';
-import {VaultClient} from '../src/vault-client';
+import {Vault} from '../src/vault';
 
 
 const shape = [

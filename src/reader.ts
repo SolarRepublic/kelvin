@@ -1,11 +1,11 @@
 import type {KelvinKeyValueStore} from './store';
 import type {ItemCode, SerItem, SerSchema} from './types';
-import type {VaultClient} from './vault-client';
-import type {VaultHub} from './vault-hub';
+import type {Vault} from './vault';
+import type {VaultHub} from './hub';
 import type {JsonArray, JsonObject} from '@blake.regalia/belt';
 
 export class Reader {
-	protected _k_vault: VaultClient;
+	protected _k_vault: Vault;
 	protected _k_content: KelvinKeyValueStore;
 
 	constructor(protected _k_hub: VaultHub) {

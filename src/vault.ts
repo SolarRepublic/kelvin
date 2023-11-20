@@ -1,9 +1,11 @@
+import type {N} from 'ts-toolbelt';
+
 import type {GenericItemController, ItemController} from './controller';
 import type {KelvinKeyValueStore, KelvinKeyValueWriter} from './store';
-import type {SerVaultHub, SerVaultBase, SerVaultHashParams, BucketKey, SerBucket, DomainLabel} from './types';
+import type {SerVaultHub, SerVaultBase, SerVaultHashParams, BucketKey, SerBucket, DomainLabel, SerSchema} from './types';
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-import type {AesGcmDecryptionError} from '@solar-republic/crypto';
+import type {AesGcmDecryptionError, SensitiveBytes} from '@solar-republic/crypto';
 
 import {base64_to_buffer, buffer_to_base64, buffer_to_json, F_NOOP, is_dict_es, ode, type NaiveBase64, type NaiveBase93, text_to_buffer, defer, json_to_buffer, ATU8_NIL, concat2, __UNDEFINED, type Dict, type Promisable, buffer} from '@blake.regalia/belt';
 
@@ -12,14 +14,13 @@ import {sha256_sync} from '@solar-republic/crypto/sha256';
 
 
 import {derive_cipher_key, derive_tandem_root_keys, generate_root_signature, import_key, verify_root_key, type RootKeyStruct, derive_cipher_nonce, test_encryption_integrity} from './auth';
-import {ATU8_DUMMY_PHRASE, G_DEFAULT_HASHING_PARAMS, NB_HUB_GROWTH, NB_HUB_MINIMUM, NB_RECRYPTION_THRESHOLD, NB_SHA256_SALT, N_SYSTEM_VERSION, XB_CHAR_PAD} from './constants';
+import {ATU8_DUMMY_PHRASE, G_DEFAULT_HASHING_PARAMS, NB_HUB_GROWTH, NB_HUB_MINIMUM, NB_RECRYPTION_THRESHOLD, NB_SHA256_SALT, N_SYSTEM_VERSION, XB_CHAR_PAD, XB_NONCE_PREFIX_VERSION} from './constants';
 import {Bug, InvalidPassphraseError, InvalidSessionError, RecoverableVaultError, RefuseDestructiveActionError, VaultClosedError, VaultCorruptedError} from './errors';
+import {VaultHub} from './hub';
 import {SI_KEY_STORAGE_BASE, SI_KEY_STORAGE_HUB, SI_KEY_SESSION_ROOT, SI_KEY_SESSION_VECTOR, SI_KEY_SESSION_AUTH} from './ids';
-import {VaultHub} from './vault-hub';
 
 
 type SerSessionRootKey = number[];
-
 
 enum ConnectionState {
 	NOT_CONNECTED='not-connected',
@@ -52,8 +53,62 @@ export type SchemaSession = {
 type StoreContent = KelvinKeyValueStore<KelvinKeyValueWriter, SchemaContent>;
 type StoreSession = KelvinKeyValueStore<KelvinKeyValueWriter, SchemaSession>;
 
+export type Migrator = {
+	domain(si_domain: string): void;
+};
+
+export type Migration = (k_migrator: Migrator) => Promisable<void>;
+
+export type ZeroToNRange = {
+	0: never;
+	1: 0;
+	2: 0 | 1;
+	3: 0 | 1 | 2;
+	4: 0 | 1 | 2 | 3;
+	5: 0 | 1 | 2 | 3 | 4;
+	6: 0 | 1 | 2 | 3 | 4 | 5;
+	7: 0 | 1 | 2 | 3 | 4 | 5 | 6;
+	8: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
+	9: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+	10: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+	11: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
+	12: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
+	13: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
+	14: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13;
+	15: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14;
+	16: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15;
+	17: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16;
+	18: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17;
+	19: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18;
+	20: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19;
+	21: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20;
+	22: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21;
+	23: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22;
+	24: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23;
+	25: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24;
+	26: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25;
+	27: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26;
+	28: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27;
+	29: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28;
+	30: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29;
+	31: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30;
+	32: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31;
+	33: number;
+};
+
+export type MigrationRouter<n_db_version extends number> = {
+	[i_version in n_db_version extends keyof ZeroToNRange? ZeroToNRange[n_db_version]: number]: Migration
+};
+
+export type UnlockConfig<n_db_version extends number> = {
+	passphrase: Uint8Array;
+	recovery?: boolean;
+	info?: ((s_state: string) => void);
+	migrations: MigrationRouter<n_db_version>;
+};
+
 // stores the private fields of an Vault instance
-const hm_privates = new WeakMap<VaultClient, VaultFields>();
+const hm_privates = new WeakMap<Vault, VaultFields>();
 
 // pattern for executing list of awaiter callbacks
 const callback_awaiters = <w_value>(a_awaiters_src: ((w_value: w_value) => void)[], w_value: w_value) => {
@@ -82,6 +137,108 @@ const awaiter_from = <w_value>(a_awaiters: ((w_value: w_value) => void)[]) => {
 };
 
 
+// test encryption integrity
+async function _test_integrity(
+	dk_root_old: CryptoKey,
+	atu8_vector_old: Uint8Array,
+	atu8_vector_new: Uint8Array,
+	atu8_salt: Uint8Array,
+	dk_aes_new: CryptoKey
+) {
+	// prepare nonces
+	const [atu8_nonce_old, atu8_nonce_new] = await Promise.all([
+		derive_cipher_nonce(atu8_vector_old, sha256_sync(text_to_buffer('dummy')), 96),
+		derive_cipher_nonce(atu8_vector_new, sha256_sync(text_to_buffer('dummy')), 96),
+	]);
+
+	// derive temporary old cipher key capable of encrypting, scoped to this block only
+	const dk_aes_old_tmp = await derive_cipher_key(dk_root_old, atu8_salt, true);
+
+	// run integrity tests
+	await test_encryption_integrity(ATU8_DUMMY_PHRASE, dk_aes_old_tmp, atu8_nonce_old);
+	await test_encryption_integrity(ATU8_DUMMY_PHRASE, dk_aes_new, atu8_nonce_new);
+}
+
+// creates cipher nonce for the given key
+function _create_cipher_nonce(
+	si_key: string,
+	atu8_ent: Uint8Array,
+	atu8_vector: Uint8Array
+): Promise<Uint8Array> {
+	// create salt
+	const atu8_salt = sha256_sync(concat2(text_to_buffer(si_key), atu8_ent));
+
+	// derive nonce for aes
+	return derive_cipher_nonce(atu8_vector, atu8_salt, 96);
+}
+
+// consistent method for producing the nonce to use when decrypting
+async function _read_nonce_for_entry(
+	si_key: string,
+	atu8_value: Uint8Array,
+	atu8_vector: Uint8Array
+): Promise<[
+	atu8_nonce: Uint8Array,
+	atu8_cipher: Uint8Array,
+]> {
+	// extra entropy if needed
+	let atu8_ent = ATU8_NIL;
+
+	// output ciphertext (default to contents)
+	let atu8_cipher = atu8_value;
+
+	// key is plaintext
+	if('#' === si_key[0]) {
+		// check version byte
+		if(atu8_value[0] > XB_NONCE_PREFIX_VERSION) {
+			throw new VaultCorruptedError(`Database was encoded using a newer version of the software (${atu8_ent[0]}) or it is corrupted. Unable to decode`);
+		}
+
+		// get extra entropy from beginning of value
+		atu8_ent = atu8_value.subarray(1, 17);
+
+		// adjust ciphertext
+		atu8_cipher = atu8_value.subarray(17);
+	}
+
+	// derive nonce
+	const atu8_nonce = await _create_cipher_nonce(si_key, atu8_ent, atu8_vector);
+
+	// return nonce and cipher
+	return [atu8_nonce, atu8_cipher];
+}
+
+// consistent method for producing the nonce to use when encrypting
+async function _write_nonce_for_entry(
+	si_key: string,
+	atu8_vector: Uint8Array
+): Promise<[
+	atu8_nonce: Uint8Array,
+	atu8_prefix: Uint8Array | undefined,
+]> {
+	// extra entropy if needed
+	let atu8_ent = ATU8_NIL;
+
+	// prefix value
+	let atu8_prefix: Uint8Array | undefined;
+
+	// key is plaintext
+	if('#' === si_key[0]) {
+		// create extra entropy
+		atu8_ent = random_bytes(16);
+
+		// construct prefix as version byte plus entropy
+		atu8_prefix = concat2(Uint8Array.from([XB_NONCE_PREFIX_VERSION]), atu8_ent);
+	}
+
+	// derive nonce
+	const atu8_nonce = await _create_cipher_nonce(si_key, atu8_ent, atu8_vector);
+
+	// return nonce and value
+	return [atu8_nonce, atu8_prefix];
+}
+
+
 /**
  * 
  * Storage key prefixes:
@@ -93,14 +250,9 @@ const awaiter_from = <w_value>(a_awaiters: ((w_value: w_value) => void)[]) => {
  *   - "@base": stores encryption metadata
  *   - "@params": tunable parameters to password hashing function
  */
-export class VaultClient {
-	// static async connect(
-	// 	k_storage: JsonKeyValueStore,
-	// 	k_session: JsonKeyValueStore
-	// ): Promise<VaultClient> {
-	// 	return new VaultClient(k_storage as StoreContent, k_session as StoreSession).connect();
-	// }
-
+export class Vault <
+	n_db_version extends number=number,
+> {
 	// storage
 	protected _k_content: StoreContent;
 	protected _k_session: StoreSession;
@@ -135,11 +287,16 @@ export class VaultClient {
 	protected _h_controllers: Record<DomainLabel, GenericItemController> = {};
 
 	constructor(
+		protected _n_db_version: n_db_version,
 		k_content: KelvinKeyValueStore,
 		k_session: KelvinKeyValueStore
 	) {
 		this._k_content = k_content as StoreContent;
 		this._k_session = k_session as StoreSession;
+	}
+
+	get dbVersion(): n_db_version {
+		return this._n_db_version;
 	}
 
 	// access the raw content storage instance
@@ -263,111 +420,6 @@ export class VaultClient {
 		return g_hub;
 	}
 
-	// test encryption integrity
-	protected async _test_integrity(
-		dk_root_old: CryptoKey,
-		atu8_vector_old: Uint8Array,
-		atu8_vector_new: Uint8Array,
-		atu8_salt: Uint8Array,
-		dk_aes_new: CryptoKey
-	) {
-		// prepare nonces
-		const [atu8_nonce_old, atu8_nonce_new] = await Promise.all([
-			derive_cipher_nonce(atu8_vector_old, sha256_sync(text_to_buffer('dummy')), 96),
-			derive_cipher_nonce(atu8_vector_new, sha256_sync(text_to_buffer('dummy')), 96),
-		]);
-
-		// derive temporary old cipher key capable of encrypting, scoped to this block only
-		const dk_aes_old_tmp = await derive_cipher_key(dk_root_old, atu8_salt, true);
-
-		// run integrity tests
-		await test_encryption_integrity(ATU8_DUMMY_PHRASE, dk_aes_old_tmp, atu8_nonce_old);
-		await test_encryption_integrity(ATU8_DUMMY_PHRASE, dk_aes_new, atu8_nonce_new);
-	}
-
-	// creates cipher nonce for the given key
-	protected _create_cipher_nonce(
-		si_key: string,
-		atu8_ent: Uint8Array,
-		atu8_vector: Uint8Array
-	): Promise<Uint8Array> {
-		// create salt
-		const atu8_salt = sha256_sync(concat2(text_to_buffer(si_key), atu8_ent));
-
-		// derive nonce for aes
-		return derive_cipher_nonce(atu8_vector, atu8_salt, 96);
-	}
-
-	// consistent method for producing the nonce to use when decrypting
-	protected async _read_nonce_for_entry(
-		si_key: string,
-		atu8_value: Uint8Array,
-		atu8_vector: Uint8Array
-	): Promise<[
-		atu8_nonce: Uint8Array,
-		atu8_cipher: Uint8Array,
-	]> {
-		// extra entropy if needed
-		let atu8_ent = ATU8_NIL;
-
-		// output ciphertext (default to contents)
-		let atu8_cipher = atu8_value;
-
-		// key is plaintext
-		if('#' === si_key[0]) {
-			// check version byte
-			if(atu8_value[0] > 0) {
-				throw new VaultCorruptedError(`Database was encoded using a newer version of the software (${atu8_ent[0]}) or it is corrupted. Unable to decode`);
-			}
-
-			// get extra entropy from beginning of value
-			atu8_ent = atu8_value.subarray(1, 17);
-
-			// adjust ciphertext
-			atu8_cipher = atu8_value.subarray(17);
-		}
-
-		// derive nonce
-		const atu8_nonce = await this._create_cipher_nonce(si_key, atu8_ent, atu8_vector);
-
-		// return nonce and cipher
-		return [atu8_nonce, atu8_cipher];
-	}
-
-	// consistent method for producing the nonce to use when encrypting
-	protected async _write_nonce_for_entry(
-		si_key: string,
-		atu8_cipher: Uint8Array,
-		atu8_vector: Uint8Array
-	): Promise<[
-		atu8_nonce: Uint8Array,
-		atu8_value: Uint8Array,
-	]> {
-		// extra entropy if needed
-		let atu8_ent = ATU8_NIL;
-
-		// output value (default to ciphertext)
-		let atu8_value = atu8_cipher;
-
-		// key is plaintext
-		if('#' === si_key[0]) {
-			// create extra entropy
-			atu8_ent = random_bytes(16);
-
-			// prepend entropy to output value
-			atu8_value = concat2(atu8_ent, atu8_cipher);
-
-			// prepend version byte
-			atu8_value = concat2(Uint8Array.from([0]), atu8_value);
-		}
-
-		// derive nonce
-		const atu8_nonce = await this._create_cipher_nonce(si_key, atu8_ent, atu8_vector);
-
-		// return nonce and value
-		return [atu8_nonce, atu8_value];
-	}
-
 	// decrypt an entry
 	protected async _decrypt_entry(
 		si_key: string,
@@ -379,7 +431,7 @@ export class VaultClient {
 		const g_privates = hm_privates.get(this)!;
 
 		// derive the nonce
-		const [atu8_nonce, atu8_cipher] = await this._read_nonce_for_entry(si_key, atu8_value, atu8_vector || g_privates.atu8_vector!);
+		const [atu8_nonce, atu8_cipher] = await _read_nonce_for_entry(si_key, atu8_value, atu8_vector || g_privates.atu8_vector!);
 
 		// decrypt the value
 		return await aes_gcm_decrypt(atu8_cipher, dk_cipher || g_privates.dk_cipher!, atu8_nonce);
@@ -396,10 +448,13 @@ export class VaultClient {
 		const g_privates = hm_privates.get(this)!;
 
 		// derive the nonce
-		const [atu8_nonce, atu8_value] = await this._write_nonce_for_entry(si_key, atu8_plain, atu8_vector || g_privates.atu8_vector!);
+		const [atu8_nonce, atu8_prefix] = await _write_nonce_for_entry(si_key, atu8_vector || g_privates.atu8_vector!);
 
-		// decrypt the value
-		return await aes_gcm_encrypt(atu8_value, dk_cipher || g_privates.dk_cipher!, atu8_nonce);
+		// encrypt the value
+		const atu8_cipher = await aes_gcm_encrypt(atu8_plain, dk_cipher || g_privates.dk_cipher!, atu8_nonce);
+
+		// concat if prefix exists
+		return atu8_prefix? concat2(atu8_prefix, atu8_cipher): atu8_cipher;
 	}
 
 	/**
@@ -413,7 +468,7 @@ export class VaultClient {
 		g_root_old: RootKeyStruct,
 		g_root_new: RootKeyStruct,
 		f_info: ((s_state: string) => void)=F_NOOP
-	): Promise<void> {
+	): Promise<CryptoKey> {
 		// destructure field(s)
 		const {_atu8_salt} = this;
 
@@ -451,7 +506,7 @@ export class VaultClient {
 		]);
 
 		// test encryption integrity
-		await this._test_integrity(dk_root_old, atu8_vector_old, atu8_vector_new, _atu8_salt, dk_aes_new);
+		await _test_integrity(dk_root_old, atu8_vector_old, atu8_vector_new, _atu8_salt, dk_aes_new);
 
 		// get keys of encrypted entries
 		const a_keys = (await k_reader.getAllKeys()).filter(si_key => /^[#_]/.test(si_key));
@@ -463,8 +518,8 @@ export class VaultClient {
 		for(const [si_key, atu8_value] of ode(h_entries)) {
 			// prepare old and new nonces
 			const [[atu8_nonce_old, atu8_cipher], [atu8_nonce_new]] = await Promise.all([
-				this._read_nonce_for_entry(si_key, atu8_value, atu8_vector_old),
-				this._read_nonce_for_entry(si_key, atu8_value, atu8_vector_new),
+				_read_nonce_for_entry(si_key, atu8_value, atu8_vector_old),
+				_read_nonce_for_entry(si_key, atu8_value, atu8_vector_new),
 			]);
 
 			// add to cumulative byte length
@@ -509,15 +564,23 @@ export class VaultClient {
 
 		// wait for all operations to finish
 		await Promise.all(a_promises);
+
+		// return new cipher key
+		return dk_aes_new;
 	}
 
 
-	// initialize the connection
-	async connect(si_name: string): Promise<this> {
+	/**
+	 * Connects to the given database
+	 * @param si_database - id of the database
+	 * @returns 
+	 */
+	async connect(si_database: string): Promise<this> {
+		// destructure field(s)
 		const {_k_content} = this;
 
 		// invalid connection state
-		if(this._sc_connection !== ConnectionState.NOT_CONNECTED) {
+		if(![ConnectionState.NOT_CONNECTED, ConnectionState.NON_EXISTANT].includes(this._sc_connection)) {
 			throw new RefuseDestructiveActionError(`vault instance is not accepting connection requests while in state: ${this._sc_connection}`);
 		}
 
@@ -525,7 +588,7 @@ export class VaultClient {
 		this._sc_connection = ConnectionState.CONNECTING;
 
 		// accept name
-		this._si_name = si_name;
+		this._si_name = si_database;
 
 		// start monitoring changes to base
 		this._fk_unlisten_base = _k_content.onEntryChanged(this._fixed_storage_key(SI_KEY_STORAGE_BASE), (g_new, g_old) => {
@@ -614,6 +677,73 @@ export class VaultClient {
 		return !!g_privates?.dk_root;
 	}
 
+	async _unlock_subroutine(
+		kw_content: KelvinKeyValueWriter,
+		kn_root: SensitiveBytes,
+		dk_root: CryptoKey,
+		dk_cipher: CryptoKey,
+		atu8_vector: Uint8Array,
+		atu8_entropy: Uint8Array,
+		xg_nonce_new: bigint,
+		atu8_salt: Uint8Array,
+		f_info: ((s_state: string) => void)=F_NOOP
+	): Promise<void> {
+		// update session
+		{
+			// verbose
+			f_info('Updating session');
+
+			// create session auth private key
+			const atu8_auth = random_bytes(32);
+
+			// save/update to private fields
+			hm_privates.set(this, {
+				...hm_privates.get(this)!,
+				dk_root,
+				dk_cipher,
+				atu8_vector,
+				atu8_auth,
+			});
+
+			// save to session storage
+			await this._k_session.lockAll(kw_session => kw_session.setStringMany({
+				[this._fixed_storage_key(SI_KEY_SESSION_ROOT)]: buffer_to_base64(kn_root.data),
+				[this._fixed_storage_key(SI_KEY_SESSION_VECTOR)]: buffer_to_base64(atu8_vector),
+				[this._fixed_storage_key(SI_KEY_SESSION_AUTH)]: buffer_to_base64(atu8_auth),
+			}));
+		}
+
+		// verbose
+		f_info('Generating signature');
+
+		// generate signature
+		const atu8_signature = await generate_root_signature(dk_root, atu8_salt);
+
+		// verbose
+		f_info('Saving to storage');
+
+		// serialize the new base
+		const g_base: SerVaultBase = {
+			version: N_SYSTEM_VERSION,
+			entropy: buffer_to_base64(atu8_entropy),
+			nonce: `${xg_nonce_new}`,
+			signature: buffer_to_base64(atu8_signature),
+			salt: buffer_to_base64(atu8_salt),
+			params: G_DEFAULT_HASHING_PARAMS,
+		};
+
+		// start waiting for next update
+		const dp_update = this._next_base_update();
+
+		// write to storage (this will trigger a change and call _load_base)
+		await kw_content.setJson(this._fixed_storage_key(SI_KEY_STORAGE_BASE), g_base);
+
+		// verbose
+		f_info('Waiting for confirmation');
+
+		// wait for that update
+		await dp_update;
+	}
 
 	/**
 	 * Attempt to unlock the vault. If successful, the root key will be rotated.
@@ -622,11 +752,11 @@ export class VaultClient {
 	 * @param f_info - optional callback to provide with update messages during the process
 	 * @returns 
 	 */
-	async unlock(
-		atu8_phrase: Uint8Array,
-		b_recovering=false,
-		f_info: ((s_state: string) => void)=F_NOOP
-	): Promise<void> {
+	async unlock(atu8_phrase: Uint8Array, b_recovering=false, f_info: ((s_state: string) => void)=F_NOOP): Promise<void> {
+	// async unlock(gc_unlock: UnlockConfig<n_db_version>): Promise<void> {
+		// already unlocked
+		if(this.isUnlocked()) return;
+
 		// destructure fields
 		const {
 			_atu8_salt,
@@ -637,7 +767,15 @@ export class VaultClient {
 			_k_session,
 		} = this;
 
-		// bind to session root key changes
+		// // destructure config
+		// const {
+		// 	passphrase: atu8_phrase,
+		// 	migrations: h_migrations,
+		// 	recovery: b_recovering=false,
+		// 	info: f_info=F_NOOP,
+		// } = gc_unlock;
+
+		// TODO: bind to session root key changes
 
 		// verbose
 		f_info('Waiting for session lock');
@@ -654,7 +792,7 @@ export class VaultClient {
 				export: kn_root_new,
 			} = await derive_tandem_root_keys(atu8_phrase, _atu8_entropy, _xg_nonce, _g_params, true);
 
-			// in case of failure, zero out key material
+			// whether success or failure, zero out key material
 			try {
 				// invalid old root key
 				if(!await verify_root_key(g_root_old.key, _atu8_salt, _atu8_signature)) {
@@ -668,80 +806,38 @@ export class VaultClient {
 					}
 				}
 
-				// set new root key in session
-				await _k_session.lockAll(async(kw_session) => {
-					await kw_session.setStringMany({
-						[this._fixed_storage_key(SI_KEY_SESSION_ROOT)]: buffer_to_base64(kn_root_new!.data),
-					});
-				});
+				// rotate root key
+				const dk_cipher = await this._rotate_root_key(kw_content, g_root_old, g_root_new, f_info);
+
+				// 
+				await this._unlock_subroutine(
+					kw_content,
+					kn_root_new!,
+					g_root_new.key,
+					dk_cipher,
+					g_root_new.vector,
+					_atu8_entropy,
+					g_root_new.nonce,
+					_atu8_salt,
+					f_info
+				);
 			}
 			// before throwing, zero-out key material
 			finally {
 				kn_root_new?.wipe();
 			}
 
-			// rotate root key
-			await this._rotate_root_key(kw_content, g_root_old, g_root_new, f_info);
-
-			// update session
-			{
-				// verbose
-				f_info('Updating session');
-
-				// create session auth private key
-				const atu8_auth = random_bytes(32);
-
-				// save/update to private field
-				hm_privates.set(this, {
-					...hm_privates.get(this)!,
-					dk_cipher: g_root_new.key,
-					atu8_vector: g_root_new.vector,
-					atu8_auth,
-				});
-
-				// save to session storage
-				await _k_session.lockAll(kw_session => kw_session.setStringMany({
-					[this._fixed_storage_key(SI_KEY_SESSION_VECTOR)]: buffer_to_base64(g_root_new.vector),
-					[this._fixed_storage_key(SI_KEY_SESSION_AUTH)]: buffer_to_base64(atu8_auth),
-				}));
-			}
-
-			// verbose
-			f_info('Generating signature');
-
-			// generate new signature
-			const atu8_signature_new = await generate_root_signature(g_root_new.key, _atu8_salt);
-
-			// verbose
-			f_info('Saving to storage');
-
-			// serialize the new base
-			const g_base: SerVaultBase = {
-				version: N_SYSTEM_VERSION,
-				entropy: buffer_to_base64(_atu8_entropy),
-				nonce: `${g_root_new.nonce}`,
-				signature: buffer_to_base64(atu8_signature_new),
-				salt: buffer_to_base64(_atu8_salt),
-				params: _g_params,
-			};
-
-			// start waiting for next update
-			const dp_update = this._next_base_update();
-
-			// write to storage (this will trigger a change and call _load_base again -- that's fine)
-			await kw_content.setJson(this._fixed_storage_key(SI_KEY_STORAGE_BASE), g_base);
-
-			// verbose
-			f_info('Waiting for confirmation');
-
-			// wait for that update
-			await dp_update;
-
 			// verbose
 			f_info('Done');
 		});
 	}
 
+	/**
+	 * Registers a new vault
+	 * @param atu8_phrase 
+	 * @param f_info 
+	 * @returns 
+	 */
 	async register(
 		atu8_phrase: Uint8Array,
 		f_info: ((s_state: string) => void)=F_NOOP
@@ -771,49 +867,37 @@ export class VaultClient {
 			const {
 				new: {
 					key: dk_root_new,
+					vector: atu8_vector,
 					nonce: xg_nonce_new,
 				},
-			} = await derive_tandem_root_keys(atu8_phrase, atu8_entropy, xg_nonce_init);
-
-			// verbose
-			f_info('Generating signature');
+				export: kn_root,
+			} = await derive_tandem_root_keys(atu8_phrase, atu8_entropy, xg_nonce_init, G_DEFAULT_HASHING_PARAMS, true);
 
 			// create salt
 			const atu8_salt = this._atu8_salt = random_bytes(NB_SHA256_SALT);
 
-			// generate signature
-			const atu8_signature = await generate_root_signature(dk_root_new, atu8_salt);
+			// whether success or failure
+			try {
+				// derive aes cipher key
+				const dk_cipher = await derive_cipher_key(dk_root_new, atu8_salt, true);
 
-			// verbose
-			f_info('Saving to storage');
-
-			// serialize the new base
-			const g_base: SerVaultBase = {
-				version: N_SYSTEM_VERSION,
-				entropy: buffer_to_base64(atu8_entropy),
-				nonce: `${xg_nonce_new}`,
-				signature: buffer_to_base64(atu8_signature),
-				salt: buffer_to_base64(atu8_salt),
-				params: G_DEFAULT_HASHING_PARAMS,
-			};
-
-			// start waiting for next update
-			const dp_update = this._next_base_update();
-
-			// write to storage (this will trigger a change and call _load_base)
-			await kw_content.setJson(this._fixed_storage_key(SI_KEY_STORAGE_BASE), g_base);
-
-			// verbose
-			f_info('Waiting for confirmation');
-
-			// wait for that update
-			await dp_update;
-
-			// save/update private field
-			hm_privates.set(this, {
-				...hm_privates.get(this),
-				dk_root: dk_root_new,
-			});
+				// 
+				await this._unlock_subroutine(
+					kw_content,
+					kn_root!,
+					dk_root_new,
+					dk_cipher,
+					atu8_vector,
+					atu8_entropy,
+					xg_nonce_new,
+					atu8_salt,
+					f_info
+				);
+			}
+			// zero-out rooy ket material
+			finally {
+				kn_root?.wipe();
+			}
 
 			// set connection state
 			this._sc_connection = ConnectionState.CONNECTED;
@@ -825,9 +909,11 @@ export class VaultClient {
 
 	/**
 	 * Attempt to open the unlocked vault. Throws {@link AesGcmDecryptionError} if passphrase is wrong
+	 * @param h_migrations - dict of migrations keyed by database version number. only optional for
+	 * 	cases when the caller is guaranteed to only ever access an already unlocked vault.
 	 * @returns a {@link VaultHub}
 	 */
-	async open(): Promise<VaultHub> {
+	async open(h_migrations?: MigrationRouter<n_db_version>): Promise<VaultHub> {
 		// destructure field(s)
 		const {_k_content, _k_hub} = this;
 
@@ -861,27 +947,34 @@ export class VaultClient {
 			}
 		});
 
-		// TODO: obtian a read lock?
+		// TODO: obtain a read lock?
 
 		// create hub
-		const k_hub = this._k_hub = new VaultHub(this);
+		const k_hub = this._k_hub = new VaultHub(this, this._h_controllers);
 
 		// fetch the hub data
 		const atu8_hub = await _k_content.getBytes(this._fixed_storage_key(SI_KEY_STORAGE_HUB));
 
-		// hub exists
-		if(atu8_hub) {
-			// load hub data
-			const g_hub = await this._load_hub(atu8_hub);
+		// obtain a write lock
+		await this._k_content.lockAll(async(kw_content) => {
+			// hub exists
+			if(atu8_hub) {
+				// load hub data
+				const g_hub = await this._load_hub(atu8_hub);
 
-			// load into hub instance
-			k_hub.load(g_hub);
-		}
-		// hub does not exist
-		else {
-			// save it to storage from hub's initialization
-			await this._k_content.lockAll(kw_content => this._k_hub._write_hub(kw_content));
-		}
+				// load into hub instance
+				k_hub.load(g_hub);
+			}
+			// hub does not exist
+			else {
+				// save it to storage from hub's initialization
+				// await this._k_content.lockAll(kw_content => this._k_hub._write_hub(kw_content));
+				await this._k_hub._write_hub(kw_content);
+			}
+
+			// initialize hub
+			await k_hub._init(kw_content, h_migrations);
+		});
 
 		// queue calling back awaiters
 		queueMicrotask(() => {

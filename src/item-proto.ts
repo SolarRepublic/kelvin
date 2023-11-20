@@ -263,11 +263,11 @@ const tagged_serdefaults = <
 			return [
 				// serializer
 				(h_items, a_path) => fodemtv(h_serdefs, ([f_ser,, f_def], si_field) => si_field in h_items
-					? f_ser(h_items[si_field!], a_path): f_def()),
+					? f_ser(h_items[si_field], a_path): f_def()),
 
 				// deserializer
 				(h_items, a_path) => fodemtv(h_serdefs, ([, f_deser, f_def], si_field) => si_field in (h_items as JsonObject)
-					? f_deser((h_items as JsonObject)[si_field!], a_path): f_def()),
+					? f_deser((h_items as JsonObject)[si_field], a_path): f_def()),
 
 				// default
 				() => fodemtv(h_serdefs, ([,, f_def]) => f_def()),
@@ -342,7 +342,7 @@ const tagged_serdefaults = <
 
 // descriptors for part keys
 const H_DESCRIPTORS_PARTS2: {
-	[xc_type in PartableDatatype | PrimitiveDatatype.UNKNOWN]: (b_writable=false) => (i_field: number, a_path: FieldPath) => {
+	[xc_type in PartableDatatype | PrimitiveDatatype.UNKNOWN]: (b_writable: boolean) => (i_field: number, a_path: FieldPath) => {
 		get(this: RuntimeItem): PrimitiveDatatypeToEsType<xc_type>;
 		set(this: RuntimeItem, w_value: never): void;
 	};
