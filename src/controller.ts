@@ -34,6 +34,7 @@ export class ItemController<
 	protected _si_domain!: si_domain;
 	protected _xc_strategy: DomainStorageStrategy;
 	protected _k_reader!: Reader;
+	protected _nl_parts: number;
 
 	protected _h_shapes_cache: Dict<object> = {};
 
@@ -89,6 +90,9 @@ export class ItemController<
 
 		// register controller with client
 		this._k_vault.registerController(this._si_domain, this);
+
+		// cache part length
+		this._nl_parts = Object.keys(a_schema[1]).length;
 	}
 
 	get strategy(): DomainStorageStrategy {
@@ -143,10 +147,10 @@ export class ItemController<
 				value: this._si_domain,
 			},
 			[$_PARTS]: {
-				value: a_parts,
+				value: [0, ...a_parts],
 			},
 			[$_TUPLE]: {
-				value: a_tuple,
+				value: [0, ...a_parts, ...a_tuple],
 			},
 		};
 	}
@@ -166,6 +170,7 @@ export class ItemController<
 	_encode_item(a_parts: a_parts) {
 		const {_k_hub} = this;
 
+		// joining parts implicitly stringifies them
 		return _k_hub.itemCode(_k_hub.itemIdent(this._si_domain, a_parts.join(':') as ItemPath));
 	}
 
@@ -188,8 +193,8 @@ export class ItemController<
 		// item not found
 		if(!i_code) return Promise.resolve(__UNDEFINED);
 
-		// 
-		const [a_shape_loaded, a_tuple] = await this._k_reader.getItemContent(i_code);
+		// get item content
+		const a_tuple = await this._k_hub.getItemContent(i_code);
 
 		// create instance and set its local properties
 		const g_item = Object.create(this._g_prototype, this._backing(a_parts, a_tuple));
@@ -215,13 +220,13 @@ export class ItemController<
 		}
 		// incorrect domain
 		else if(this._si_domain !== g_item[$_DOMAIN]) {
-			throw new TypeError(`Attempted to pass an item from "${g_item[$_DOMAIN]}" domain to the "${this._si_domain}" domain`);
+			throw new TypeError(`Attempted to pass an item from "${g_item[$_DOMAIN]}" domain to the "${this._si_domain as string}" domain`);
 		}
 
 		// return serialized item
 		return [
 			g_runtime[$_PARTS].slice(1).join(':') as ItemPath,
-			g_runtime[$_TUPLE],
+			g_runtime[$_TUPLE].slice(this._nl_parts+1),
 		];
 	}
 
@@ -267,20 +272,6 @@ export class ItemController<
 
 		// serialize item
 		const [sr_item, w_ser] = this._serialize(g_item);
-
-		// // encode item
-		// const si_item = _k_hub.itemIdent(this._si_domain, sr_item);
-
-		// // item already exists and therefore already belongs to bucket
-		// const i_code = _k_hub.itemCode(si_item);
-		// if(i_code) {
-		// 	// replace the item
-		// 	await _k_hub.replaceItem(i_code, w_ser);
-		// }
-		// // item does not yet exist
-		// else {
-		// 	await _k_hub.addItem(si_item, w_ser);
-		// }
 
 		// write item to storage
 		await _k_hub.putItem(this._si_domain, sr_item, w_ser);

@@ -96,16 +96,10 @@ export type ZeroToNRange = {
 	33: number;
 };
 
-export type MigrationRouter<n_db_version extends number> = {
+export type MigrationRouter<n_db_version extends number=number> = {
 	[i_version in n_db_version extends keyof ZeroToNRange? ZeroToNRange[n_db_version]: number]: Migration
 };
 
-export type UnlockConfig<n_db_version extends number> = {
-	passphrase: Uint8Array;
-	recovery?: boolean;
-	info?: ((s_state: string) => void);
-	migrations: MigrationRouter<n_db_version>;
-};
 
 // stores the private fields of an Vault instance
 const hm_privates = new WeakMap<Vault, VaultFields>();
@@ -239,6 +233,23 @@ async function _write_nonce_for_entry(
 }
 
 
+export type VaultConfig = {
+	content: KelvinKeyValueStore;
+	session: KelvinKeyValueStore;
+};
+
+export type ConnectConfig<n_db_version extends number> = {
+	id: string;
+	version: n_db_version;
+	migrations: MigrationRouter<n_db_version>;
+};
+
+export type UnlockConfig = {
+	passphrase: Uint8Array;
+	recovery?: boolean;
+	info?: ((s_state: string) => void);
+};
+
 /**
  * 
  * Storage key prefixes:
@@ -250,9 +261,7 @@ async function _write_nonce_for_entry(
  *   - "@base": stores encryption metadata
  *   - "@params": tunable parameters to password hashing function
  */
-export class Vault <
-	n_db_version extends number=number,
-> {
+export class Vault {
 	// storage
 	protected _k_content: StoreContent;
 	protected _k_session: StoreSession;
@@ -262,6 +271,12 @@ export class Vault <
 
 	// database name
 	protected _si_name!: string;
+
+	// database version
+	protected _n_db_version = 0;
+
+	// migrations
+	protected _h_migrations: MigrationRouter = {};
 
 	// unmarshalled base
 	protected _atu8_entropy!: Uint8Array;
@@ -273,8 +288,10 @@ export class Vault <
 	// once the vault is opened, the hub can be accessed
 	protected _k_hub!: VaultHub;
 
+	// awaiters
 	protected _a_awaiting_open: ((k_hub: VaultHub) => any)[] = [];
 	protected _a_awaiting_base: ((g_base: SerVaultBase) => any)[] = [];
+	protected _a_awaiting_hub_change: (() => any)[] = [];
 
 	// for removing change event listeners
 	protected _fk_unlisten_base: () => void = F_NOOP;
@@ -286,16 +303,19 @@ export class Vault <
 	// controllers
 	protected _h_controllers: Record<DomainLabel, GenericItemController> = {};
 
+
 	constructor(
-		protected _n_db_version: n_db_version,
-		k_content: KelvinKeyValueStore,
-		k_session: KelvinKeyValueStore
+		gc_vault: VaultConfig
 	) {
-		this._k_content = k_content as StoreContent;
-		this._k_session = k_session as StoreSession;
+		this._k_content = gc_vault.content as StoreContent;
+		this._k_session = gc_vault.session as StoreSession;
 	}
 
-	get dbVersion(): n_db_version {
+	get dbVersion(): number {
+		if(![ConnectionState.CONNECTING, ConnectionState.CONNECTED].includes(this._sc_connection)) {
+			throw new Error(`Cannot access database version in '${this._sc_connection}' state`);
+		}
+
 		return this._n_db_version;
 	}
 
@@ -415,6 +435,8 @@ export class Vault <
 		catch(e_) {
 			throw new VaultCorruptedError('unable to decode hub json');
 		}
+
+		console.info(g_hub);
 
 		// return hub
 		return g_hub;
@@ -575,7 +597,9 @@ export class Vault <
 	 * @param si_database - id of the database
 	 * @returns 
 	 */
-	async connect(si_database: string): Promise<this> {
+	async connect<
+		n_db_version extends number,
+	>(gc_connect: ConnectConfig<n_db_version>): Promise<this> {
 		// destructure field(s)
 		const {_k_content} = this;
 
@@ -588,7 +612,11 @@ export class Vault <
 		this._sc_connection = ConnectionState.CONNECTING;
 
 		// accept name
-		this._si_name = si_database;
+		this._si_name = gc_connect.id;
+
+		// accept version and migrations
+		this._n_db_version = gc_connect.version;
+		this._h_migrations = gc_connect.migrations;
 
 		// start monitoring changes to base
 		this._fk_unlisten_base = _k_content.onEntryChanged(this._fixed_storage_key(SI_KEY_STORAGE_BASE), (g_new, g_old) => {
@@ -913,7 +941,7 @@ export class Vault <
 	 * 	cases when the caller is guaranteed to only ever access an already unlocked vault.
 	 * @returns a {@link VaultHub}
 	 */
-	async open(h_migrations?: MigrationRouter<n_db_version>): Promise<VaultHub> {
+	async open(): Promise<VaultHub> {
 		// destructure field(s)
 		const {_k_content, _k_hub} = this;
 
@@ -945,6 +973,9 @@ export class Vault <
 			else {
 				throw new VaultCorruptedError('hub was deleted');
 			}
+
+			// callback awaiters
+			callback_awaiters(this._a_awaiting_hub_change, void 0);
 		});
 
 		// TODO: obtain a read lock?
@@ -973,7 +1004,7 @@ export class Vault <
 			}
 
 			// initialize hub
-			await k_hub._init(kw_content, h_migrations);
+			await k_hub._init(kw_content, this._h_migrations);
 		});
 
 		// queue calling back awaiters
@@ -1034,6 +1065,9 @@ export class Vault <
 
 		// write to storage
 		await kw_content.setBytes(si_key_hub, atu8_hub_value);
+
+		// wait for change to be captured
+		await awaiter_from(this._a_awaiting_hub_change);
 	}
 
 

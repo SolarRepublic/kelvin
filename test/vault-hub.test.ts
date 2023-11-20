@@ -37,14 +37,21 @@ const client = async(xc_stage: Stage) => {
 	const k_content = new MemoryWrapper();
 	const k_session = new MemoryWrapper();
 
-	const k_client: Vault = new Vault(0, k_content, k_session);
+	const k_client: Vault = new Vault({
+		content: k_content,
+		session: k_session,
+	});
 
 	const g_context: TestContextExtension = {
 		k_client,
 	};
 
 	if(xc_stage >= Stage.CONNECT) {
-		await k_client.connect(SI_DATABASE);
+		await k_client.connect({
+			id: SI_DATABASE,
+			version: 0,
+			migrations: {},
+		});
 
 		if(xc_stage >= Stage.REGISTER) {
 			await k_client.register(phrase());
@@ -92,7 +99,11 @@ describe('nonexistant', () => {
 		},
 
 		async 'connect() resolves'() {
-			await expect(k_client.connect(SI_DATABASE)).resolves.toBeInstanceOf(Vault);
+			await expect(k_client.connect({
+				id: SI_DATABASE,
+				version: 0,
+				migrations: {},
+			})).resolves.toBeInstanceOf(Vault);
 		},
 	});
 

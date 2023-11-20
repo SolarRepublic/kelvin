@@ -27,10 +27,10 @@ export class VaultHub {
 	// decrypted and unmarshalled hub
 	protected _n_db_version = 0 as SerVaultHub['db_version'];
 	protected _h_domains: SerVaultHub['domains'] = {};
-	protected _a_items = [] as unknown as SerVaultHub['items'];
+	protected _a_items = [0] as unknown as SerVaultHub['items'];
 	protected _h_indexes: SerVaultHub['indexes'] = {};
 	protected _a_buckets = [] as unknown as SerVaultHub['buckets'];
-	protected _a_locations = [] as unknown as SerVaultHub['locations'];
+	protected _a_locations = [0] as unknown as SerVaultHub['locations'];
 	protected _a_buckets_to_schemas = [] as unknown as SerVaultHub['buckets_to_schemas'];
 	protected _a_schemas = [] as unknown as SerVaultHub['schemas'];
 	protected _nb_bucket: SerVaultHub['bucket_length'] = NB_BUCKET_CONTENTS;
@@ -422,9 +422,6 @@ export class VaultHub {
 			// fill gap
 			this._a_items[i_code] = si_item;
 
-			// update lookup cache
-			this._h_items[si_item] = i_code;
-
 			// find next gap
 			i_empty = this._a_items.indexOf('' as ItemIdent, i_code+1);
 
@@ -433,9 +430,11 @@ export class VaultHub {
 		}
 		// no gaps; append
 		else {
-			// assignment from push result intentional, codes start at `1`
-			i_code = this._a_items.push(si_item) as ItemCode;
+			i_code = this._a_items.push(si_item) - 1 as ItemCode;
 		}
+
+		// update lookup cache
+		this._h_items[si_item] = i_code;
 
 		// return new index
 		return [i_code, false];
@@ -772,6 +771,21 @@ export class VaultHub {
 			// schedule a bucket rotation
 			this._schedule_rotation();
 		});
+	}
+
+
+	async getItemContent(i_code: ItemCode): Promise<SerItem> {
+		// locate which bucket the item is stored in
+		const i_bucket = this.getItemBucketCode(i_code);
+
+		// resolve bucket key
+		const [si_bucket] = this.getBucketMetadata(i_bucket);
+
+		// load the bucket
+		const h_bucket = await this._k_vault.readBucket(si_bucket);
+
+		// return accessed item
+		return h_bucket[i_code];
 	}
 }
 

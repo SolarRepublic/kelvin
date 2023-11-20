@@ -35,6 +35,7 @@ export const init_chains = (k_client: Vault) => {
 			ns: k.int(xc_ns),
 			ref: k.str(si_ref),
 			on: k.int(Toggle.ON),
+			data: k.str(),
 			// pfp: k.ref<Pfp>(),
 			// bech32s: k.switch('ns', xc_ns, k => ({
 			// 	[ChainNamespace.UNKNOWN]: k.obj({}),
