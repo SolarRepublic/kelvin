@@ -1,9 +1,9 @@
 
-import type {GenericItemController, ItemController} from './controller';
-import type {PartableDatatype, PrimitiveDatatypeToEsType, TaggedDatatypeToEsTypeGetter, TaggedDatatypeToEsTypeSetter} from './schema-types';
-import type {DomainLabel, FieldLabel, ItemCode, SerField, SerFieldStruct, SerSchema, SerTaggedDatatype, SerTaggedDatatypeMap} from './types';
+import type {GenericItemController} from './controller';
+import type {KnownEsDatatypes, PartableDatatype, PrimitiveDatatypeToEsType, TaggedDatatypeToEsTypeGetter, TaggedDatatypeToEsTypeSetter} from './schema-types';
+import type {ItemCode, SerField, SerSchema, SerTaggedDatatype, SerTaggedDatatypeMap} from './types';
 
-import type {JsonPrimitive, JsonValue, JsonObject, JsonArray, Dict} from '@blake.regalia/belt';
+import type {JsonValue, JsonObject, JsonArray, Dict} from '@blake.regalia/belt';
 
 import {ode, base93_to_buffer, buffer_to_base93, F_IDENTITY, fodemtv} from '@blake.regalia/belt';
 
@@ -12,21 +12,21 @@ import {FieldArray} from './field-array';
 import {ItemRef} from './item-ref';
 import {PrimitiveDatatype, TaggedDatatype} from './schema-types';
 
+export const $_CONTROLLER = Symbol('item-controller');
 export const $_CODE = Symbol('item-code');
-export const $_DOMAIN = Symbol('item-domain');
-// export const $_REFS = Symbol('item-refs');
-export const $_PARTS = Symbol('item-parts');
 export const $_TUPLE = Symbol('item-tuple');
 
 type FieldPath = (string | number)[];
 
 export type RuntimeItem = {
+	[si_key: string]: KnownEsDatatypes;
 	[$_CODE]: ItemCode;
-	[$_DOMAIN]: DomainLabel;
-	// [$_REFS]: Record<DomainLabel, GenericItemController>;
-	[$_PARTS]: Extract<JsonPrimitive, number | string>[];
+	[$_CONTROLLER]: GenericItemController;
 	[$_TUPLE]: JsonValue[];
 };
+
+export const is_runtime_item = (z_item: unknown): z_item is RuntimeItem => !!(z_item as RuntimeItem)[$_TUPLE];
+
 
 const is_primitive_datatype = (z_field: SerTaggedDatatype[1]): z_field is PrimitiveDatatype => 'number' === typeof z_field;
 const is_tagged_datatype = (z_field: SerTaggedDatatype[1]): z_field is SerTaggedDatatype => Array.isArray(z_field);
@@ -129,7 +129,7 @@ const tagged_serdefaults = <
 				}
 
 				// resolve domain
-				const si_domain_ref = (k_ref as RuntimeItem)[$_DOMAIN] || (k_ref as ItemRef).domain;
+				const si_domain_ref = (k_ref as RuntimeItem)[$_CONTROLLER].domain || (k_ref as ItemRef).domain;
 
 				// wrong domain
 				if(w_info !== si_domain_ref) {
@@ -290,58 +290,8 @@ const tagged_serdefaults = <
 };
 
 
-// // descriptors for part keys
-// const H_DESCRIPTORS_PARTS: {
-// 	[xc_type in PartableDatatype | PrimitiveDatatype.UNKNOWN]: (i_field: number, a_path: FieldPath) => {
-// 		get(this: RuntimeItem): PrimitiveDatatypeToEsType<xc_type>;
-// 		set(this: RuntimeItem, w_value: never): void;
-// 	};
-// } = {
-// 	[PrimitiveDatatype.UNKNOWN]: (i_field, a_path) => ({
-// 		get() {
-// 			console.warn(new SchemaWarning(`Part field at ${a_path.join('.')} has an unknown type`));
-// 			return this[$_PARTS][i_field] as unknown;
-// 		},
-
-// 		set() {
-// 			throw new TypeFieldNotWritableError(a_path.join('.'));
-// 		},
-// 	}),
-
-// 	[PrimitiveDatatype.INT]: (i_field, a_path) => ({
-// 		get() {
-// 			return this[$_PARTS][i_field] as number;
-// 		},
-
-// 		set() {
-// 			throw new TypeFieldNotWritableError(a_path.join('.'));
-// 		},
-// 	}),
-
-// 	[PrimitiveDatatype.BIGINT]: (i_field, a_path) => ({
-// 		get() {
-// 			return BigInt(this[$_PARTS][i_field]);
-// 		},
-
-// 		set() {
-// 			throw new TypeFieldNotWritableError(a_path.join('.'));
-// 		},
-// 	}),
-
-// 	[PrimitiveDatatype.STRING]: (i_field, a_path) => ({
-// 		get() {
-// 			return this[$_PARTS][i_field] as string;
-// 		},
-
-// 		set() {
-// 			throw new TypeFieldNotWritableError(a_path.join('.'));
-// 		},
-// 	}),
-// };
-
-
 // descriptors for part keys
-const H_DESCRIPTORS_PARTS2: {
+const H_DESCRIPTORS_PARTS: {
 	[xc_type in PartableDatatype | PrimitiveDatatype.UNKNOWN]: (b_writable: boolean) => (i_field: number, a_path: FieldPath) => {
 		get(this: RuntimeItem): PrimitiveDatatypeToEsType<xc_type>;
 		set(this: RuntimeItem, w_value: never): void;
@@ -350,13 +300,13 @@ const H_DESCRIPTORS_PARTS2: {
 	[PrimitiveDatatype.UNKNOWN]: b_writable => (i_field, a_path) => ({
 		get() {
 			console.warn(new SchemaWarning(`Part field at ${a_path.join('.')} has an unknown type`));
-			return this[$_PARTS][i_field] as unknown;
+			return this[$_TUPLE][i_field] as unknown;
 		},
 
 		...b_writable
 			? {
 				set(w_value) {
-					this[$_PARTS][i_field] = w_value;
+					this[$_TUPLE][i_field] = w_value;
 				},
 			}
 			: {
@@ -368,13 +318,14 @@ const H_DESCRIPTORS_PARTS2: {
 
 	[PrimitiveDatatype.INT]: b_writable => (i_field, a_path) => ({
 		get() {
-			return this[$_PARTS][i_field] as number;
+			return +this[$_TUPLE][i_field]!;
 		},
 
 		...b_writable
 			? {
 				set(n_value) {
-					this[$_PARTS][i_field] = n_value;
+					// doesn't matter what gets stored, will get stringify anyway
+					this[$_TUPLE][i_field] = n_value;
 				},
 			}
 			: {
@@ -386,13 +337,13 @@ const H_DESCRIPTORS_PARTS2: {
 
 	[PrimitiveDatatype.BIGINT]: b_writable => (i_field, a_path) => ({
 		get() {
-			return BigInt(this[$_PARTS][i_field]);
+			return BigInt(this[$_TUPLE][i_field] as string);
 		},
 
 		...b_writable
 			? {
 				set(xg_value) {
-					this[$_PARTS][i_field] = xg_value+'';
+					this[$_TUPLE][i_field] = xg_value+'';
 				},
 			}
 			: {
@@ -404,13 +355,29 @@ const H_DESCRIPTORS_PARTS2: {
 
 	[PrimitiveDatatype.STRING]: b_writable => (i_field, a_path) => ({
 		get() {
-			return this[$_PARTS][i_field] as string;
+			return this[$_TUPLE][i_field] as string;
 		},
 
 		...b_writable
 			? {
 				set(w_value) {
-					this[$_PARTS][i_field] = w_value;
+					// stringify
+					const s_value = w_value+'';
+
+					// value contains reserved colon
+					if(s_value.includes(':')) {
+						// OK in last part, just issue warning
+						if(i_field === this[$_CONTROLLER].partLength) {
+							console.warn(new SchemaWarning(`Colon character (":") noticed in value passed to ${a_path.join('.')}, which is a key part. Tolerated since it occurs at last position but could lead to critical issues if schema changes`));
+						}
+						// forbidden elsewhere
+						else {
+							throw new SchemaError(`Colon character (":") noticed in value passed to ${a_path.join('.')}. Not allowed here`);
+						}
+					}
+
+					// accept
+					this[$_TUPLE][i_field] = s_value;
 				},
 			}
 			: {
@@ -573,7 +540,7 @@ export function item_prototype(a_schema: SerSchema, k_item: GenericItemControlle
 	// each part key
 	for(const [si_key, z_datatype] of ode(h_keys)) {
 		// lookup descriptor
-		const f_descriptor = H_DESCRIPTORS_PARTS2[z_datatype](b_writable);
+		const f_descriptor = H_DESCRIPTORS_PARTS[z_datatype](b_writable);
 
 		// not found
 		if(!f_descriptor) {

@@ -1,4 +1,4 @@
-import type {ItemController} from './controller';
+import type {GenericItemController, ItemController} from './controller';
 
 import type {DomainLabel, ItemCode, ItemIdent} from './types';
 
@@ -7,7 +7,7 @@ export class ItemRef<
 	g_dst=any,
 > implements PromiseLike<g_dst> {
 	constructor(
-		protected _k_src: ItemController,
+		protected _k_src: GenericItemController,
 		protected _i_item: ItemCode,
 		protected _si_domain: DomainLabel
 	) {}
@@ -18,6 +18,10 @@ export class ItemRef<
 
 	get ident(): ItemIdent | undefined {
 		return this._k_src.hub.decodeItem(this._i_item);
+	}
+
+	get controller(): GenericItemController {
+		return this._k_src;
 	}
 
 	get domain(): DomainLabel {

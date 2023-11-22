@@ -127,32 +127,6 @@ export class VaultHub {
 		// 
 	}
 
-	// db_version_id(): DbVersionId {
-	// 	const {_h_domains} = this;
-
-	// 	// sort keys lexicographically
-	// 	const a_keys = Object.keys(_h_domains).sort() as DomainLabel[];
-
-	// 	// prep list of version identifiers
-	// 	const a_versions: Uint8Array[] = [];
-
-	// 	// each entry in sorted order
-	// 	for(const si_key of a_keys) {
-	// 		// destructure metadata
-	// 		const [,, sb93_version] = _h_domains[si_key];
-
-	// 		// add to list of identifiers
-	// 		a_versions.push(base93_to_buffer(sb93_version));
-	// 	}
-
-	// 	// hash concatenated list
-	// 	return '_'+buffer_to_base93(sha256_sync(concat(a_versions))) as DbVersionId;
-	// }
-
-	// domain_version_id(si_domain: DomainLabel, sx_schema: NaiveJsonString): DomainVersionId {
-	// 	return `#${si_domain}:${buffer_to_base93(sha256_sync(text_to_buffer(sx_schema)))}` as DomainVersionId;
-	// }
-
 	async _init(kw_content: KelvinKeyValueWriter, h_migrations?: Record<number, Migration>): Promise<void> {
 		// db version the app is targetting
 		const n_db_version_app = this._k_vault.dbVersion;
@@ -773,6 +747,49 @@ export class VaultHub {
 		});
 	}
 
+	async* itemEntries(si_domain: DomainLabel, as_seen=new Set<ItemCode>()): AsyncIterableIterator<[ItemCode, ItemIdent, SerItem]> {
+		// destructure field(s)
+		const {_k_vault} = this;
+
+		// get list of bucket codes
+		const [a_bucket_codes] = this._h_domains[si_domain];
+
+		// each bucket code
+		for(const i_bucket of a_bucket_codes) {
+			// resolve bucket metadata
+			const a_metadata = this.getBucketMetadata(i_bucket);
+
+			// bucket no longer exists
+			if(!a_metadata) {
+				// redo, but filter out all items that have already been iterated
+				for await(const a_item of this.itemEntries(si_domain)) {
+					// item already seen; skip
+					if(as_seen.has(a_item[0])) continue;
+
+					// yield it
+					yield a_item;
+				}
+
+				// exit
+				return;
+			}
+
+			// destructure bucket metadata
+			const [si_bucket] = a_metadata;
+
+			// load bucket
+			const h_bucket = await _k_vault.readBucket(si_bucket);
+
+			// each item
+			for(const [sn_item, a_tuple] of ode(h_bucket)) {
+				// item path
+				const sr_item = this._a_items[+sn_item];
+
+				// yield pair
+				yield [+sn_item as ItemCode, sr_item, a_tuple];
+			}
+		}
+	}
 
 	async getItemContent(i_code: ItemCode): Promise<SerItem> {
 		// locate which bucket the item is stored in

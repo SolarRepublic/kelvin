@@ -3,17 +3,15 @@ import type {A, L} from 'ts-toolbelt';
 import type {PartableDatatype, PrimitiveDatatype, TaggedDatatype} from './schema-types';
 import type {Dict, IntStr, NaiveBase64, JsonObject, JsonValue, JsonArray, Subtype, NaiveBase93} from '@blake.regalia/belt';
 
-// /**
-//  * Canonical hash of the domains & their schemas to handle migrations
-//  */
-// export type DbVersionId = Subtype<`_${NaiveBase93}`, 'db-version-id'>;
-
+/**
+ * App-controlled database version identifier
+ */
 export type DbVersionId = Subtype<number, 'db-version-id'>;
 
-/**
- * Canonical hash of a single domain's schema
- */
-export type DomainVersionId = Subtype<`=${DomainLabel}:${NaiveBase93}`, 'domain-version-id'>;
+// /**
+//  * Canonical hash of a single domain's schema
+//  */
+// export type DomainVersionId = Subtype<`=${DomainLabel}:${NaiveBase93}`, 'domain-version-id'>;
 
 /**
  * A Domain's unique human-readable label
@@ -264,11 +262,6 @@ export type SerDomainMetadata = [
 	 * Domain storage strategy
 	 */
 	strategy: DomainStorageStrategy,
-
-	// /**
-	//  * Schema version digeest
-	//  */
-	// version: DomainVersionId,
 ];
 
 /**

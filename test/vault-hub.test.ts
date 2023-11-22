@@ -7,7 +7,8 @@ import {ode, text_to_buffer} from '@blake.regalia/belt';
 
 import {beforeEach, describe, expect, it, vi} from 'vitest';
 
-import {ItemController} from '../src/controller';
+import {ChainNamespace, Toggle, init_chains} from './chains';
+import {ItemController, type GenericItemController} from '../src/controller';
 import {VaultHub} from '../src/hub';
 import {Vault} from '../src/vault';
 import {MemoryWrapper} from '../src/wrappers/memory';
@@ -15,6 +16,7 @@ import {MemoryWrapper} from '../src/wrappers/memory';
 type TestContextExtension = {
 	k_client: Vault;
 	k_hub?: VaultHub;
+	Chains?: ReturnType<typeof init_chains>['Chains'];
 };
 
 declare module 'vitest' {
@@ -31,6 +33,7 @@ enum Stage {
 	CONNECT=1,
 	REGISTER=2,
 	OPEN=3,
+	DATA=4,
 }
 
 const client = async(xc_stage: Stage) => {
@@ -55,6 +58,11 @@ const client = async(xc_stage: Stage) => {
 
 		if(xc_stage >= Stage.REGISTER) {
 			await k_client.register(phrase());
+
+			// data
+			if(xc_stage >= Stage.DATA) {
+				Object.assign(g_context, init_chains(k_client));
+			}
 
 			if(xc_stage >= Stage.OPEN) {
 				g_context.k_hub = await k_client.open();
@@ -202,60 +210,35 @@ describe('after open', () => {
 });
 
 
-
-// const k_content = new MemoryWrapper();
-// const k_session = new MemoryWrapper();
-
-// export const k_vault = new Vault(k_content, k_session);
-
-// const k_db = await k_vault.connect('default');
-
-// if(k_db.exists) {
-// 	await k_db.unlock(phrase());
-// }
-// else {
-// 	await k_db.register(phrase());
-// }
-
-// await k_db.open();
-
-// await k_db.close();
-
-// new ItemController({
-// 	vault: k_vault,
-// 	domain: 'chains',
-// });
-
-
-
-	// describe('before connecting', () => {
-	// 	it('exists() throws', () => {
-	// 		expect(() => k_client.exists()).to.throw;
-	// 	});
-
-	// 	it('isUnlocked() throws', () => {
-	// 		expect(() => k_client.isUnlocked()).to.throw;
-	// 	});
-	// });
-// });
-
-// describe('before unlocking', () => {
-
-// 	k_client.
-// });
-
-
-// await k_client.connect();
-
-
-// k_client.isUnlocked();
-
-
 describe('item', () => {
-	beforeEach(init(Stage.OPEN));
+	beforeEach(init(Stage.DATA));
 
 	tests({
-		async controller({k_client, k_hub}) {
+		async 'put and get'({k_client, k_hub, Chains}) {
+			const g_sample = {
+				ns: ChainNamespace.COSMOS,
+				ref: 'test-1',
+				on: Toggle.ON,
+				data: 'hello world',
+			};
+
+			await expect(Chains!.put(g_sample)).resolves.toBeDefined();
+
+			const dp_get_full = Chains!.get(g_sample);
+			await expect(dp_get_full).resolves.toMatchObject(g_sample);
+
+			const dp_get_partial = Chains!.get({
+				ns: g_sample.ns,
+				ref: g_sample.ref,
+			});
+			await expect(dp_get_partial).resolves.toMatchObject(g_sample);
+
+			const dp_get_at = Chains!.getAt([g_sample.ns, g_sample.ref]);
+			await expect(dp_get_at).resolves.toMatchObject(g_sample);
+
+			for await(const [sr_chain, g_chain] of Chains!.entries()) {
+
+			}
 		},
 	});
 });

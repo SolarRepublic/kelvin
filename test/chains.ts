@@ -34,7 +34,7 @@ export const init_chains = (k_client: Vault) => {
 		schema: (k, xc_ns: ChainNamespace, si_ref: string) => ({
 			ns: k.int(xc_ns),
 			ref: k.str(si_ref),
-			on: k.int(Toggle.ON),
+			on: k.int<Toggle>(),
 			data: k.str(),
 			// pfp: k.ref<Pfp>(),
 			// bech32s: k.switch('ns', xc_ns, k => ({
@@ -58,7 +58,13 @@ export const init_chains = (k_client: Vault) => {
 			// 	return pubkey_to_bech32(this.a z_context);
 			// }
 		}),
+
+		// indexes: [
+		// 	'data',
+		// ],
 	});
+
+
 
 	// export type Chain = typeof Chains;
 

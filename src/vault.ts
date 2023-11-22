@@ -436,8 +436,6 @@ export class Vault {
 			throw new VaultCorruptedError('unable to decode hub json');
 		}
 
-		console.info(g_hub);
-
 		// return hub
 		return g_hub;
 	}

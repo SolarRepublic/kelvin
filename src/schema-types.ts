@@ -2,7 +2,7 @@ import type {A} from 'ts-toolbelt';
 
 import type {Key} from 'ts-toolbelt/out/Any/Key';
 
-import type {GenericItemController, ItemController} from './controller';
+import type {GenericItemController} from './controller';
 import type {FieldArray} from './field-array';
 import type {RuntimeItem} from './item-proto';
 import type {ItemRef} from './item-ref';
@@ -35,7 +35,7 @@ export enum TaggedDatatype {
 	SWITCH=5,
 }
 
-export type PrimitiveDatatypeToEsType<xc_type extends PrimitiveDatatype> = {
+export type PrimitiveDatatypeToEsType<xc_type extends PrimitiveDatatype=PrimitiveDatatype> = {
 	[PrimitiveDatatype.UNKNOWN]: unknown;
 	[PrimitiveDatatype.INT]: number;
 	[PrimitiveDatatype.BIGINT]: bigint;
@@ -44,6 +44,8 @@ export type PrimitiveDatatypeToEsType<xc_type extends PrimitiveDatatype> = {
 	[PrimitiveDatatype.BYTES]: Uint8Array;
 	[PrimitiveDatatype.OBJECT]: JsonObject;
 }[xc_type];
+
+export type KnownEsPrimitiveDatatypes = PrimitiveDatatypeToEsType<Exclude<PrimitiveDatatype, PrimitiveDatatype.UNKNOWN>>;
 
 
 export type PartableDatatype = PrimitiveDatatype.INT | PrimitiveDatatype.BIGINT | PrimitiveDatatype.STRING;
@@ -61,13 +63,21 @@ export type AcceptablePartTuples =
 	| [PartableEsType, PartableEsType, PartableEsType, PartableEsType, PartableEsType, PartableEsType, PartableEsType]
 	| [PartableEsType, PartableEsType, PartableEsType, PartableEsType, PartableEsType, PartableEsType, PartableEsType, PartableEsType];
 
+export type KnownEsDatatypes = KnownEsPrimitiveDatatypes | KnownEsTaggedDatatypes;
+
+export type FieldTuple = Array<KnownEsDatatypes>;
+
+// eslint-disable-next-line @typescript-eslint/consistent-indexed-object-style
+export type FieldStruct = {
+	[si_key: string]: KnownEsDatatypes;
+};
 
 export type TaggedDatatypeToEsTypeGetter<xc_type extends TaggedDatatype> = {
 	[TaggedDatatype.UNKNOWN]: unknown;
 	[TaggedDatatype.REF]: ItemRef;
 	[TaggedDatatype.ARRAY]: FieldArray;
-	[TaggedDatatype.TUPLE]: any[];
-	[TaggedDatatype.STRUCT]: object;
+	[TaggedDatatype.TUPLE]: FieldTuple;
+	[TaggedDatatype.STRUCT]: FieldStruct;
 	[TaggedDatatype.SWITCH]: any;
 }[xc_type];
 
@@ -79,6 +89,8 @@ export type TaggedDatatypeToEsTypeSetter<xc_type extends TaggedDatatype> = {
 	[TaggedDatatype.STRUCT]: object;
 	[TaggedDatatype.SWITCH]: any;
 }[xc_type];
+
+export type KnownEsTaggedDatatypes = TaggedDatatypeToEsTypeGetter<Exclude<TaggedDatatype, TaggedDatatype.UNKNOWN | TaggedDatatype.SWITCH>>;
 
 declare const DATATYPE: unique symbol;
 declare const SUBTYPE: unique symbol;

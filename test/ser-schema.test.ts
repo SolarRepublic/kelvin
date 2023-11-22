@@ -15,7 +15,7 @@ enum Category {
 }
 
 // @ts-expect-error lone declaration
-const kitch_sink: SchemaBuilder = (k: SchemaSpecifier, xc_cat: Category, s_id: string) => ({
+const kitchen_sink: SchemaBuilder = (k: SchemaSpecifier, xc_cat: Category, s_id: string) => ({
 	part_int: k.int(xc_cat),
 	part_str: k.str(s_id),
 	int: k.int(),
@@ -62,7 +62,7 @@ const kitch_sink: SchemaBuilder = (k: SchemaSpecifier, xc_cat: Category, s_id: s
 	}),
 });
 
-const a_actual = interpret_schema('test', kitch_sink);
+const a_actual = interpret_schema('test', kitchen_sink);
 
 // dest:
 const a_expect = [1, {
@@ -117,7 +117,7 @@ const a_expect = [1, {
 	}],
 }];
 
-describe('kitch sink', () => {
+describe('kitchen sink', () => {
 	it('schema matches', () => {
 		expect(a_actual).toMatchObject(a_expect);
 	});
