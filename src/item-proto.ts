@@ -18,19 +18,17 @@ export const $_TUPLE = Symbol('item-tuple');
 
 type FieldPath = (string | number)[];
 
-export type RuntimeItem<g_controller=GenericItemController> = {
+export type GenericItem = Record<string, KnownEsDatatypes>;
+
+export type RuntimeItem<g_item extends object=GenericItem> = {
 	[$_CODE]: ItemCode;
 	[$_CONTROLLER]: GenericItemController;
 	[$_TUPLE]: JsonValue[];
-} & g_controller extends GenericItemController
-	? Record<string, KnownEsDatatypes>
-	: g_controller extends ItemController<infer s_domain, infer si_domain, infer a_parts, infer g_schema, infer f_schema, infer g_item, infer g_proto, infer g_runtime, infer g_parts>
-		? g_item
-		: never;
+} & g_item;
 
 export type ItemStruct<g_controller=GenericItemController> = g_controller extends ItemController<infer s_domain, infer si_domain, infer a_parts, infer g_schema, infer f_schema, infer g_item, infer g_proto, infer g_runtime, infer g_parts>
 	? g_item
-	: Record<string, KnownEsDatatypes>;
+	: GenericItem;
 
 export const is_runtime_item = (z_item: unknown): z_item is RuntimeItem => !!(z_item as RuntimeItem)[$_TUPLE];
 

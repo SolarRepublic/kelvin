@@ -237,7 +237,7 @@ export type SerBucketMetadata = [
 	/**
 	 * Bucket key
 	 */
-	code: BucketKey,
+	key: BucketKey,
 
 	/**
 	 * Byte length of the unpadded bucket contents

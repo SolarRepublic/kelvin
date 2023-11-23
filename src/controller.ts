@@ -25,7 +25,7 @@ export class ItemController<
 	f_schema extends SchemaBuilder<SchemaSpecifier, a_parts, g_schema>,
 	g_item extends ItemShapesFromSchema<g_schema>,
 	g_proto,
-	g_runtime extends g_item & g_proto,
+	g_runtime extends RuntimeItem<g_item & g_proto>,
 	g_parts extends PartFields<g_schema>,
 > {
 	protected _k_vault: Vault;
@@ -248,7 +248,7 @@ export class ItemController<
 
 	_serialize(g_item: g_item | g_runtime): [ItemPath, SerItem] {
 		// prep runtime item
-		let g_runtime = g_item as RuntimeItem;
+		let g_runtime = g_item as g_runtime;
 
 		// no backing data
 		if(!is_runtime_item(g_item)) {
@@ -261,7 +261,7 @@ export class ItemController<
 			Object.assign(g_inst, g_item);
 
 			// replace
-			g_runtime = g_inst;
+			g_runtime = g_inst as g_runtime;
 		}
 		// incorrect domain
 		else if(this._si_domain !== g_item[$_CONTROLLER].domain) {

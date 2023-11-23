@@ -292,6 +292,7 @@ export class Vault {
 	protected _a_awaiting_open: ((k_hub: VaultHub) => any)[] = [];
 	protected _a_awaiting_base: ((g_base: SerVaultBase) => any)[] = [];
 	protected _a_awaiting_hub_change: (() => any)[] = [];
+	protected _h_awaiting_bucket: Record<BucketKey, (() => any)[]> = {};
 
 	// for removing change event listeners
 	protected _fk_unlisten_base: () => void = F_NOOP;
@@ -1061,11 +1062,14 @@ export class Vault {
 		// encrypt entry
 		const atu8_hub_value = await this._encrypt_entry(si_key_hub, atu8_hub_padded);
 
+		// prep awaiter
+		const dp_written = awaiter_from(this._a_awaiting_hub_change);
+
 		// write to storage
 		await kw_content.setBytes(si_key_hub, atu8_hub_value);
 
 		// wait for change to be captured
-		await awaiter_from(this._a_awaiting_hub_change);
+		await dp_written;
 	}
 
 
@@ -1128,6 +1132,18 @@ export class Vault {
 		// encrypt
 		const atu8_value = await this._encrypt_entry(si_key, atu8_bucket_padded);
 
+		// prep awaiter
+		const [dp_bucket_change, fk_bucket_change] = defer();
+
+		// listen for bucket changes
+		const fk_unlisten_bucket = this._k_content.onEntryChanged(si_key, () => {
+			// remove listener
+			fk_unlisten_bucket();
+
+			// resolve
+			fk_bucket_change(void 0);
+		});
+
 		// attempt to encode bucket contents & write to storage
 		try {
 			await kw_content.setBytes(si_key, atu8_value);
@@ -1135,6 +1151,9 @@ export class Vault {
 		catch(e_encode) {
 			throw new Bug('unable to encode/write ciphertext bucket contents');
 		}
+
+		// wait for confirmation
+		await dp_bucket_change;
 
 		// return the plaintext length of the bucket's contents before padding
 		return atu8_bucket_plain.length;
