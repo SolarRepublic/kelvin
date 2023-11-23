@@ -29,7 +29,7 @@ type ArrayMutatorMethods<w_member=any> = Pick<Array<w_member>,
 
 export class FieldArray<
 	w_member=any,
-> implements Iterable<w_member>, ArrayMutatorMethods {
+> extends Array implements Iterable<w_member>, ArrayMutatorMethods {
 	static create<
 		w_member=any,
 	>(
@@ -37,7 +37,7 @@ export class FieldArray<
 		f_serializer: (w_value: any) => JsonValue,
 		f_deserializer: (w_value: JsonValue) => any,
 		f_default: () => JsonValue
-	) {
+	): FieldArray<w_member> {
 		const k_array = new FieldArray<w_member>(a_members, f_serializer, f_deserializer, f_default);
 
 		return new Proxy(k_array, {
@@ -72,12 +72,12 @@ export class FieldArray<
 				}
 
 				// set on instance
-				k_target[z_property as keyof typeof k_target] = w_value;
+				k_target[z_property as Exclude<keyof typeof k_target, symbol>] = w_value;
 
 				// success
 				return true;
 			},
-		});
+		}) as unknown as FieldArray<w_member>;
 	}
 
 	readonly #a_members: JsonArray;
@@ -93,6 +93,8 @@ export class FieldArray<
 		f_deserializer: (w_value: JsonValue) => w_member,
 		f_default: () => JsonValue
 	) {
+		super(0);
+
 		this.#a_members = a_members;
 		this.#f_serializer = f_serializer;
 		this.#f_deserializer = f_deserializer;
@@ -110,7 +112,7 @@ export class FieldArray<
 	 * Override so it does not get length property from function prototype
 	 * @returns 
 	 */
-	get length(): number {
+	override get length(): number {
 		return this.#a_members.length;
 	}
 
@@ -118,7 +120,7 @@ export class FieldArray<
 	 * Also a mutator
 	 * @returns 
 	 */
-	set length(nl_value: number) {
+	override set length(nl_value: number) {
 		const _a_members = this.#a_members;
 		const _f_default = this.#f_default;
 
@@ -136,27 +138,27 @@ export class FieldArray<
 	All mutator methods...
 	*/
 
-	shift(): w_member | undefined {
+	override shift(): w_member | undefined {
 		return this.#f_deserializer(this.#a_members.shift());
 	}
 
-	pop(): w_member | undefined {
+	override pop(): w_member | undefined {
 		return this.#f_deserializer(this.#a_members.pop());
 	}
 
-	unshift(...a_items: w_member[]): number {
+	override unshift(...a_items: w_member[]): number {
 		return this.#a_members.unshift(...a_items.map(this.#f_serializer));
 	}
 
-	push(...a_items: w_member[]): number {
+	override push(...a_items: w_member[]): number {
 		return this.#a_members.push(...a_items.map(this.#f_serializer));
 	}
 
-	reverse(): w_member[] {
+	override reverse(): w_member[] {
 		return this.#a_members.reverse().map(this.#f_deserializer);
 	}
 
-	sort(f_cmp?: ((w_a: w_member, w_b: w_member) => number) | undefined): this {
+	override sort(f_cmp?: ((w_a: w_member, w_b: w_member) => number) | undefined): this {
 		const f_deserializer = this.#f_deserializer;
 
 		this.#a_members.sort((w_a, w_b) => (f_cmp ?? F_CMP_DEFAULT)(f_deserializer(w_a), f_deserializer(w_b)));
@@ -164,9 +166,9 @@ export class FieldArray<
 		return this;
 	}
 
-	splice(i_start: number, nl_del?: number | undefined): w_member[];
-	splice(i_start: number, nl_del: number, ...a_items: w_member[]): w_member[];
-	splice(i_start: unknown, nl_del?: unknown, ...a_rest: unknown[]): w_member[] {
+	override splice(i_start: number, nl_del?: number | undefined): w_member[];
+	override splice(i_start: number, nl_del: number, ...a_items: w_member[]): w_member[];
+	override splice(i_start: unknown, nl_del?: unknown, ...a_rest: unknown[]): w_member[] {
 		return this.#a_members.splice(
 			i_start as number,
 			nl_del as number,
@@ -174,20 +176,20 @@ export class FieldArray<
 		).map(this.#f_deserializer);
 	}
 
-	copyWithin(i_target: number, i_start: number, i_end?: number | undefined): this {
+	override copyWithin(i_target: number, i_start: number, i_end?: number | undefined): this {
 		this.#a_members.copyWithin(i_target, i_start, i_end);
 
 		return this;
 	}
 
-	fill(w_value: w_member, i_start?: number | undefined, i_end?: number | undefined): this {
+	override fill(w_value: w_member, i_start?: number | undefined, i_end?: number | undefined): this {
 		this.#a_members.fill(this.#f_serializer(w_value), i_start, i_end);
 
 		return this;
 	}
 
 	// optimization
-	slice(i_start?: number | undefined, i_end?: number | undefined): w_member[] {
+	override slice(i_start?: number | undefined, i_end?: number | undefined): w_member[] {
 		return this.#a_members.slice(i_start, i_end).map(this.#f_deserializer);
 	}
 }

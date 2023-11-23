@@ -1,15 +1,13 @@
 import type {GenericItemController} from './controller';
 import type {KelvinKeyValueWriter} from './store';
-import type {DomainCode, DomainLabel, ItemIdent, ItemCode, ItemPath, SerVaultHub, IndexLabel, IndexValue, IndexPosition, BucketKey, BucketCode, SchemaCode, SerSchema, SerItem, SerBucketMetadata, SerBucket, DbVersionId, DomainVersionId} from './types';
+import type {DomainCode, DomainLabel, ItemIdent, ItemCode, ItemPath, SerVaultHub, IndexLabel, IndexValue, IndexPosition, BucketKey, BucketCode, SchemaCode, SerSchema, SerItem, SerBucketMetadata, SerBucket} from './types';
 import type {Migration, Vault} from './vault';
 
-import type {NaiveBase93, NaiveJsonString, Nilable} from '@blake.regalia/belt';
+import type {Nilable} from '@blake.regalia/belt';
 
-import {base93_to_buffer, buffer_to_base93, concat, fodemtv, fold, ode, odem, ofe, text_to_buffer} from '@blake.regalia/belt';
+import {buffer_to_base93, fodemtv, fold, ode, odem, ofe, text_to_buffer} from '@blake.regalia/belt';
 
 import {random_bytes} from '@solar-republic/crypto';
-
-import {sha256_sync} from '@solar-republic/crypto/sha256';
 
 import {NB_BUCKET_CONTAINER, NB_BUCKET_CONTENTS, NB_BUCKET_LABEL, XT_ROTATION_DEBOUNCE, XT_ROTATION_WAIT_MAX} from './constants';
 import {index_to_b92} from './data';
@@ -64,6 +62,10 @@ export class VaultHub {
 
 	get vault(): Vault {
 		return this._k_vault;
+	}
+
+	get items(): ItemIdent[] {
+		return this._a_items;
 	}
 
 	async _write_hub(kw_content: KelvinKeyValueWriter): Promise<void> {
@@ -508,9 +510,7 @@ export class VaultHub {
 		if(!a_list) return a_list;
 
 		// destructure fields
-		const {
-			_a_items,
-		} = this;
+		const {_a_items} = this;
 
 		// list of [position, item ident] where a match was found
 		const a_found: [IndexPosition, ItemIdent][] = [];
@@ -583,7 +583,7 @@ export class VaultHub {
 		return this._a_buckets_to_schemas[i_bucket];
 	}
 
-	getSchema(i_schema: SchemaCode): SerSchema {
+	getSchema(i_schema: SchemaCode): Readonly<SerSchema> | 0 {
 		return this._a_schemas[i_schema];
 	}
 
@@ -665,7 +665,7 @@ export class VaultHub {
 		return this._new_bucket(si_domain);
 	}
 
-	async putItem(si_domain: DomainLabel, sr_item: ItemPath, w_item: SerItem) {
+	async putItem(si_domain: DomainLabel, sr_item: ItemPath, w_item: SerItem): Promise<void> {
 		// obtain lock
 		await this._k_vault.withExclusive(async(kw_content) => {
 			// add item key

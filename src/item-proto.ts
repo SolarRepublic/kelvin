@@ -1,5 +1,5 @@
 
-import type {GenericItemController} from './controller';
+import type {GenericItemController, ItemController} from './controller';
 import type {KnownEsDatatypes, PartableDatatype, PrimitiveDatatypeToEsType, TaggedDatatypeToEsTypeGetter, TaggedDatatypeToEsTypeSetter} from './schema-types';
 import type {ItemCode, SerField, SerSchema, SerTaggedDatatype, SerTaggedDatatypeMap} from './types';
 
@@ -18,12 +18,19 @@ export const $_TUPLE = Symbol('item-tuple');
 
 type FieldPath = (string | number)[];
 
-export type RuntimeItem = {
-	[si_key: string]: KnownEsDatatypes;
+export type RuntimeItem<g_controller=GenericItemController> = {
 	[$_CODE]: ItemCode;
 	[$_CONTROLLER]: GenericItemController;
 	[$_TUPLE]: JsonValue[];
-};
+} & g_controller extends GenericItemController
+	? Record<string, KnownEsDatatypes>
+	: g_controller extends ItemController<infer s_domain, infer si_domain, infer a_parts, infer g_schema, infer f_schema, infer g_item, infer g_proto, infer g_runtime, infer g_parts>
+		? g_item
+		: never;
+
+export type ItemStruct<g_controller=GenericItemController> = g_controller extends ItemController<infer s_domain, infer si_domain, infer a_parts, infer g_schema, infer f_schema, infer g_item, infer g_proto, infer g_runtime, infer g_parts>
+	? g_item
+	: Record<string, KnownEsDatatypes>;
 
 export const is_runtime_item = (z_item: unknown): z_item is RuntimeItem => !!(z_item as RuntimeItem)[$_TUPLE];
 

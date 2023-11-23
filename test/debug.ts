@@ -1,10 +1,8 @@
-import {buffer_to_base93, text_to_buffer} from '@blake.regalia/belt';
-import {VaultHub} from 'src/hub';
+import {text_to_buffer} from '@blake.regalia/belt';
 import {Vault} from 'src/vault';
 import {MemoryWrapper} from 'src/wrappers/memory';
 
-import {ChainNamespace, Toggle, init_chains} from './chains';
-import {ContactType, controllers} from './schema';
+import {init_chains} from './chains';
 
 const k_content = new MemoryWrapper('content');
 const k_session = new MemoryWrapper('session');
@@ -36,21 +34,29 @@ if(!k_client.isUnlocked()) {
 	await k_client.unlock(text_to_buffer(sh_phrase));
 }
 
-const {Chains} = init_chains(k_client);
+const {Chains, g_chain_sample_1, g_chain_sample_2, g_chain_sample_3} = init_chains(k_client);
 
 // attempt to open the vault
 const k_hub = await k_client.open();
 
-await Chains.put({
-	ns: ChainNamespace.COSMOS,
-	ref: 'test-1',
-	on: Toggle.ON,
-	data: 'hello world',
-});
+await Chains.put(g_chain_sample_1);
+
+await Chains.put(g_chain_sample_2);
 
 debugger;
 
-const g_read = await Chains.getAt([ChainNamespace.COSMOS, 'test-1']);
+const g_read_1 = await Chains.get(g_chain_sample_1);
+
+const g_read_2 = await Chains.get(g_chain_sample_2);
+
+debugger;
+
+
+for await(const [si_item, g_item] of Chains.entries()) {
+	debugger;
+}
+
+// const g_read = await Chains.getAt([ChainNamespace.COSMOS, 'test-1']);
 
 debugger;
 console.log(g_read);

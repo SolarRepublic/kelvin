@@ -1,3 +1,4 @@
+import type {ItemStruct} from '../src/item-proto';
 import type {Vault} from '../src/vault';
 
 import {ItemController} from '../src/controller';
@@ -25,6 +26,8 @@ const G_BECH32S_COSMOS = {
 	valoper: 'valoper',
 	valoperpub: 'valoperpub',
 };
+
+export type ChainStruct = ItemStruct<ReturnType<typeof init_chains>['Chains']>;
 
 export const init_chains = (k_client: Vault) => {
 	const Chains = new ItemController({
@@ -63,7 +66,6 @@ export const init_chains = (k_client: Vault) => {
 		// 	'data',
 		// ],
 	});
-
 
 
 	// export type Chain = typeof Chains;
@@ -106,7 +108,34 @@ export const init_chains = (k_client: Vault) => {
 	// 	}),
 	// });
 
+	type LocalChainStruct = ItemStruct<typeof Chains>;
+
+	const g_chain_sample_1: LocalChainStruct = {
+		ns: ChainNamespace.COSMOS,
+		ref: 'test-1',
+		on: Toggle.ON,
+		data: 'foo',
+	};
+
+	const g_chain_sample_2: LocalChainStruct = {
+		ns: ChainNamespace.COSMOS,
+		ref: 'test-2',
+		on: Toggle.ON,
+		data: 'bar',
+	};
+
+	const g_chain_sample_3: LocalChainStruct = {
+		ns: ChainNamespace.COSMOS,
+		ref: 'test-2',
+		on: Toggle.ON,
+		data: 'baz',
+	};
+
+
 	return {
 		Chains,
+		g_chain_sample_1,
+		g_chain_sample_2,
+		g_chain_sample_3,
 	};
 };

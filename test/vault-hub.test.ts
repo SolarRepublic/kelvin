@@ -1,14 +1,13 @@
 /* eslint-disable @typescript-eslint/no-unused-expressions */
 /* eslint-disable quote-props */
-import type {DomainLabel} from '../src/types';
+import type {ItemStruct} from 'src/item-proto';
 import type {TestContext, TestFunction} from 'vitest';
 
 import {ode, text_to_buffer} from '@blake.regalia/belt';
 
 import {beforeEach, describe, expect, it, vi} from 'vitest';
 
-import {ChainNamespace, Toggle, init_chains} from './chains';
-import {ItemController, type GenericItemController} from '../src/controller';
+import {init_chains, type ChainStruct} from './chains';
 import {VaultHub} from '../src/hub';
 import {Vault} from '../src/vault';
 import {MemoryWrapper} from '../src/wrappers/memory';
@@ -16,7 +15,10 @@ import {MemoryWrapper} from '../src/wrappers/memory';
 type TestContextExtension = {
 	k_client: Vault;
 	k_hub?: VaultHub;
-	Chains?: ReturnType<typeof init_chains>['Chains'];
+	Chains: ReturnType<typeof init_chains>['Chains'];
+	g_chain_sample_1: ChainStruct;
+	g_chain_sample_2: ChainStruct;
+	g_chain_sample_3: ChainStruct;
 };
 
 declare module 'vitest' {
@@ -34,6 +36,9 @@ enum Stage {
 	REGISTER=2,
 	OPEN=3,
 	DATA=4,
+	PUT_1=5,
+	PUT_2=6,
+	PUT_3=7,
 }
 
 const client = async(xc_stage: Stage) => {
@@ -45,9 +50,9 @@ const client = async(xc_stage: Stage) => {
 		session: k_session,
 	});
 
-	const g_context: TestContextExtension = {
+	const g_context = {
 		k_client,
-	};
+	} as TestContextExtension;
 
 	if(xc_stage >= Stage.CONNECT) {
 		await k_client.connect({
@@ -60,12 +65,26 @@ const client = async(xc_stage: Stage) => {
 			await k_client.register(phrase());
 
 			// data
+			const g_init = init_chains(k_client);
+			const {Chains, g_chain_sample_1, g_chain_sample_2, g_chain_sample_3} = g_init;
 			if(xc_stage >= Stage.DATA) {
-				Object.assign(g_context, init_chains(k_client));
+				Object.assign(g_context, g_init);
 			}
 
 			if(xc_stage >= Stage.OPEN) {
 				g_context.k_hub = await k_client.open();
+			}
+
+			if(xc_stage >= Stage.PUT_1) {
+				await Chains.put(g_chain_sample_1);
+
+				if(xc_stage >= Stage.PUT_2) {
+					await Chains.put(g_chain_sample_2);
+
+					if(xc_stage >= Stage.PUT_3) {
+						await Chains.put(g_chain_sample_3);
+					}
+				}
 			}
 		}
 	}
@@ -73,8 +92,11 @@ const client = async(xc_stage: Stage) => {
 	return g_context;
 };
 
+
+const init_destruct = async(xc_stage: Stage, w_obj: object={}) => Object.assign(w_obj, await client(xc_stage));
+
 // eslint-disable-next-line no-sequences
-const init = (xc_stage: Stage) => async(g: TestContext) => (Object.assign(g, await client(xc_stage)), void 0);
+const init = (xc_stage: Stage) => async(g_ctx: TestContext) => (await init_destruct(xc_stage, g_ctx), void 0);
 
 type Tree<w_leaf> = {
 	[si_key: string]: Tree<w_leaf> | w_leaf;
@@ -211,34 +233,153 @@ describe('after open', () => {
 
 
 describe('item', () => {
-	beforeEach(init(Stage.DATA));
-
 	tests({
-		async 'put and get'({k_client, k_hub, Chains}) {
-			const g_sample = {
-				ns: ChainNamespace.COSMOS,
-				ref: 'test-1',
-				on: Toggle.ON,
-				data: 'hello world',
-			};
+		async 'get full 0 undefined'() {
+			const {Chains, g_chain_sample_1} = await init_destruct(Stage.DATA);
 
-			await expect(Chains!.put(g_sample)).resolves.toBeDefined();
+			await expect(Chains.get(g_chain_sample_1))
+				.resolves.toBeUndefined();
+		},
 
-			const dp_get_full = Chains!.get(g_sample);
-			await expect(dp_get_full).resolves.toMatchObject(g_sample);
+		async 'get at 0 undefined'() {
+			const {Chains, g_chain_sample_1} = await init_destruct(Stage.DATA);
 
-			const dp_get_partial = Chains!.get({
-				ns: g_sample.ns,
-				ref: g_sample.ref,
-			});
-			await expect(dp_get_partial).resolves.toMatchObject(g_sample);
+			await expect(Chains.getAt([g_chain_sample_1.ns, g_chain_sample_1.ref]))
+				.resolves.toBeUndefined();
+		},
 
-			const dp_get_at = Chains!.getAt([g_sample.ns, g_sample.ref]);
-			await expect(dp_get_at).resolves.toMatchObject(g_sample);
+		async 'entries 0 empty'() {
+			const {Chains, g_chain_sample_1} = await init_destruct(Stage.DATA);
 
-			for await(const [sr_chain, g_chain] of Chains!.entries()) {
+			const di_chains = Chains.entries();
 
+			let c_values = 0;
+			for await(const w_never of di_chains) {
+				c_values++;
 			}
+
+			expect(c_values).toBe(0);
+		},
+
+		async 'put 1 resolves'() {
+			const {Chains, g_chain_sample_1} = await init_destruct(Stage.DATA);
+
+			await expect(Chains.put(g_chain_sample_1))
+				.resolves.toBeDefined();
+		},
+
+		async 'get full 1 original matches'() {
+			const {Chains, g_chain_sample_1} = await init_destruct(Stage.PUT_1);
+
+			await expect(Chains.get(g_chain_sample_1))
+				.resolves.toMatchObject(g_chain_sample_1);
+		},
+
+		async 'get full 1 copy matches'() {
+			const {Chains, g_chain_sample_1} = await init_destruct(Stage.PUT_1);
+
+			await expect(Chains.get({...g_chain_sample_1}))
+				.resolves.toMatchObject(g_chain_sample_1);
+		},
+
+		async 'get partial 1 matches'() {
+			const {Chains, g_chain_sample_1} = await init_destruct(Stage.PUT_1);
+
+			const dp_get_partial = Chains.get({
+				ns: g_chain_sample_1.ns,
+				ref: g_chain_sample_1.ref,
+			});
+
+			await expect(dp_get_partial).resolves.toMatchObject(g_chain_sample_1);
+		},
+
+		async 'get at 1 matches'() {
+			const {Chains, g_chain_sample_1} = await init_destruct(Stage.PUT_1);
+
+			await expect(Chains.getAt([g_chain_sample_1.ns, g_chain_sample_1.ref]))
+				.resolves.toMatchObject(g_chain_sample_1);
+		},
+
+		async 'entries 1 matches'() {
+			const {Chains, g_chain_sample_1} = await init_destruct(Stage.PUT_1);
+
+			const di_chains = Chains.entries();
+
+			expect(typeof di_chains[Symbol.asyncIterator]).toBe('function');
+
+			let c_values = 0;
+			for await(const [si_item, g_item] of di_chains) {
+				expect(g_item).toMatchObject(g_chain_sample_1);
+				c_values++;
+			}
+
+			expect(c_values).toBe(1);
+		},
+
+		async 'get full 2 original matches'() {
+			const {Chains, g_chain_sample_1, g_chain_sample_2} = await init_destruct(Stage.PUT_2);
+
+			await expect(Chains.get(g_chain_sample_2))
+				.resolves.toMatchObject(g_chain_sample_2);
+
+			await expect(Chains.get(g_chain_sample_1))
+				.resolves.toMatchObject(g_chain_sample_1);
+		},
+
+		async 'get full 2 copy matches'() {
+			const {Chains, g_chain_sample_1, g_chain_sample_2} = await init_destruct(Stage.PUT_2);
+
+			await expect(Chains.get({...g_chain_sample_1}))
+				.resolves.toMatchObject(g_chain_sample_1);
+
+			await expect(Chains.get({...g_chain_sample_2}))
+				.resolves.toMatchObject(g_chain_sample_2);
+		},
+
+		async 'get partial 2 matches'() {
+			const {Chains, g_chain_sample_1, g_chain_sample_2} = await init_destruct(Stage.PUT_2);
+
+			const dp_get_partial_2 = Chains.get({
+				ns: g_chain_sample_2.ns,
+				ref: g_chain_sample_2.ref,
+			});
+
+			await expect(dp_get_partial_2).resolves.toMatchObject(g_chain_sample_2);
+
+			const dp_get_partial_1 = Chains.get({
+				ns: g_chain_sample_1.ns,
+				ref: g_chain_sample_1.ref,
+			});
+
+			await expect(dp_get_partial_1).resolves.toMatchObject(g_chain_sample_1);
+		},
+
+		async 'get at 2 matches'() {
+			const {Chains, g_chain_sample_1, g_chain_sample_2} = await init_destruct(Stage.PUT_2);
+
+			await expect(Chains.getAt([g_chain_sample_1.ns, g_chain_sample_1.ref]))
+				.resolves.toMatchObject(g_chain_sample_1);
+
+			await expect(Chains.getAt([g_chain_sample_2.ns, g_chain_sample_2.ref]))
+				.resolves.toMatchObject(g_chain_sample_2);
+		},
+
+		async 'entries 2 matches'() {
+			const {Chains, g_chain_sample_1, g_chain_sample_2} = await init_destruct(Stage.PUT_2);
+
+			const di_chains = Chains.entries();
+
+			expect(typeof di_chains[Symbol.asyncIterator]).toBe('function');
+
+			const a_values: ChainStruct[] = [];
+			for await(const [si_item, g_item] of di_chains) {
+				a_values.push(g_item);
+			}
+
+			expect(a_values).toMatchObject([
+				g_chain_sample_1,
+				g_chain_sample_2,
+			]);
 		},
 	});
 });

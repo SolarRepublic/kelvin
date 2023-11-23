@@ -4,18 +4,16 @@ import type {VaultHub} from './hub';
 import type {RuntimeItem} from './item-proto';
 import type {Reader} from './reader';
 
-import type {DomainLabel, ItemCode, ItemIdent, ItemPath, SerFieldStruct, SerItem, SerKeyStruct, SerSchema, FieldLabel, SerTaggedDatatype} from './types';
+import type {ItemShapesFromSchema, StrictSchema, SchemaSpecifier, AcceptablePartTuples, SchemaBuilder, PartFields, PartableEsType, FieldStruct} from './schema-types';
+import type {DomainLabel, ItemCode, ItemIdent, ItemPath, SerFieldStruct, SerItem, SerKeyStruct, SerSchema} from './types';
 import type {Vault} from './vault';
 import type {Dict, JsonArray, JsonObject} from '@blake.regalia/belt';
 
-import {F_IDENTITY, __UNDEFINED, escape_regex, is_dict_es, ode} from '@blake.regalia/belt';
+import {F_IDENTITY, __UNDEFINED, escape_regex} from '@blake.regalia/belt';
 
-import {SchemaError} from './errors';
 import {apply_filter_struct, type GenericStructMatchCriteria, type MatchCriteria} from './filter';
-import {$_CODE, $_CONTROLLER, $_TUPLE, item_prototype} from './item-proto';
-import {ItemRef} from './item-ref';
+import {$_CODE, $_CONTROLLER, $_TUPLE, is_runtime_item, item_prototype} from './item-proto';
 import {interpret_schema} from './schema-impl';
-import {type ItemShapesFromSchema, type StrictSchema, type SchemaSpecifier, type AcceptablePartTuples, type SchemaBuilder, type PartFields, type PartableEsType, type PrimitiveDatatypeToEsType, type PrimitiveDatatype, TaggedDatatype, type FieldStruct} from './schema-types';
 import {DomainStorageStrategy} from './types';
 
 
@@ -266,8 +264,8 @@ export class ItemController<
 			g_runtime = g_inst;
 		}
 		// incorrect domain
-		else if(this._si_domain !== g_item[$_DOMAIN]) {
-			throw new TypeError(`Attempted to pass an item from "${g_item[$_DOMAIN]}" domain to the "${this._si_domain as string}" domain`);
+		else if(this._si_domain !== g_item[$_CONTROLLER].domain) {
+			throw new TypeError(`Attempted to pass an item from "${g_item[$_CONTROLLER].domain}" domain to the "${this._si_domain as string}" domain`);
 		}
 
 		// where the break between parts and fields is
@@ -287,7 +285,7 @@ export class ItemController<
 		return this.getByCode(this._encode_item(a_parts), a_parts);
 	}
 
-	async put(g_item: g_item) {
+	async put(g_item: g_item): Promise<[ItemPath, SerItem]> {
 		const {_k_hub} = this;
 
 		// serialize item
@@ -300,17 +298,31 @@ export class ItemController<
 		return [sr_item, w_ser];
 	}
 
-	// putAt<a_local extends a_parts>(
-	// 	a_parts: a_local,
-	// 	g_item: ExtractedMembers<a_local, g_schema>
-	// ) {
 
-	// }
+	/**
+	 * Asynchronously iterates through all items as entries.
+	 * If db is modified during iteration, deleted items will not cause error but new items
+	 * _might_ not be yielded.
+	 */
+	async* entries(): AsyncIterableIterator<[ItemIdent, g_item]> {
+		// each item entry from hub
+		for await(const [i_item, si_item, a_tuple] of this._k_hub.itemEntries(this._si_domain)) {
+			// create item
+			const g_item = this._instantiate(si_item, a_tuple);
 
+			// return key/value pair
+			yield [si_item, g_item];
+		}
+	}
 
+	/**
+	 * 
+	 * @param h_criteria 
+	 * @param n_limit 
+	 */
 	async* filter(h_criteria: MatchCriteria<g_item>, n_limit=Infinity): AsyncIterableIterator<g_item> {
 		// destructure fields
-		const {_h_schema_fields} = this;
+		const {_h_schema_fields, _k_hub} = this;
 
 		// copy criteria in prep to keep only fields
 		const h_fields = {...h_criteria};
@@ -341,7 +353,7 @@ export class ItemController<
 		const a_matched: [ItemCode, ItemIdent][] = [];
 
 		// each item
-		const a_items = this._k_hub.items;
+		const a_items = _k_hub.items;
 		for(let i_item=1; i_item<a_items.length; i_item++) {
 			const si_test = a_items[i_item];
 
@@ -351,13 +363,16 @@ export class ItemController<
 			}
 		}
 
+		// sort matches by bucket code to improve lookup locality
+		a_matched.sort(([i_item_a], [i_item_b]) => _k_hub.getItemBucketCode(i_item_a) - _k_hub.getItemBucketCode(i_item_b));
+
 		// count how many items have been yielded
 		const c_yielded = 0;
 
 		// each match
 		for(const [i_item, si_item] of a_matched) {
 			// get item content
-			const a_tuple = await this._k_hub.getItemContent(i_item);
+			const a_tuple = await _k_hub.getItemContent(i_item);
 
 			// load item
 			const g_item = this._instantiate(si_item, a_tuple);
@@ -370,26 +385,6 @@ export class ItemController<
 
 			// reached limit; search no more
 			if(c_yielded >= n_limit) break;
-		}
-	}
-
-	// * filter(g_criteria: Partial<g_item>): AsyncIterableIterator<g_item> {
-
-	// }
-
-	/**
-	 * Asynchronously iterates through all items as entries.
-	 * If db is modified during iteration, deleted items will not cause error but new items
-	 * _might_ not be yielded.
-	 */
-	async* entries(): AsyncIterableIterator<[ItemIdent, g_item]> {
-		// each item entry from hub
-		for await(const [i_item, si_item, a_tuple] of this._k_hub.itemEntries(this._si_domain)) {
-			// create item
-			const g_item = this._instantiate(si_item, a_tuple);
-
-			// return key/value pair
-			yield [si_item, g_item];
 		}
 	}
 }
@@ -406,32 +401,3 @@ export type GenericItemController = ItemController<
 	any
 >;
 
-
-
-// const k_client = new VaultClient();
-
-// const Chains1 = new ItemController({
-// 	client: k_client,
-// 	domain: 'chains' as DomainLabel,
-// 	schema: (k0, xc_ns: ChainNamespace, si_ref: string) => ({
-// 		ns: k0.int(xc_ns),
-// 		ref: k0.str(si_ref),
-// 		data: k0.str(),
-// 	}),
-// 	proto: cast => ({
-// 		test() {
-// 			cast(this).ns;
-// 		},
-
-// 		get caip2(): string {
-// 			return cast(this).ref;
-// 		},
-// 	}),
-// });
-
-// const test = await Chains1.get({
-// 	ns: ChainNamespace.COSMOS,
-// 	ref: 's',
-// });
-
-// test?.caip2;
