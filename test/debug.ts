@@ -59,7 +59,8 @@ for await(const [si_item, g_item] of Chains.entries()) {
 // const g_read = await Chains.getAt([ChainNamespace.COSMOS, 'test-1']);
 
 debugger;
-console.log(g_read);
+console.log(g_read_1);
+console.log(g_read_2);
 
 // // use item
 // const g_item = await Contacts.getAt([ContactType.HUMAN, buffer_to_base93(text_to_buffer('data'))]);

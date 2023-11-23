@@ -658,7 +658,7 @@ export class VaultHub {
 			const h_bucket = await this._k_vault.readBucket(si_bucket);
 
 			// return all bucket info
-			return [i_bucket, new_bucket_key(), h_bucket, si_bucket];
+			return [i_bucket, new_bucket_key(), {...h_bucket}, si_bucket];
 		}
 
 		// no bucket was selected, add new one
@@ -685,7 +685,6 @@ export class VaultHub {
 			let h_bucket: SerBucket;
 
 			// in case an old bucket needs to be deleted
-			let i_bucket_delete = -1 as BucketCode;
 			let si_bucket_delete: BucketKey | undefined;
 
 			// item already exists
@@ -704,13 +703,13 @@ export class VaultHub {
 
 				// TODO: fix, bucket code should remain same but a new bucket key should always be created and old bucket entry deleted
 
-				// create new bucket and select as destination
-				[i_bucket, si_bucket, h_bucket] = this._new_bucket(si_domain);
-
 				// new item will fit (adding 1 for comma)
 				if(nb_item + 1 <= nb_item_exist || (nb_bucket_exist - nb_item_exist + nb_item + 1) <= this._nb_bucket) {
-					// mark old bucket for deletion
-					[i_bucket_delete, si_bucket_delete] = [i_bucket_exist, si_bucket_exist];
+					// select bucket
+					i_bucket = i_bucket_exist;
+
+					// mark old entry for deletion
+					si_bucket_delete = si_bucket_exist;
 
 					// copy contents
 					h_bucket = {...h_bucket_exist};
@@ -720,6 +719,9 @@ export class VaultHub {
 				}
 				// item won't fit
 				else {
+					// create new bucket and select as destination
+					[i_bucket, si_bucket, h_bucket] = this._new_bucket(si_domain);
+
 					// set schema association
 					this._a_buckets_to_schemas[i_bucket] = i_schema;
 				}
@@ -733,8 +735,14 @@ export class VaultHub {
 			// place item into bucket
 			h_bucket[i_item] = w_item;
 
+			// ref bucket metadagta
+			const a_metadata = this._a_buckets[i_bucket];
+
+			// update bucket key
+			a_metadata[0] = si_bucket;
+
 			// adjust bucket size
-			this._a_buckets[i_bucket][1] += nb_item;
+			a_metadata[1] += nb_item;
 
 			// save item location
 			this._a_locations[i_item] = i_bucket;
@@ -745,12 +753,12 @@ export class VaultHub {
 			// next, update the hub
 			await this._write_hub(kw_content);
 
-			console.info(`Wrote to ${si_bucket} :: ${JSON.stringify(h_bucket)}\nhub: ${JSON.stringify(this.isolate())}\npruning:${[...this._as_buckets_prune].join(', ')}`);
-
 			// add old bucket to deletion queue
 			if(si_bucket_delete) {
 				this._as_buckets_prune.add(si_bucket_delete);
 			}
+
+			console.info(`Wrote to ${si_bucket} :: ${JSON.stringify(h_bucket)}\nhub: ${JSON.stringify(this.isolate())}\npruning:${[...this._as_buckets_prune].join(', ')}`);
 
 			// schedule a bucket rotation
 			this._schedule_rotation();
