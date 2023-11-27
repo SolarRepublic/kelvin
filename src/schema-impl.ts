@@ -1,6 +1,6 @@
 import type {L} from 'ts-toolbelt';
 
-import type {SchemaSimulator, SchemaBuilder, SchemaSpecifier, AcceptablePartTuples, StrictSchema} from './schema-types';
+import type {SchemaSimulator, SchemaBuilder, PartableSchemaSpecifier, AcceptablePartTuples, StructuredSchema} from './schema-types';
 import type {FieldLabel, SerField, SerFieldStruct, SerKeyStruct, SerSchema, SerTaggedDatatype} from './types';
 
 import type {Dict, Arrayable, DiscriminatedUnion} from '@blake.regalia/belt';
@@ -406,7 +406,7 @@ function reshape_fields(
  */
 export function interpret_schema<a_parts extends AcceptablePartTuples>(
 	si_domain: string,
-	f_schema: SchemaBuilder<SchemaSpecifier, a_parts, StrictSchema>
+	f_schema: SchemaBuilder<PartableSchemaSpecifier, a_parts, StructuredSchema>
 ): SerSchema {
 	// allow up to 8 part fields
 	const a_simulators: symbol[] = [];

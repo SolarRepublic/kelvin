@@ -50,3 +50,5 @@ export class MigrationError extends BasicError('Error encountered while attempti
 export class ClientBehindError extends BasicError('Your client software is older than the version that created the database') {}
 
 export class MissingMigrationRouterError extends BasicError('Missing migration router where expected') {}
+
+export class StorageError extends BasicError('A problem was detected with the storage backend') {}

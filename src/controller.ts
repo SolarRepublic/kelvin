@@ -4,7 +4,7 @@ import type {VaultHub} from './hub';
 import type {RuntimeItem} from './item-proto';
 import type {Reader} from './reader';
 
-import type {ItemShapesFromSchema, StrictSchema, SchemaSpecifier, AcceptablePartTuples, SchemaBuilder, PartFields, PartableEsType, FieldStruct} from './schema-types';
+import type {ItemShapesFromSchema, StructuredSchema, PartableSchemaSpecifier, AcceptablePartTuples, SchemaBuilder, PartFields, PartableEsType, FieldStruct} from './schema-types';
 import type {DomainLabel, ItemCode, ItemIdent, ItemPath, SerFieldStruct, SerItem, SerKeyStruct, SerSchema} from './types';
 import type {Vault} from './vault';
 import type {Dict, JsonArray, JsonObject} from '@blake.regalia/belt';
@@ -21,8 +21,8 @@ export class ItemController<
 	s_domain extends string,
 	si_domain extends s_domain & DomainLabel,
 	a_parts extends AcceptablePartTuples,
-	g_schema extends StrictSchema,
-	f_schema extends SchemaBuilder<SchemaSpecifier, a_parts, g_schema>,
+	g_schema extends StructuredSchema,
+	f_schema extends SchemaBuilder<PartableSchemaSpecifier, a_parts, g_schema>,
 	g_item extends ItemShapesFromSchema<g_schema>,
 	g_proto,
 	g_runtime extends RuntimeItem<g_item & g_proto>,
@@ -172,7 +172,7 @@ export class ItemController<
 		};
 	}
 
-	protected _create_item_filter = (a_parts: (PartableEsType | null)[]): RegExp => {
+	protected _create_item_filter = (a_parts: (string | null)[]): RegExp => {
 		// encode domain and escape regex
 		const sx_domain = escape_regex(this._k_hub.encodeDomain(this._si_domain)!)+':';
 
@@ -221,7 +221,7 @@ export class ItemController<
 		return this.getAt(a_parts);
 	}
 
-	_instantiate(si_item: ItemIdent, a_tuple: SerItem): g_item {
+	_instantiate(si_item: ItemIdent, a_tuple: SerItem): g_runtime {
 		// split ident by reserved delimiter
 		const a_split = si_item.split(':');
 
@@ -310,6 +310,10 @@ export class ItemController<
 			// create item
 			const g_item = this._instantiate(si_item, a_tuple);
 
+			if(!g_item[$_TUPLE]) {
+				throw new Error(`Item missing TUPLE?!`);
+			}
+
 			// return key/value pair
 			yield [si_item, g_item];
 		}
@@ -322,20 +326,20 @@ export class ItemController<
 	 */
 	async* filter(h_criteria: MatchCriteria<g_item>, n_limit=Infinity): AsyncIterableIterator<g_item> {
 		// destructure fields
-		const {_h_schema_fields, _k_hub} = this;
+		const {_h_schema_fields, _h_schema_parts, _k_hub} = this;
 
 		// copy criteria in prep to keep only fields
 		const h_fields = {...h_criteria};
 
 		// prep list of parts
-		const a_parts = [];
+		const a_parts: (string | null)[] = [];
 
 		// each key part
 		for(const si_part of Object.keys(this._h_schema_parts)) {
-			// part is present in criteria
-			if(si_part in h_criteria) {
+			// part is present in criteria and able to be embedded in regex
+			if(['number', 'bigint', 'string'].includes(typeof h_criteria[si_part])) {
 				// use value
-				a_parts.push(si_part);
+				a_parts.push(h_criteria[si_part]+'');
 
 				// remove from fields-only copy
 				delete h_fields[si_part];
@@ -378,7 +382,7 @@ export class ItemController<
 			const g_item = this._instantiate(si_item, a_tuple);
 
 			// filter does not match; next candidate
-			if(!apply_filter_struct(g_item as FieldStruct, h_fields as GenericStructMatchCriteria, '', _h_schema_fields)) continue;
+			if(!apply_filter_struct(g_item as FieldStruct, h_fields as GenericStructMatchCriteria, '', _h_schema_fields, _h_schema_parts)) continue;
 
 			// passed filter; yield
 			yield g_item;
@@ -393,9 +397,9 @@ export type GenericItemController = ItemController<
 	string,
 	DomainLabel,
 	AcceptablePartTuples,
-	StrictSchema,
+	StructuredSchema,
 	any,
-	ItemShapesFromSchema<StrictSchema>,
+	ItemShapesFromSchema<StructuredSchema>,
 	any,
 	any,
 	any

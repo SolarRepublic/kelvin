@@ -3,6 +3,8 @@ import type {SerVaultHashParams} from './types';
 import {text_to_buffer} from '@blake.regalia/belt';
 import {ATU8_SHA256_STARSHELL, random_bytes} from '@solar-republic/crypto';
 
+export const B_VERBOSE = true || import.meta.env?.DEV;
+
 // uint specifying system version for database compatibility
 export const N_SYSTEM_VERSION = 2;
 
@@ -38,6 +40,15 @@ export const XT_ROTATION_DEBOUNCE = 500;  // 500 ms
 
 // maximum amount of time allowed to pass while waiting for rotation
 export const XT_ROTATION_WAIT_MAX = 2e3;  // 2 seconds
+
+// // amount of time a cached entry should stay in memory
+// export const XT_CACHE_LIFETIME = 
+
+// maximum amount of time to wait for a write/deletion to be confirmed before raising an error
+export const XT_CONFIRMATION_TIMEOUT = 5e3;  // 5 seconds
+
+// default limit for storing cached bucket data in memory
+export const NB_CACHE_LIMIT_DEFAULT = 64 * (1 << 10);  // 64 KiB
 
 
 // target number of argon hashing iterations

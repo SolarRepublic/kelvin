@@ -1,4 +1,4 @@
-import type {SchemaBuilder, SchemaSpecifier} from 'src/schema-types';
+import type {SchemaBuilder, PartableSchemaSpecifier} from 'src/schema-types';
 
 import {interpret_schema} from 'src/schema-impl';
 import {PrimitiveDatatype, TaggedDatatype} from 'src/schema-types';
@@ -15,7 +15,7 @@ enum Category {
 }
 
 // @ts-expect-error lone declaration
-const kitchen_sink: SchemaBuilder = (k: SchemaSpecifier, xc_cat: Category, s_id: string) => ({
+const kitchen_sink: SchemaBuilder = (k: PartableSchemaSpecifier, xc_cat: Category, s_id: string) => ({
 	part_int: k.int(xc_cat),
 	part_str: k.str(s_id),
 	int: k.int(),

@@ -68,8 +68,11 @@ export class VaultHub {
 		return this._a_items;
 	}
 
-	async _write_hub(kw_content: KelvinKeyValueWriter): Promise<void> {
-		return await this._k_vault.writeHub(this.isolate(), kw_content);
+	async _write_hub(kw_content: KelvinKeyValueWriter, g_overwrite: Partial<SerVaultHub>={}): Promise<void> {
+		return await this._k_vault.writeHub({
+			...this.isolate(),
+			...g_overwrite,
+		}, kw_content);
 	}
 
 	// returns the isolated form of the current vault, ready for JSON serialization
@@ -266,6 +269,9 @@ export class VaultHub {
 
 			// obtain write lock
 			await _k_vault.withExclusive(async(kw_content) => {
+				// copy buckets sequence
+				const a_buckets = [..._a_buckets.map(a_meta => [...a_meta])] as SerBucketMetadata[];
+
 				// each bucket defined in hub
 				for(const [i_bucket, [si_bucket_old]] of this._a_buckets.entries()) {
 					// bypass bucket from rotation
@@ -278,7 +284,7 @@ export class VaultHub {
 					const si_bucket_new = new_bucket_key();
 
 					// update bucket key
-					_a_buckets[i_bucket as BucketCode][0] = si_bucket_new;
+					a_buckets[i_bucket as BucketCode][0] = si_bucket_new;
 
 					// write contents to new bucket
 					await _k_vault.writeBucket(si_bucket_new, h_bucket, _nb_bucket, kw_content);
@@ -288,10 +294,15 @@ export class VaultHub {
 				}
 
 				// write hub
-				await this._write_hub(kw_content);
+				await this._write_hub(kw_content, {
+					buckets: a_buckets,
+				});
+
+				// replace buckets sequence synchronously now that new buckets exist
+				this._a_buckets = a_buckets;
 
 				// prune all old buckets at once
-				await kw_content.removeMany([..._as_buckets_prune]);
+				await _k_vault.deleteBuckets(_as_buckets_prune, kw_content);
 			});
 		}, XT_ROTATION_DEBOUNCE);
 	}
@@ -701,8 +712,6 @@ export class VaultHub {
 				// calculate size of existing item
 				const nb_item_exist = text_to_buffer(JSON.stringify(h_bucket_exist[i_item])).length;
 
-				// TODO: fix, bucket code should remain same but a new bucket key should always be created and old bucket entry deleted
-
 				// new item will fit (adding 1 for comma)
 				if(nb_item + 1 <= nb_item_exist || (nb_bucket_exist - nb_item_exist + nb_item + 1) <= this._nb_bucket) {
 					// select bucket
@@ -757,8 +766,6 @@ export class VaultHub {
 			if(si_bucket_delete) {
 				this._as_buckets_prune.add(si_bucket_delete);
 			}
-
-			console.info(`Wrote to ${si_bucket} :: ${JSON.stringify(h_bucket)}\nhub: ${JSON.stringify(this.isolate())}\npruning:${[...this._as_buckets_prune].join(', ')}`);
 
 			// schedule a bucket rotation
 			this._schedule_rotation();

@@ -1,6 +1,8 @@
 import type {ItemStruct} from '../src/item-proto';
 import type {Vault} from '../src/vault';
 
+import {DatatypeString} from 'src/schema-types';
+
 import {ItemController} from '../src/controller';
 
 export enum Toggle {
@@ -38,12 +40,23 @@ export const init_chains = (k_client: Vault) => {
 			ns: k.int(xc_ns),
 			ref: k.str(si_ref),
 			on: k.int<Toggle>(),
-			data: k.str(),
+			int: k.int(),
+			str: k.str(),
+			bytes: k.bytes(),
+			array: k.arr(k1 => k1.str()),
+			tuple: k.tuple(k1 => [k1.arr(k2 => k2.str()), k1.int()]),
 			// pfp: k.ref<Pfp>(),
-			// bech32s: k.switch('ns', xc_ns, k => ({
-			// 	[ChainNamespace.UNKNOWN]: k.obj({}),
-			// 	[ChainNamespace.COSMOS]: k.struct(G_BECH32S_COSMOS),
-			// })),
+			bech32s: k.switch('ns', xc_ns, {
+				[ChainNamespace.UNKNOWN]: k1 => k1.int(),
+				[ChainNamespace.COSMOS]: k1 => ({
+					acc: k1.str(),
+					accpub: k1.str(),
+					valcons: k1.str(),
+					valconspub: k1.str(),
+					valoper: k1.str(),
+					valoperpub: k1.str(),
+				}),
+			}),
 			// ftIfaces: k.arr(),
 			// nftIfaces: k.arr(),
 
@@ -55,6 +68,11 @@ export const init_chains = (k_client: Vault) => {
 		proto: cast => ({
 			get caip2(): string {
 				return H_NS_LABELS[cast(this).ns]+':'+cast(this).ref;
+			},
+
+			hrp(): string {
+				const k_this = cast(this);
+				return ChainNamespace.COSMOS === k_this.ns? k_this.bech32s.accpub: '';
 			},
 
 			// addressFor(z_context: Chain | string): string {
@@ -114,21 +132,27 @@ export const init_chains = (k_client: Vault) => {
 		ns: ChainNamespace.COSMOS,
 		ref: 'test-1',
 		on: Toggle.ON,
-		data: 'foo',
+		int: 1,
+		str: 'foo',
+		bytes: Uint8Array.from([0x01]),
 	};
 
 	const g_chain_sample_2: LocalChainStruct = {
 		ns: ChainNamespace.COSMOS,
 		ref: 'test-2',
 		on: Toggle.ON,
-		data: 'bar',
+		int: 2,
+		str: 'bar',
+		bytes: Uint8Array.from([0x01, 0x02]),
 	};
 
 	const g_chain_sample_3: LocalChainStruct = {
 		ns: ChainNamespace.COSMOS,
-		ref: 'test-2',
+		ref: 'test-3',
 		on: Toggle.ON,
-		data: 'baz',
+		int: 3,
+		str: 'baz',
+		bytes: Uint8Array.from([0x01, 0x02, 0x03]),
 	};
 
 

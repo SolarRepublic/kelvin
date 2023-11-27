@@ -1,8 +1,7 @@
-import type {N} from 'ts-toolbelt';
 
-import type {GenericItemController, ItemController} from './controller';
+import type {GenericItemController} from './controller';
 import type {KelvinKeyValueStore, KelvinKeyValueWriter} from './store';
-import type {SerVaultHub, SerVaultBase, SerVaultHashParams, BucketKey, SerBucket, DomainLabel, SerSchema} from './types';
+import type {SerVaultHub, SerVaultBase, SerVaultHashParams, BucketKey, SerBucket, DomainLabel} from './types';
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import type {AesGcmDecryptionError, SensitiveBytes} from '@solar-republic/crypto';
@@ -14,8 +13,8 @@ import {sha256_sync} from '@solar-republic/crypto/sha256';
 
 
 import {derive_cipher_key, derive_tandem_root_keys, generate_root_signature, import_key, verify_root_key, type RootKeyStruct, derive_cipher_nonce, test_encryption_integrity} from './auth';
-import {ATU8_DUMMY_PHRASE, G_DEFAULT_HASHING_PARAMS, NB_HUB_GROWTH, NB_HUB_MINIMUM, NB_RECRYPTION_THRESHOLD, NB_SHA256_SALT, N_SYSTEM_VERSION, XB_CHAR_PAD, XB_NONCE_PREFIX_VERSION} from './constants';
-import {Bug, InvalidPassphraseError, InvalidSessionError, RecoverableVaultError, RefuseDestructiveActionError, VaultClosedError, VaultCorruptedError} from './errors';
+import {ATU8_DUMMY_PHRASE, B_VERBOSE, G_DEFAULT_HASHING_PARAMS, NB_CACHE_LIMIT_DEFAULT, NB_HUB_GROWTH, NB_HUB_MINIMUM, NB_RECRYPTION_THRESHOLD, NB_SHA256_SALT, N_SYSTEM_VERSION, XB_CHAR_PAD, XB_NONCE_PREFIX_VERSION, XT_CONFIRMATION_TIMEOUT} from './constants';
+import {Bug, InvalidPassphraseError, InvalidSessionError, RecoverableVaultError, RefuseDestructiveActionError, StorageError, VaultClosedError, VaultCorruptedError} from './errors';
 import {VaultHub} from './hub';
 import {SI_KEY_STORAGE_BASE, SI_KEY_STORAGE_HUB, SI_KEY_SESSION_ROOT, SI_KEY_SESSION_VECTOR, SI_KEY_SESSION_AUTH} from './ids';
 
@@ -236,6 +235,20 @@ async function _write_nonce_for_entry(
 export type VaultConfig = {
 	content: KelvinKeyValueStore;
 	session: KelvinKeyValueStore;
+
+	/**
+	 * Limit how much memory is consumed by the bucket cache by specifying the maximum size in bytes
+	 * which is calculated using the plaintext serialized JSON in UTF-8. Actual memory footprint
+	 * is the deserialized data structs in memory, which will be different than this value, so it's
+	 * important to understand this is only a proxy. Defaults to {@link NB_CACHE_LIMIT_DEFAULT}
+	 */
+	cacheLimit?: number;
+
+	/**
+	 * Specify the maximum amount of time to wait for a confirmation of a write/delete operation
+	 * from the storage backend. Defaults to {@link XT_CONFIRMATION_TIMEOUT}.
+	 */
+	confirmationTimeout?: number;
 };
 
 export type ConnectConfig<n_db_version extends number> = {
@@ -297,6 +310,10 @@ export class Vault {
 	// for removing change event listeners
 	protected _fk_unlisten_base: () => void = F_NOOP;
 	protected _fk_unlisten_hub: () => void = F_NOOP;
+	protected _fk_unlisten_buckets: () => void = F_NOOP;
+
+	// confirmation timeout
+	protected _xt_confirmation_timeout: number;
 
 	// dirty indicator
 	protected _b_dirty = false;
@@ -304,12 +321,19 @@ export class Vault {
 	// controllers
 	protected _h_controllers: Record<DomainLabel, GenericItemController> = {};
 
+	// cache
+	protected _h_bucket_cache: Dict<[SerBucket, number]> = {};
+	protected _nb_cache = 0;
+	protected _nb_cache_limit: number;
+
 
 	constructor(
 		gc_vault: VaultConfig
 	) {
 		this._k_content = gc_vault.content as StoreContent;
 		this._k_session = gc_vault.session as StoreSession;
+		this._nb_cache_limit = gc_vault.cacheLimit ?? NB_CACHE_LIMIT_DEFAULT;
+		this._xt_confirmation_timeout = gc_vault.confirmationTimeout ?? XT_CONFIRMATION_TIMEOUT;
 	}
 
 	get dbVersion(): number {
@@ -942,7 +966,7 @@ export class Vault {
 	 */
 	async open(): Promise<VaultHub> {
 		// destructure field(s)
-		const {_k_content, _k_hub} = this;
+		const {_k_content, _k_hub, _h_bucket_cache} = this;
 
 		// vault is already open
 		if(_k_hub) return _k_hub;
@@ -975,6 +999,36 @@ export class Vault {
 
 			// callback awaiters
 			callback_awaiters(this._a_awaiting_hub_change, void 0);
+		});
+
+		// listen for bucket changes
+		this._fk_unlisten_buckets = _k_content.onChanged((h_changes) => {
+			// each change
+			for(const si_key_changed in h_changes) {
+				// entry is a local bucket and bucket is cached
+				if(si_key_changed in _h_bucket_cache) {
+					// get new value as bytes
+					const atu8_new = h_changes[si_key_changed].newValue.asBytes();
+
+					// bucket was removed
+					if(!atu8_new) {
+						// destructure cache entry to get its size
+						const [, nb_entry] = _h_bucket_cache[si_key_changed];
+
+						// delete from cache
+						delete _h_bucket_cache[si_key_changed];
+
+						// update cache size
+						this._nb_cache -= nb_entry;
+					}
+					// bucket changed?!
+					else {
+						debugger;
+
+						throw new Bug(`Buckets should be immutable, but a cached entry seems to have changed`);
+					}
+				}
+			}
 		});
 
 		// TODO: obtain a read lock?
@@ -1039,6 +1093,11 @@ export class Vault {
 	}
 
 	async writeHub(g_hub: SerVaultHub, kw_content: KelvinKeyValueWriter): Promise<void> {
+		// verbose
+		if(B_VERBOSE) {
+			console.info(`✏️  Writing to hub: ${JSON.stringify(g_hub)}`);
+		}
+
 		// attempt to encode
 		let atu8_hub_plain: Uint8Array;
 		try {
@@ -1062,6 +1121,8 @@ export class Vault {
 		// encrypt entry
 		const atu8_hub_value = await this._encrypt_entry(si_key_hub, atu8_hub_padded);
 
+		// TODO: add confirmation timeout
+
 		// prep awaiter
 		const dp_written = awaiter_from(this._a_awaiting_hub_change);
 
@@ -1074,16 +1135,32 @@ export class Vault {
 
 
 	async readBucket(si_key: BucketKey): Promise<SerBucket> {
+		// destructure field(s)
+		const {_h_bucket_cache, _nb_cache_limit} = this;
+
 		// no cipher key
 		const dk_cipher = hm_privates.get(this)?.dk_cipher;
 		if(!dk_cipher) {
 			throw new VaultClosedError('unable to read bucket');
 		}
 
+		// entry is cached
+		if(si_key in _h_bucket_cache) {
+			console.info(`🎯 Cache hit reading bucket key: ${si_key}`);
+
+			return _h_bucket_cache[si_key][0];
+		}
+
+		if(B_VERBOSE) {
+			console.info(`🟢 Reading bucket contents: ${si_key}`);
+		}
+
 		// attempt to read bucket contents from storage
 		let atu8_value: Uint8Array;
 		try {
-			atu8_value = await this._k_content.getBytes(si_key);
+			if(!(atu8_value = await this._k_content.getBytes(si_key))) {
+				throw new Error('bucket having target key does not exist');
+			}
 		}
 		// corrupted hub
 		catch(e_decode) {
@@ -1092,6 +1169,9 @@ export class Vault {
 
 		// decrypt
 		const atu8_bucket_plain = await this._decrypt_entry(si_key, atu8_value);
+
+		// record its size
+		const nb_bucket_plain = atu8_bucket_plain.length;
 
 		// attempt to decode
 		let w_contents: SerBucket;
@@ -1103,6 +1183,21 @@ export class Vault {
 			throw new VaultCorruptedError('unable to decode hub json', e_decode);
 		}
 
+		// reached cache limit
+		if((this._nb_cache += nb_bucket_plain) >= _nb_cache_limit) {
+			// drop oldest entries from cache
+			for(const [si_entry, [, nb_plain]] of ode(_h_bucket_cache)) {
+				// drop entry
+				delete _h_bucket_cache[si_entry];
+
+				// updated size is now below threshold; break cache clearing loop
+				if((this._nb_cache -= nb_plain) < _nb_cache_limit) break;
+			}
+		}
+
+		// save to cache
+		_h_bucket_cache[si_key] = [w_contents, nb_bucket_plain];
+
 		// return decrypted value
 		return w_contents;
 	}
@@ -1112,6 +1207,11 @@ export class Vault {
 		const dk_cipher = hm_privates.get(this)?.dk_cipher;
 		if(!dk_cipher) {
 			throw new VaultClosedError('unable to write bucket');
+		}
+
+		// verbose
+		if(B_VERBOSE) {
+			console.info(`📘 Encrypting bucket contents: ${JSON.stringify(w_contents)}`);
 		}
 
 		// attempt to encode bucket contents
@@ -1133,16 +1233,29 @@ export class Vault {
 		const atu8_value = await this._encrypt_entry(si_key, atu8_bucket_padded);
 
 		// prep awaiter
-		const [dp_bucket_change, fk_bucket_change] = defer();
+		const [dp_bucket_change, fke_bucket_change] = defer();
+
+		// create confirmation timeout
+		const i_confirmation = setTimeout(() => {
+			fke_bucket_change(null, new StorageError('timed out while waiting for confirmation of bucket write'));
+		}, this._xt_confirmation_timeout);
 
 		// listen for bucket changes
 		const fk_unlisten_bucket = this._k_content.onEntryChanged(si_key, () => {
+			// cancel confirmation timeout
+			clearTimeout(i_confirmation);
+
 			// remove listener
 			fk_unlisten_bucket();
 
 			// resolve
-			fk_bucket_change(void 0);
+			fke_bucket_change(void 0);
 		});
+
+		// verbose
+		if(B_VERBOSE) {
+			console.info(`✏️  Writing encrypted bucket contents to: ${si_key}, ${atu8_value.length} bytes`);
+		}
 
 		// attempt to encode bucket contents & write to storage
 		try {
@@ -1157,6 +1270,56 @@ export class Vault {
 
 		// return the plaintext length of the bucket's contents before padding
 		return atu8_bucket_plain.length;
+	}
+
+	/**
+	 * Delete a set of buckets by their keys, ensuring any cached entries are deleted.
+	 * @param as_keys - the set of bucket keys to delete
+	 * @param kw_content 
+	 */
+	async deleteBuckets(as_keys: Set<BucketKey>, kw_content: KelvinKeyValueWriter) {
+		// copy set
+		const as_remaining = new Set(as_keys);
+
+		// defer async
+		const [dp_stasis, fke_buckets_removed] = defer();
+
+		// create confirmation timeout
+		const i_confirmation = setTimeout(() => {
+			fke_buckets_removed(null, new StorageError('timed out while waiting for confirmation of deleted bucket(s)'));
+		}, this._xt_confirmation_timeout);
+
+		// listen for bucket changes
+		const fk_unlisten_bucket = this._k_content.onChanged((h_changes) => {
+			// each change
+			for(const si_key_changed in h_changes) {
+				// remove from set of remaining if its there
+				as_remaining.delete(si_key_changed as BucketKey);
+			}
+
+			// all expected buckets have been deleted
+			if(!as_remaining.size) {
+				// clear confirmation timeout
+				clearTimeout(i_confirmation);
+
+				// remove listener
+				fk_unlisten_bucket();
+
+				// resolve
+				fke_buckets_removed(void 0);
+			}
+		});
+
+		// verbose
+		if(B_VERBOSE) {
+			console.info(`⛔️ Deleting buckets: ${[...as_keys].map(s => `"${s}"`).join(', ')}`);
+		}
+
+		// remove bucket entries
+		await kw_content.removeMany([...as_keys]);
+
+		// await for stasis to be reached
+		await dp_stasis;
 	}
 
 	/**

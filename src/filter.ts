@@ -1,7 +1,7 @@
 import type {GenericItemController} from './controller';
 
 import type {FieldTuple, KnownEsPrimitiveDatatypes, PrimitiveDatatypeToEsType, FieldStruct, KnownEsDatatypes} from './schema-types';
-import type {FieldLabel, SerField, SerFieldStruct, SerTaggedDatatype} from './types';
+import type {FieldLabel, SerField, SerFieldStruct, SerKeyStruct, SerTaggedDatatype} from './types';
 
 import type {Dict, Arrayable, JsonObject} from '@blake.regalia/belt';
 
@@ -14,7 +14,7 @@ import {ItemRef} from './item-ref';
 import {TaggedDatatype, PrimitiveDatatype} from './schema-types';
 
 export type MatchCriteria<g_item extends object> = {
-	[si_key in keyof g_item]: g_item[si_key] | (g_item[si_key] extends PrimitiveDatatypeToEsType<PrimitiveDatatype>
+	[si_key in keyof g_item]?: g_item[si_key] | (g_item[si_key] extends PrimitiveDatatypeToEsType<PrimitiveDatatype>
 		? RegExp | Set<g_item[si_key]>
 		: g_item[si_key] extends GenericItemController
 			? Set<g_item[si_key]>
@@ -144,20 +144,26 @@ const apply_set_filter = <
 	return f_filter(z_value, z_match, si_field, ...a_rest);
 };
 
-export function apply_filter_struct(g_item: FieldStruct, h_fields: GenericStructMatchCriteria, s_path: string, _h_schema_fields: SerFieldStruct): boolean {
+export function apply_filter_struct(
+	g_item: FieldStruct,
+	h_fields: GenericStructMatchCriteria,
+	s_path: string,
+	_h_schema_fields: SerFieldStruct,
+	_h_schema_parts: SerKeyStruct={}
+): boolean {
 	// check ách specified field
 	for(const [si_field, z_match] of ode(h_fields)) {
 		// build local path
 		const sr_path = s_path+'.'+si_field;
 
-		// key not in fields; ignore
-		if(!(si_field in _h_schema_fields)) continue;
+		// key not in parts nor fields; ignore
+		if(!(si_field in _h_schema_fields) && !(si_field in _h_schema_parts)) continue;
 
 		// ref actual value
 		const z_value = g_item[si_field];
 
 		// ref datatype
-		const z_datatype = _h_schema_fields[si_field as FieldLabel];
+		const z_datatype = _h_schema_fields[si_field as FieldLabel] || _h_schema_parts[si_field as FieldLabel];
 
 		// filter doesn't match; next candidate
 		if(!apply_filter_any(z_value, z_datatype, z_match, sr_path)) return false;

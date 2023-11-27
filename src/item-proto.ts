@@ -323,6 +323,7 @@ const H_DESCRIPTORS_PARTS: {
 
 	[PrimitiveDatatype.INT]: b_writable => (i_field, a_path) => ({
 		get() {
+			if(!this[$_TUPLE]) console.warn(`Not defined: ${this as unknown as string}`, this);
 			return +this[$_TUPLE][i_field]!;
 		},
 
