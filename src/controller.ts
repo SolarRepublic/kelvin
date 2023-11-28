@@ -12,22 +12,109 @@ import type {Dict, JsonArray, JsonObject} from '@blake.regalia/belt';
 import {F_IDENTITY, __UNDEFINED, escape_regex} from '@blake.regalia/belt';
 
 import {apply_filter_struct, type GenericStructMatchCriteria, type MatchCriteria} from './filter';
-import {$_CODE, $_CONTROLLER, $_TUPLE, is_runtime_item, item_prototype} from './item-proto';
+import {$_CODE, $_CONTROLLER, $_LINKS, $_TUPLE, is_runtime_item, item_prototype} from './item-proto';
 import {interpret_schema} from './schema-impl';
 import {DomainStorageStrategy} from './types';
 
+// export interface GenericItemController1<
+// 	g_schema extends StructuredSchema=StructuredSchema,
+// 	a_parts extends AcceptablePartTuples=AcceptablePartTuples,
+// 	g_item extends ItemShapesFromSchema<g_schema>=ItemShapesFromSchema<g_schema>,
+// 	g_runtime extends RuntimeItem<g_item>=RuntimeItem<g_item>,
+// 	g_parts extends PartFields<g_schema>=PartFields<g_schema>,
+// > {
+// 	strategy: DomainStorageStrategy;
+// 	schema: Readonly<SerSchema>;
+// 	partLength: number;
+// 	domain: DomainLabel;
+// 	hub: VaultHub;
+
+// 	getItemCode(g_parts: g_parts): ItemCode | undefined;
+
+// 	has(a_parts: Readonly<AcceptablePartTuples>): boolean;
+
+// 	get(g_parts: g_parts): Promise<g_runtime | undefined>;
+
+// 	getByCode(i_code: ItemCode | undefined, a_parts?: a_parts): Promise<g_runtime | undefined>;
+
+// 	getAt(a_parts: Readonly<AcceptablePartTuples>): Promise<g_runtime | undefined>;
+
+// 	put(g_item: g_item): Promise<[ItemPath, SerItem]>;
+
+// 	entries(): AsyncIterableIterator<[ItemIdent, g_item]>;
+
+// 	filter(h_criteria: MatchCriteria<g_item>, n_limit?: number): AsyncIterableIterator<g_item>;
+// }
+
+// export interface GenericItemControllerPlain {
+// 	strategy: DomainStorageStrategy;
+// 	schema: Readonly<SerSchema>;
+// 	partLength: number;
+// 	domain: DomainLabel;
+// 	hub: VaultHub;
+
+// 	getItemCode(g_parts: object): ItemCode | undefined;
+
+// 	has(a_parts: Readonly<AcceptablePartTuples>): boolean;
+
+// 	get(g_parts: object): Promise<RuntimeItem | undefined>;
+
+// 	getByCode(i_code: ItemCode | undefined, a_parts?: PartableEsType): Promise<RuntimeItem | undefined>;
+
+// 	getAt(a_parts: Readonly<AcceptablePartTuples>): Promise<RuntimeItem | undefined>;
+
+// 	put(g_item: object): Promise<[ItemPath, SerItem]>;
+
+// 	entries(): AsyncIterableIterator<[ItemIdent, RuntimeItem]>;
+
+// 	filter(h_criteria: MatchCriteria<object>, n_limit?: number): AsyncIterableIterator<RuntimeItem>;
+// }
+
+export interface GenericItemController<
+	g_item extends Dict<any>=Dict<any>,
+	g_runtime extends RuntimeItem<g_item>=RuntimeItem<g_item>,
+	g_schema extends StructuredSchema=StructuredSchema,
+	a_parts extends AcceptablePartTuples=AcceptablePartTuples,
+	g_parts extends PartFields<g_schema>=PartFields<g_schema>,
+> {
+	strategy: DomainStorageStrategy;
+	schema: Readonly<SerSchema>;
+	partLength: number;
+	domain: DomainLabel;
+	hub: VaultHub;
+
+	getItemCode(g_parts: g_parts): ItemCode | undefined;
+
+	has(a_parts: Readonly<AcceptablePartTuples>): boolean;
+
+	get(g_parts: g_parts): Promise<g_runtime | undefined>;
+
+	getByCode(i_code: ItemCode | undefined, a_parts?: a_parts): Promise<g_runtime | undefined>;
+
+	getAt(a_parts: Readonly<AcceptablePartTuples>): Promise<g_runtime | undefined>;
+
+	put(g_item: g_item): Promise<[ItemPath, SerItem]>;
+
+	entries(): AsyncIterableIterator<[ItemIdent, g_item]>;
+
+	filter(h_criteria: MatchCriteria<g_item>, n_limit?: number): AsyncIterableIterator<g_item>;
+}
+
+
 
 export class ItemController<
-	s_domain extends string,
-	si_domain extends s_domain & DomainLabel,
-	a_parts extends AcceptablePartTuples,
 	g_schema extends StructuredSchema,
-	f_schema extends SchemaBuilder<PartableSchemaSpecifier, a_parts, g_schema>,
 	g_item extends ItemShapesFromSchema<g_schema>,
 	g_proto,
 	g_runtime extends RuntimeItem<g_item & g_proto>,
+	s_domain extends string,
+	si_domain extends s_domain & DomainLabel,
+	a_parts extends AcceptablePartTuples,
+	f_schema extends SchemaBuilder<PartableSchemaSpecifier, a_parts, g_schema>,
 	g_parts extends PartFields<g_schema>,
-> {
+> implements
+	GenericItemController<g_item, g_runtime, g_schema, a_parts, g_parts>,
+	GenericItemController {
 	protected _k_vault: Vault;
 	protected _si_domain!: si_domain;
 	protected _xc_strategy: DomainStorageStrategy;
@@ -76,7 +163,7 @@ export class ItemController<
 		const a_schema = this._a_schema = interpret_schema(si_domain, f_builder);
 
 		// build schema descriptor
-		const g_descriptor_schema = this._g_descriptor_schema = item_prototype(a_schema, this as GenericItemController, false);
+		const g_descriptor_schema = this._g_descriptor_schema = item_prototype(a_schema, this, false);
 
 		// get descriptor from proto
 		const g_descriptor_proto = this._g_descriptor_proto = f_proto? Object.getOwnPropertyDescriptors(f_proto(F_IDENTITY)): {};
@@ -85,7 +172,7 @@ export class ItemController<
 		this._g_prototype = Object.create({}, Object.assign({}, g_descriptor_proto, g_descriptor_schema));
 
 		// create loader prototype
-		this._g_loader = Object.create({}, item_prototype(a_schema, this as GenericItemController, true));
+		this._g_loader = Object.create({}, item_prototype(a_schema, this, true));
 
 		// register controller with client
 		this._k_vault.registerController(this._si_domain, this);
@@ -169,6 +256,12 @@ export class ItemController<
 			[$_TUPLE]: {
 				value: a_tuple,
 			},
+			[$_LINKS]: {
+				value: {
+					remove: [],
+					insert: [],
+				},
+			},
 		};
 	}
 
@@ -185,10 +278,6 @@ export class ItemController<
 
 	get domain(): si_domain {
 		return this._si_domain;
-	}
-
-	get shape(): Readonly<SerSchema> {
-		return this._a_schema;
 	}
 
 	get hub(): VaultHub {
@@ -208,9 +297,13 @@ export class ItemController<
 		return this._encode_item(a_parts);
 	}
 
-	has<a_local extends Readonly<a_parts>>(
+	has1<a_local extends Readonly<a_parts>>(
 		a_parts: a_local
 	): boolean {
+		return !!this._encode_item(a_parts);
+	}
+
+	has(a_parts: Readonly<a_parts>): boolean {
 		return !!this._encode_item(a_parts);
 	}
 
@@ -393,15 +486,25 @@ export class ItemController<
 	}
 }
 
-export type GenericItemController = ItemController<
-	string,
-	DomainLabel,
-	AcceptablePartTuples,
-	StructuredSchema,
-	any,
-	ItemShapesFromSchema<StructuredSchema>,
-	any,
-	any,
-	any
->;
+// export type GenericItemController = ItemController<
+// 	string,
+// 	DomainLabel,
+// 	AcceptablePartTuples,
+// 	StructuredSchema,
+// 	any,
+// 	ItemShapesFromSchema<StructuredSchema>,
+// 	any,
+// 	RuntimeItem<object>,
+// 	PartFields<StructuredSchema>
+// >;
 
+
+// s_domain extends string,
+// si_domain extends s_domain & DomainLabel,
+// a_parts extends AcceptablePartTuples,
+// g_schema extends StructuredSchema,
+// f_schema extends SchemaBuilder<PartableSchemaSpecifier, a_parts, g_schema>,
+// g_item extends ItemShapesFromSchema<g_schema>,
+// g_proto,
+// g_runtime extends RuntimeItem<g_item & g_proto>,
+// g_parts extends PartFields<g_schema>,

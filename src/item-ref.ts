@@ -1,13 +1,16 @@
 import type {GenericItemController, ItemController} from './controller';
+import type {RuntimeItem} from './item-proto';
 
 import type {DomainLabel, ItemCode, ItemIdent} from './types';
+import type {Dict} from '@blake.regalia/belt';
 
 
 export class ItemRef<
-	g_dst=any,
-> implements PromiseLike<g_dst> {
+	g_dst extends Dict<any>=Dict<any>,
+	g_runtime extends RuntimeItem<g_dst>=RuntimeItem<g_dst>,
+> implements PromiseLike<g_runtime> {
 	constructor(
-		protected _k_src: GenericItemController,
+		protected _k_src: GenericItemController<g_dst, g_runtime>,
 		protected _i_item: ItemCode,
 		protected _si_domain: DomainLabel
 	) {}
@@ -29,19 +32,21 @@ export class ItemRef<
 	}
 
 	then<
-		w_value=g_dst,
+		w_value=g_runtime,
 		e_reason=never,
 	>(
-		fk_resolve?: ((w_value: g_dst) => w_value | PromiseLike<w_value>) | null | undefined,
+		fk_resolve?: ((w_value: g_runtime) => w_value | PromiseLike<w_value>) | null | undefined,
 		fe_reject?: ((e_reason: any) => e_reason | PromiseLike<e_reason>) | null | undefined
 	): PromiseLike<w_value | e_reason> {
-		const k_dst = this._k_src.hub.vault.controllerFor(this._si_domain);
+		const k_dst = this._k_src.hub.vault.controllerFor<g_dst, g_runtime>(this._si_domain);
 
 		if(!k_dst) {
 			throw new Error(`No item controller was registered for "${this._si_domain}" domain while trying to dereference item ${this.ident}`);
 		}
 
 		// load the item
-		return k_dst.getByCode(this._i_item).then(fk_resolve, fe_reject);
+		return k_dst.getByCode(this._i_item).then(
+			fk_resolve as ((value: g_runtime | undefined) => w_value | PromiseLike<w_value>) | null | undefined,
+			fe_reject);
 	}
 }

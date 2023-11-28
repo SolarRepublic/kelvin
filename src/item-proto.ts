@@ -1,7 +1,7 @@
 
 import type {GenericItemController, ItemController} from './controller';
 import type {KnownEsDatatypes, PartableDatatype, PrimitiveDatatypeToEsType, TaggedDatatypeToEsTypeGetter, TaggedDatatypeToEsTypeSetter} from './schema-types';
-import type {ItemCode, SerField, SerSchema, SerTaggedDatatype, SerTaggedDatatypeMap} from './types';
+import type {DomainCode, ItemCode, SerField, SerSchema, SerTaggedDatatype, SerTaggedDatatypeMap} from './types';
 
 import type {JsonValue, JsonObject, JsonArray, Dict} from '@blake.regalia/belt';
 
@@ -15,15 +15,25 @@ import {PrimitiveDatatype, TaggedDatatype} from './schema-types';
 export const $_CONTROLLER = Symbol('item-controller');
 export const $_CODE = Symbol('item-code');
 export const $_TUPLE = Symbol('item-tuple');
+export const $_LINKS = Symbol('item-links');
 
 type FieldPath = (string | number)[];
 
 export type GenericItem = Record<string, KnownEsDatatypes>;
 
+export type RefDelta = [
+	i_item: ItemCode,
+	a_path: FieldPath,
+];
+
 export type RuntimeItem<g_item extends object=GenericItem> = {
 	[$_CODE]: ItemCode;
 	[$_CONTROLLER]: GenericItemController;
 	[$_TUPLE]: JsonValue[];
+	[$_LINKS]: Record<DomainCode, {
+		remove: RefDelta[];
+		insert: RefDelta[];
+	}>;
 } & g_item;
 
 export type ItemStruct<g_controller=GenericItemController> = g_controller extends ItemController<infer s_domain, infer si_domain, infer a_parts, infer g_schema, infer f_schema, infer g_item, infer g_proto, infer g_runtime, infer g_parts>
@@ -99,7 +109,7 @@ const H_DEFAULTS_PRIMITIVE: {
 	[PrimitiveDatatype.OBJECT]: () => ({}),
 };
 
-type TaggedSerializer<xc_type extends TaggedDatatype> = (w_value: TaggedDatatypeToEsTypeSetter<xc_type>, a_path: FieldPath) => JsonValue;
+type TaggedSerializer<xc_type extends TaggedDatatype> = (w_value: TaggedDatatypeToEsTypeSetter<xc_type>, a_path: FieldPath, k_this: RuntimeItem) => JsonValue;
 type TaggedDeserializer<xc_type extends TaggedDatatype> = (w_value: JsonValue, a_path: FieldPath) => TaggedDatatypeToEsTypeSetter<xc_type>;
 type TaggedDefaulter<xc_type extends TaggedDatatype> = () => TaggedDatatypeToEsTypeSetter<xc_type>;
 
@@ -109,6 +119,17 @@ type SerdefaultsTuple<xc_tag extends TaggedDatatype=TaggedDatatype> = [
 	TaggedDeserializer<xc_tag>,
 	TaggedDefaulter<xc_tag>,
 ];
+
+type SubjectTree<w_leaf> = {
+	[z_key: string | number]: SubjectTree<w_leaf> | w_leaf;
+};
+
+const access_path = <w_leaf>(
+	w_subject: SubjectTree<w_leaf>,
+	a_path: (string | number)[]
+): w_leaf => a_path.length
+	? access_path(w_subject[a_path[0]] as SubjectTree<w_leaf>, a_path.slice(1))
+	: w_subject as w_leaf;
 
 const tagged_serdefaults = <
 	xc_tag extends TaggedDatatype,
@@ -124,7 +145,7 @@ const tagged_serdefaults = <
 		// ref
 		case TaggedDatatype.REF: return [
 			// ref serializer
-			(k_ref, a_path) => {
+			(k_ref, a_path, g_runtime) => {
 				// resolve item code
 				const i_code = (k_ref as RuntimeItem)[$_CODE] || (k_ref as ItemRef).code;
 
@@ -133,13 +154,40 @@ const tagged_serdefaults = <
 					throw Error(`Cannot assign to ${a_path.join('.')} property a reference item that has not yet been saved to vault`);
 				}
 
+				// normalize to controller
+				const k_controller = (k_ref as RuntimeItem)[$_CONTROLLER] || (k_ref as ItemRef).controller;
+
 				// resolve domain
-				const si_domain_ref = (k_ref as RuntimeItem)[$_CONTROLLER].domain || (k_ref as ItemRef).domain;
+				const si_domain_ref = k_controller.domain;
 
 				// wrong domain
 				if(w_info !== si_domain_ref) {
 					throw Error(`Cannot assign to ${a_path.join('.')} property a reference item in the "${si_domain_ref}" domain; must be in the "${w_info}" domain`);
 				}
+
+				// lookup code
+				const sb92_domain = k_controller.hub.encodeDomain(si_domain_ref);
+
+				// could not encode domain
+				if(!sb92_domain) {
+					throw Error(`Failed to encode domain "${si_domain_ref}" while attempting to assign item reference to ${a_path.join('.')}`);
+				}
+
+				// lookup/create links staging struct
+				const g_links = g_runtime[$_LINKS][sb92_domain] ??= {
+					remove: [],
+					insert: [],
+				};
+
+				// removing/replacing previous
+				const g_prev = access_path<KnownEsDatatypes>(g_runtime, a_path);
+				if(g_prev instanceof ItemRef) {
+					// add instruction to remove previous item reference from links
+					g_links.remove.push([g_prev.code, a_path]);
+				}
+
+				// insert new item reference into links
+				g_links.insert.push([i_code, a_path]);
 
 				return i_code;
 			},
@@ -179,7 +227,7 @@ const tagged_serdefaults = <
 					// structure
 					return [
 						// serializer
-						(a_items, a_path) => (a_items as any[]).map((w_item, i_item) => f_serializer(w_item, [...a_path, i_item])),
+						(a_items, a_path, g_runtime) => (a_items as any[]).map((w_item, i_item) => f_serializer(w_item, [...a_path, i_item], g_runtime)),
 
 						// deserializer
 						(a_items, a_path) => (a_items as JsonArray).map((w_item, i_item) => f_deserializer(w_item, [...a_path, i_item])),
@@ -213,10 +261,12 @@ const tagged_serdefaults = <
 			// return joint serdef
 			return [
 				// serializer
-				(a_items, a_path) => a_serdefaults.map((a_serdef, i_field) => a_serdef[0](a_items[i_field] as TaggedDatatypeToEsTypeSetter<xc_tag>, a_path)),
+				(a_items, a_path, g_runtime) => a_serdefaults.map((a_serdef, i_field) => a_serdef[0](
+					a_items[i_field] as TaggedDatatypeToEsTypeSetter<xc_tag>, [...a_path, i_field], g_runtime)),
 
 				// deserializer
-				(a_items, a_path) => a_serdefaults.map((a_serdef, i_field) => a_serdef[1]((a_items as JsonArray)[i_field], a_path)),
+				(a_items, a_path) => a_serdefaults.map((a_serdef, i_field) => a_serdef[1](
+					(a_items as JsonArray)[i_field], [...a_path, i_field])),
 
 				// defaults
 				() => a_serdefaults.map(a_serdef => a_serdef[2]()),
@@ -267,12 +317,12 @@ const tagged_serdefaults = <
 			// return joint serdef
 			return [
 				// serializer
-				(h_items, a_path) => fodemtv(h_serdefs, ([f_ser,, f_def], si_field) => si_field in h_items
-					? f_ser(h_items[si_field], a_path): f_def()),
+				(h_items, a_path, g_runtime) => fodemtv(h_serdefs, ([f_ser,, f_def], si_field) => si_field in h_items
+					? f_ser(h_items[si_field], [...a_path, si_field], g_runtime): f_def()),
 
 				// deserializer
 				(h_items, a_path) => fodemtv(h_serdefs, ([, f_deser, f_def], si_field) => si_field in (h_items as JsonObject)
-					? f_deser((h_items as JsonObject)[si_field], a_path): f_def()),
+					? f_deser((h_items as JsonObject)[si_field], [...a_path, si_field]): f_def()),
 
 				// default
 				() => fodemtv(h_serdefs, ([,, f_def]) => f_def()),
@@ -496,7 +546,7 @@ const tagged_descriptor = <
 		},
 
 		set(w_value) {
-			this[$_TUPLE][i_field] = f_serializer(w_value, a_path);
+			this[$_TUPLE][i_field] = f_serializer(w_value, a_path, this);
 		},
 	};
 };

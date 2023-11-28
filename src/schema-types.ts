@@ -1,4 +1,4 @@
-import type {A, B, F} from 'ts-toolbelt';
+import type {A} from 'ts-toolbelt';
 
 import type {Key} from 'ts-toolbelt/out/Any/Key';
 
@@ -7,8 +7,7 @@ import type {FieldArray} from './field-array';
 import type {RuntimeItem} from './item-proto';
 import type {ItemRef} from './item-ref';
 import type {AllValues, KvTuplesToObject, UnionToTuple, FilterDrop} from './meta';
-import type {Arrayable, Dict, ES_TYPE, JsonArray, JsonObject, JsonPrimitive, NaiveBase64} from '@blake.regalia/belt';
-import type {IncidentType} from 'test/schema';
+import type {Dict, ES_TYPE, JsonObject, JsonPrimitive, NaiveBase64} from '@blake.regalia/belt';
 
 
 /**
@@ -131,6 +130,7 @@ export type CoreDatatype =
 	| DatatypeString
 	| DatatypeBytes
 	| DatatypeObject
+	| DatatypeRef
 	| DatatypeArray<Datatype[]>
 	| DatatypeStruct
 	// | SchemaSwitch<string, Classifier, Datatype, SchemaBuilderSwitchMap<Classifier, Datatype>>;
@@ -148,14 +148,15 @@ export type StructuredSchema = Dict<Datatype>;
  * Reinterprets the given type as being JSON-compatible
  */
 export type ReduceSchema<z_test> =
-	z_test extends SchemaSubtype<infer w_estype, infer s_id>? ReduceSchema<w_estype>
-		: z_test extends {[ES_TYPE]: any}? z_test
-			: z_test extends JsonPrimitive? z_test
-				: z_test extends Array<infer w_type>
-					? ReduceSchema<w_type>[]
-					: {
-						[si_each in keyof z_test]: ReduceSchema<z_test[si_each]>;
-					};
+	z_test extends DatatypeRef<infer g_ref>? g_ref
+		: z_test extends SchemaSubtype<infer w_estype, infer s_id>? ReduceSchema<w_estype>
+			: z_test extends {[ES_TYPE]: any}? z_test
+				: z_test extends JsonPrimitive? z_test
+					: z_test extends Array<infer w_type>
+						? ReduceSchema<w_type>[]
+						: {
+							[si_each in keyof z_test]: ReduceSchema<z_test[si_each]>;
+						};
 
 
 export type DatatypeInt<
@@ -192,7 +193,7 @@ export type DatatypeObject<
 > = SchemaSubtype<w_subtype, 'obj'>;
 
 export type DatatypeRef<
-	g_ref extends GenericItemController,
+	g_ref extends ItemRef=ItemRef,
 > = SchemaSubtype<g_ref, 'ref'>;
 
 export type DatatypeArray<
@@ -377,7 +378,10 @@ export type SchemaSpecifier = ImplementsSchemaTypes<{
 
 	obj<w_subtype extends JsonObject=JsonObject>(): DatatypeObject<w_subtype>;
 
-	ref<g_ref extends GenericItemController>(g_controller: GenericItemController): DatatypeRef<g_ref>;
+	ref<
+		dc_controller extends GenericItemController,
+	>(g_controller: dc_controller): dc_controller extends GenericItemController<infer g_thing>
+		? DatatypeRef<ItemRef<g_thing>>: never;
 
 	arr<
 		w_items extends Datatype,
@@ -469,6 +473,7 @@ export type SubschemaBuilder<
 
 	type Demo = {
 		type: DatatypeInt<ItemType, 1>;
+		// ref: DatatypeRef<GenericItemController<start>>;
 		switch: SchemaSwitch<'type', ItemType, {
 			[ItemType.UNKNOWN]: (k1: SchemaSpecifier) => DatatypeInt<number, 0>;
 			[ItemType.THING]: (k1: SchemaSpecifier) => DatatypeString<'thing', 0>;

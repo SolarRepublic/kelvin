@@ -1,13 +1,16 @@
 import type {ItemStruct} from '../src/item-proto';
 import type {Vault} from '../src/vault';
 
-import {DatatypeString} from 'src/schema-types';
-
 import {ItemController} from '../src/controller';
 
 export enum Toggle {
 	OFF=0,
 	ON=1,
+}
+
+export enum PfpType {
+	UNKNOWN=0,
+	IMG=1,
 }
 
 export enum ChainNamespace {
@@ -32,6 +35,17 @@ const G_BECH32S_COSMOS = {
 export type ChainStruct = ItemStruct<ReturnType<typeof init_chains>['Chains']>;
 
 export const init_chains = (k_client: Vault) => {
+	const Pfps = new ItemController({
+		client: k_client,
+		domain: 'pfps',
+
+		schema: (k, xc_type: PfpType, s_hash: string) => ({
+			type: k.int(xc_type),
+			hash: k.str(s_hash),
+			data: k.str(),
+		}),
+	});
+
 	const Chains = new ItemController({
 		client: k_client,
 		domain: 'chains',
@@ -45,7 +59,7 @@ export const init_chains = (k_client: Vault) => {
 			bytes: k.bytes(),
 			array: k.arr(k1 => k1.str()),
 			tuple: k.tuple(k1 => [k1.arr(k2 => k2.str()), k1.int()]),
-			// pfp: k.ref<Pfp>(),
+			pfp: k.ref(Pfps),
 			bech32s: k.switch('ns', xc_ns, {
 				[ChainNamespace.UNKNOWN]: k1 => k1.int(),
 				[ChainNamespace.COSMOS]: k1 => ({
@@ -73,6 +87,14 @@ export const init_chains = (k_client: Vault) => {
 			hrp(): string {
 				const k_this = cast(this);
 				return ChainNamespace.COSMOS === k_this.ns? k_this.bech32s.accpub: '';
+			},
+
+			async pfpData(): Promise<string> {
+				return (await cast(this).pfp).data;
+			},
+
+			t1(): string[] {
+				return cast(this).tuple[0];
 			},
 
 			// addressFor(z_context: Chain | string): string {

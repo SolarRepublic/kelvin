@@ -1,5 +1,7 @@
 
 import type {GenericItemController} from './controller';
+import type {RuntimeItem} from './item-proto';
+import type {AcceptablePartTuples, PartFields, StructuredSchema} from './schema-types';
 import type {KelvinKeyValueStore, KelvinKeyValueWriter} from './store';
 import type {SerVaultHub, SerVaultBase, SerVaultHashParams, BucketKey, SerBucket, DomainLabel} from './types';
 
@@ -1353,7 +1355,13 @@ export class Vault {
 	 * @internal
 	 * Retrieves the registered (weakly typed) item controller for a given domain
 	 */
-	controllerFor(si_domain: DomainLabel): GenericItemController | undefined {
-		return this._h_controllers[si_domain];
+	controllerFor<
+		g_item extends Dict<any>=Dict<any>,
+		g_runtime extends RuntimeItem<g_item>=RuntimeItem<g_item>,
+		g_schema extends StructuredSchema=StructuredSchema,
+		a_parts extends AcceptablePartTuples=AcceptablePartTuples,
+		g_parts extends PartFields<g_schema>=PartFields<g_schema>,
+	>(si_domain: DomainLabel): GenericItemController<g_item, g_runtime, g_schema, a_parts, g_parts> | undefined {
+		return this._h_controllers[si_domain] as GenericItemController<g_item, g_runtime, g_schema, a_parts, g_parts>;
 	}
 }
