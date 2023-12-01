@@ -1,6 +1,7 @@
 import type {GenericItemController} from './controller';
+import type {$_LINKS, RuntimeItem} from './item-proto';
 import type {KelvinKeyValueWriter} from './store';
-import type {DomainCode, DomainLabel, ItemIdent, ItemCode, ItemPath, SerVaultHub, IndexLabel, IndexValue, IndexPosition, BucketKey, BucketCode, SchemaCode, SerSchema, SerItem, SerBucketMetadata, SerBucket} from './types';
+import type {DomainCode, DomainLabel, ItemIdent, ItemCode, ItemPath, SerVaultHub, IndexLabel, IndexValue, IndexPosition, BucketKey, BucketCode, SchemaCode, SerSchema, SerItem, SerBucketMetadata, SerBucket, SerDomainLinks, FieldPathCode, FieldPath, SerFieldPath, SerLinksTuple} from './types';
 import type {Migration, Vault} from './vault';
 
 import type {Nilable} from '@blake.regalia/belt';
@@ -13,10 +14,15 @@ import {NB_BUCKET_CONTAINER, NB_BUCKET_CONTENTS, NB_BUCKET_LABEL, XT_ROTATION_DE
 import {index_to_b92} from './data';
 import {Bug, ClientBehindError, MigrationError, MissingMigrationError, MissingMigrationRouterError, SchemaError, SchemaWarning} from './errors';
 import {DomainStorageStrategy} from './types';
+import {WorkingSequence} from './working-sequence';
 
 
 
 export type ItemIdentPattern = ItemIdent | RegExp;
+
+export type HubEffects = {
+	links: RuntimeItem[typeof $_LINKS];
+};
 
 // creates a new random bucket key
 const new_bucket_key = () => '_'+buffer_to_base93(random_bytes(NB_BUCKET_LABEL)) as BucketKey;
@@ -32,6 +38,7 @@ export class VaultHub {
 	protected _a_buckets_to_schemas = [] as unknown as SerVaultHub['buckets_to_schemas'];
 	protected _a_schemas = [] as unknown as SerVaultHub['schemas'];
 	protected _nb_bucket: SerVaultHub['bucket_length'] = NB_BUCKET_CONTENTS;
+	protected _h_links: SerVaultHub['links'] = {};
 
 	// caches
 	protected _h_domain_codes: Record<DomainLabel, DomainCode> = {};
@@ -87,6 +94,7 @@ export class VaultHub {
 			locations: this._a_locations,
 			buckets_to_schemas: this._a_buckets_to_schemas,
 			schemas: this._a_schemas,
+			links: this._h_links,
 		};
 
 		return g_hub;
@@ -109,7 +117,8 @@ export class VaultHub {
 			_a_buckets: g_hub.buckets,
 			_a_locations: g_hub.locations,
 			_a_buckets_to_schemas: g_hub.buckets_to_schemas,
-			_a_shapes: g_hub.schemas,
+			_a_schemas: g_hub.schemas,
+			_h_links: g_hub.links,
 		});
 
 		// create lookup from domain label to domain code
@@ -342,6 +351,15 @@ export class VaultHub {
 
 		// domain does not exist
 		return null;
+	}
+
+	/**
+	 * Decode the given code to its domain label (inverse of {@link encodeDomain})
+	 * @param sb92_domain - the domain code
+	 * @returns the domain label, or `null` if the domain does not exist
+	 */
+	decodeDomain(sb92_domain: DomainCode): DomainLabel | null {
+		return this._h_domain_labels[sb92_domain] || null;
 	}
 
 	/**
@@ -676,7 +694,7 @@ export class VaultHub {
 		return this._new_bucket(si_domain);
 	}
 
-	async putItem(si_domain: DomainLabel, sr_item: ItemPath, w_item: SerItem): Promise<void> {
+	async putItem(si_domain: DomainLabel, sr_item: ItemPath, w_item: SerItem, g_effects: HubEffects): Promise<void> {
 		// obtain lock
 		await this._k_vault.withExclusive(async(kw_content) => {
 			// add item key
@@ -744,8 +762,16 @@ export class VaultHub {
 			// place item into bucket
 			h_bucket[i_item] = w_item;
 
-			// ref bucket metadagta
-			const a_metadata = this._a_buckets[i_bucket];
+			// first, write the new bucket
+			await this._k_vault.writeBucket(si_bucket, h_bucket, this._nb_bucket, kw_content);
+
+			// create copies of hub entries being modified
+			const a_buckets_mut = this._a_buckets.slice();
+			const a_locations_mut = this._a_locations.slice();
+			const h_links_mut = {...this._h_links};
+
+			// ref-clone bucket metadata
+			const a_metadata = a_buckets_mut[i_bucket] = a_buckets_mut[i_bucket].slice() as SerBucketMetadata;
 
 			// update bucket key
 			a_metadata[0] = si_bucket;
@@ -754,13 +780,122 @@ export class VaultHub {
 			a_metadata[1] += nb_item;
 
 			// save item location
-			this._a_locations[i_item] = i_bucket;
+			a_locations_mut[i_item] = i_bucket;
 
-			// first, write the new bucket
-			await this._k_vault.writeBucket(si_bucket, h_bucket, this._nb_bucket, kw_content);
+			// apply hub effects
+			{
+				// encode source domain
+				const sb92_domain_source = this.encodeDomain(si_domain)!;
+
+				// each affected domain
+				for(const [sb92_domain_target, g_links] of ode(g_effects.links)) {
+					// nothing to do; skip
+					if(!g_links.remove && !g_links.insert) continue;
+
+					debugger;
+
+					// ref-clone-create dict of incoming links for the specified target domain
+					const h_incoming_mut = {...h_links_mut[sb92_domain_target] || {}};
+
+					// ref-clone-create 
+					const [h_paths, h_items] = (h_incoming_mut[sb92_domain_source]?.slice() || [[], {}]) as SerLinksTuple;
+
+					// convert to mutable entries
+					let h_paths_mut = {...h_paths};
+
+					// create pseudo-sequence from keys
+					const a_paths_keys = Object.keys(h_paths_mut);
+
+					// ref-clone-create item
+					const h_refs_mut = {...h_items[i_item]};
+
+					// each removal
+					for(const [sr_path_remove, w_remove] of ode(g_links.remove)) {
+						// path not found
+						if(!h_paths[sr_path_remove]) {
+							throw Error(`Cannot remove old item reference since field path (${sr_path_remove}) could not be encoded in ${this.decodeDomain(sb92_domain_target)}`);
+						}
+
+						// encode field path
+						const i_path = a_paths_keys.indexOf(sr_path_remove) as FieldPathCode;
+
+						// confirm value being removed
+						const z_value = h_refs_mut[i_path];
+						if(Array.isArray(z_value)) {
+							if(JSON.stringify(w_remove) !== JSON.stringify(z_value)) {
+								throw Error(`Mismatch link removal; expected ${JSON.stringify(w_remove)} but found ${JSON.stringify(z_value)}`);
+							}
+						}
+						else if(w_remove !== z_value) {
+							throw Error(`Mismatch link removal; expected ${w_remove} but found ${z_value}`);
+						}
+
+						// delete from refs
+						delete h_refs_mut[i_path];
+
+						// decrement ref counter; no more usages
+						if(0 === (h_paths_mut[sr_path_remove] -= 1)) {
+							// convert object to entries to preserve order
+							const a_entries = ode(h_paths_mut);
+
+							// nullify entry
+							a_entries[i_path] = ['' as SerFieldPath, 0];
+
+							// write serialized entries back to object
+							h_paths_mut = ofe(a_entries);
+						}
+					}
+
+					// each insertion
+					for(const [sr_path_insert, w_insert] of ode(g_links.insert)) {
+						// prep path code
+						let i_path: FieldPathCode;
+
+						// path already defined; deduce its code
+						if(h_paths[sr_path_insert]) {
+							i_path = a_paths_keys.indexOf(sr_path_insert) as FieldPathCode;
+						}
+						// add new path
+						else {
+							// find next free spot
+							i_path = a_paths_keys.indexOf('') as FieldPathCode;
+
+							// need to append
+							if(-1 === i_path) {
+								// append key
+								i_path = a_paths_keys.push(sr_path_insert) - 1 as FieldPathCode;
+
+								// insert new entry, init ref counter to 0
+								h_paths_mut[sr_path_insert] = 0;
+							}
+						}
+
+						// increment ref counter
+						h_paths_mut[sr_path_insert] += 1;
+
+						// insert ref
+						h_refs_mut[i_path] = w_insert;
+					}
+
+					// ref-clone-set items
+					const h_items_mut = {
+						...h_items,
+						[i_item]: h_refs_mut,
+					};
+
+					// set incoming
+					h_incoming_mut[sb92_domain_source] = [h_paths_mut, h_items_mut];
+
+					// set links
+					h_links_mut[sb92_domain_target] = h_incoming_mut;
+				}
+			}
 
 			// next, update the hub
-			await this._write_hub(kw_content);
+			await this._write_hub(kw_content, {
+				buckets: a_buckets_mut,
+				locations: a_locations_mut,
+			});
 
 			// add old bucket to deletion queue
 			if(si_bucket_delete) {

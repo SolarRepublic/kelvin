@@ -7,7 +7,7 @@ import {ode, timeout} from '@blake.regalia/belt';
 import {XT_ROTATION_DEBOUNCE} from 'src/constants';
 import {beforeEach, describe, expect, it, vi} from 'vitest';
 
-import {ChainNamespace} from './chains';
+import {FooBarNamespace} from './foo-bars';
 import {SI_DATABASE, client, Stage, init, phrase, init_destruct, spread_async} from './kit';
 import {VaultHub} from '../src/hub';
 import {Vault} from '../src/vault';
@@ -151,23 +151,23 @@ describe('after open', () => {
 describe('item', () => {
 	tests({
 		async 'get full 0 undefined'() {
-			const {Chains, g_chain_sample_1} = await init_destruct(Stage.DATA);
+			const {FooBars, g_foobar_1} = await init_destruct(Stage.DATA);
 
-			await expect(Chains.get(g_chain_sample_1))
+			await expect(FooBars.get(g_foobar_1))
 				.resolves.toBeUndefined();
 		},
 
 		async 'get at 0 undefined'() {
-			const {Chains, g_chain_sample_1} = await init_destruct(Stage.DATA);
+			const {FooBars, g_foobar_1} = await init_destruct(Stage.DATA);
 
-			await expect(Chains.getAt([g_chain_sample_1.ns, g_chain_sample_1.ref]))
+			await expect(FooBars.getAt([g_foobar_1.ns, g_foobar_1.ref]))
 				.resolves.toBeUndefined();
 		},
 
 		async 'entries 0 empty'() {
-			const {Chains, g_chain_sample_1} = await init_destruct(Stage.DATA);
+			const {FooBars, g_foobar_1} = await init_destruct(Stage.DATA);
 
-			const di_chains = Chains.entries();
+			const di_chains = FooBars.entries();
 
 			let c_values = 0;
 			for await(const w_never of di_chains) {
@@ -178,291 +178,291 @@ describe('item', () => {
 		},
 
 		async 'put 1 resolves'() {
-			const {Chains, g_chain_sample_1} = await init_destruct(Stage.DATA);
+			const {FooBars, g_foobar_1} = await init_destruct(Stage.DATA);
 
-			await expect(Chains.put(g_chain_sample_1))
+			await expect(FooBars.put(g_foobar_1))
 				.resolves.toBeDefined();
 		},
 
 		async 'get full 1 original matches'() {
-			const {Chains, g_chain_sample_1} = await init_destruct(Stage.PUT_1);
+			const {FooBars, g_foobar_1} = await init_destruct(Stage.PUT_1);
 
-			await expect(Chains.get(g_chain_sample_1))
-				.resolves.toMatchObject(g_chain_sample_1);
+			await expect(FooBars.get(g_foobar_1))
+				.resolves.toMatchObject(g_foobar_1);
 		},
 
 		async 'get full 1 copy matches'() {
-			const {Chains, g_chain_sample_1} = await init_destruct(Stage.PUT_1);
+			const {FooBars, g_foobar_1} = await init_destruct(Stage.PUT_1);
 
-			await expect(Chains.get({...g_chain_sample_1}))
-				.resolves.toMatchObject(g_chain_sample_1);
+			await expect(FooBars.get({...g_foobar_1}))
+				.resolves.toMatchObject(g_foobar_1);
 		},
 
 		async 'get partial 1 matches'() {
-			const {Chains, g_chain_sample_1} = await init_destruct(Stage.PUT_1);
+			const {FooBars, g_foobar_1} = await init_destruct(Stage.PUT_1);
 
-			const dp_get_partial = Chains.get({
-				ns: g_chain_sample_1.ns,
-				ref: g_chain_sample_1.ref,
+			const dp_get_partial = FooBars.get({
+				ns: g_foobar_1.ns,
+				ref: g_foobar_1.ref,
 			});
 
-			await expect(dp_get_partial).resolves.toMatchObject(g_chain_sample_1);
+			await expect(dp_get_partial).resolves.toMatchObject(g_foobar_1);
 		},
 
 		async 'get at 1 matches'() {
-			const {Chains, g_chain_sample_1} = await init_destruct(Stage.PUT_1);
+			const {FooBars, g_foobar_1} = await init_destruct(Stage.PUT_1);
 
-			await expect(Chains.getAt([g_chain_sample_1.ns, g_chain_sample_1.ref]))
-				.resolves.toMatchObject(g_chain_sample_1);
+			await expect(FooBars.getAt([g_foobar_1.ns, g_foobar_1.ref]))
+				.resolves.toMatchObject(g_foobar_1);
 		},
 
 		async 'entries 1 matches'() {
-			const {Chains, g_chain_sample_1} = await init_destruct(Stage.PUT_1);
+			const {FooBars, g_foobar_1} = await init_destruct(Stage.PUT_1);
 
-			const di_chains = Chains.entries();
+			const di_chains = FooBars.entries();
 
 			expect(typeof di_chains[Symbol.asyncIterator]).toBe('function');
 
 			const a_values = entries_to_values(await spread_async(di_chains));
 
 			expect(a_values).toMatchObject([
-				g_chain_sample_1,
+				g_foobar_1,
 			]);
 		},
 
 		async 'get full 2 original matches'() {
-			const {Chains, g_chain_sample_1, g_chain_sample_2} = await init_destruct(Stage.PUT_2);
+			const {FooBars, g_foobar_1, g_foobar_2} = await init_destruct(Stage.PUT_2);
 
-			await expect(Chains.get(g_chain_sample_2))
-				.resolves.toMatchObject(g_chain_sample_2);
+			await expect(FooBars.get(g_foobar_2))
+				.resolves.toMatchObject(g_foobar_2);
 
-			await expect(Chains.get(g_chain_sample_1))
-				.resolves.toMatchObject(g_chain_sample_1);
+			await expect(FooBars.get(g_foobar_1))
+				.resolves.toMatchObject(g_foobar_1);
 		},
 
 		async 'get full 2 copy matches'() {
-			const {Chains, g_chain_sample_1, g_chain_sample_2} = await init_destruct(Stage.PUT_2);
+			const {FooBars, g_foobar_1, g_foobar_2} = await init_destruct(Stage.PUT_2);
 
-			await expect(Chains.get({...g_chain_sample_1}))
-				.resolves.toMatchObject(g_chain_sample_1);
+			await expect(FooBars.get({...g_foobar_1}))
+				.resolves.toMatchObject(g_foobar_1);
 
-			await expect(Chains.get({...g_chain_sample_2}))
-				.resolves.toMatchObject(g_chain_sample_2);
+			await expect(FooBars.get({...g_foobar_2}))
+				.resolves.toMatchObject(g_foobar_2);
 		},
 
 		async 'get partial 2 matches'() {
-			const {Chains, g_chain_sample_1, g_chain_sample_2} = await init_destruct(Stage.PUT_2);
+			const {FooBars, g_foobar_1, g_foobar_2} = await init_destruct(Stage.PUT_2);
 
-			const dp_get_partial_2 = Chains.get({
-				ns: g_chain_sample_2.ns,
-				ref: g_chain_sample_2.ref,
+			const dp_get_partial_2 = FooBars.get({
+				ns: g_foobar_2.ns,
+				ref: g_foobar_2.ref,
 			});
 
-			await expect(dp_get_partial_2).resolves.toMatchObject(g_chain_sample_2);
+			await expect(dp_get_partial_2).resolves.toMatchObject(g_foobar_2);
 
-			const dp_get_partial_1 = Chains.get({
-				ns: g_chain_sample_1.ns,
-				ref: g_chain_sample_1.ref,
+			const dp_get_partial_1 = FooBars.get({
+				ns: g_foobar_1.ns,
+				ref: g_foobar_1.ref,
 			});
 
-			await expect(dp_get_partial_1).resolves.toMatchObject(g_chain_sample_1);
+			await expect(dp_get_partial_1).resolves.toMatchObject(g_foobar_1);
 		},
 
 		async 'get at 2 matches'() {
-			const {Chains, g_chain_sample_1, g_chain_sample_2} = await init_destruct(Stage.PUT_2);
+			const {FooBars, g_foobar_1, g_foobar_2} = await init_destruct(Stage.PUT_2);
 
-			await expect(Chains.getAt([g_chain_sample_1.ns, g_chain_sample_1.ref]))
-				.resolves.toMatchObject(g_chain_sample_1);
+			await expect(FooBars.getAt([g_foobar_1.ns, g_foobar_1.ref]))
+				.resolves.toMatchObject(g_foobar_1);
 
-			await expect(Chains.getAt([g_chain_sample_2.ns, g_chain_sample_2.ref]))
-				.resolves.toMatchObject(g_chain_sample_2);
+			await expect(FooBars.getAt([g_foobar_2.ns, g_foobar_2.ref]))
+				.resolves.toMatchObject(g_foobar_2);
 		},
 
 		async 'entries 2 matches'() {
-			const {Chains, g_chain_sample_1, g_chain_sample_2} = await init_destruct(Stage.PUT_2);
+			const {FooBars, g_foobar_1, g_foobar_2} = await init_destruct(Stage.PUT_2);
 
-			const a_values = entries_to_values(await spread_async(Chains.entries()));
+			const a_values = entries_to_values(await spread_async(FooBars.entries()));
 
 			expect(a_values).toMatchObject([
-				g_chain_sample_1,
-				g_chain_sample_2,
+				g_foobar_1,
+				g_foobar_2,
 			]);
 		},
 
 
 		async 'get full 2/1 original matches'() {
-			const {Chains, g_chain_sample_1, g_chain_sample_2, g_chain_sample_3} = await init_destruct(Stage.PUT_2);
+			const {FooBars, g_foobar_1, g_foobar_2, g_foobar_3} = await init_destruct(Stage.PUT_2);
 
-			await expect(Chains.get(g_chain_sample_1))
-				.resolves.toMatchObject(g_chain_sample_1);
+			await expect(FooBars.get(g_foobar_1))
+				.resolves.toMatchObject(g_foobar_1);
 
-			await expect(Chains.get(g_chain_sample_2))
-				.resolves.toMatchObject(g_chain_sample_2);
+			await expect(FooBars.get(g_foobar_2))
+				.resolves.toMatchObject(g_foobar_2);
 
-			await Chains.put(g_chain_sample_3);
+			await FooBars.put(g_foobar_3);
 
-			await expect(Chains.get(g_chain_sample_3))
-				.resolves.toMatchObject(g_chain_sample_3);
+			await expect(FooBars.get(g_foobar_3))
+				.resolves.toMatchObject(g_foobar_3);
 		},
 
 		async 'get full 2/1 copy matches'() {
-			const {Chains, g_chain_sample_1, g_chain_sample_2, g_chain_sample_3} = await init_destruct(Stage.PUT_2);
+			const {FooBars, g_foobar_1, g_foobar_2, g_foobar_3} = await init_destruct(Stage.PUT_2);
 
-			await expect(Chains.get({...g_chain_sample_1}))
-				.resolves.toMatchObject(g_chain_sample_1);
+			await expect(FooBars.get({...g_foobar_1}))
+				.resolves.toMatchObject(g_foobar_1);
 
-			await expect(Chains.get({...g_chain_sample_2}))
-				.resolves.toMatchObject(g_chain_sample_2);
+			await expect(FooBars.get({...g_foobar_2}))
+				.resolves.toMatchObject(g_foobar_2);
 
-			await Chains.put(g_chain_sample_3);
+			await FooBars.put(g_foobar_3);
 
-			await expect(Chains.get({...g_chain_sample_3}))
-				.resolves.toMatchObject(g_chain_sample_3);
+			await expect(FooBars.get({...g_foobar_3}))
+				.resolves.toMatchObject(g_foobar_3);
 		},
 
 		async 'get partial 2/1 matches'() {
-			const {Chains, g_chain_sample_1, g_chain_sample_2, g_chain_sample_3} = await init_destruct(Stage.PUT_2);
+			const {FooBars, g_foobar_1, g_foobar_2, g_foobar_3} = await init_destruct(Stage.PUT_2);
 
-			const dp_get_partial_2 = Chains.get({
-				ns: g_chain_sample_2.ns,
-				ref: g_chain_sample_2.ref,
+			const dp_get_partial_2 = FooBars.get({
+				ns: g_foobar_2.ns,
+				ref: g_foobar_2.ref,
 			});
 
-			await expect(dp_get_partial_2).resolves.toMatchObject(g_chain_sample_2);
+			await expect(dp_get_partial_2).resolves.toMatchObject(g_foobar_2);
 
-			const dp_get_partial_1 = Chains.get({
-				ns: g_chain_sample_1.ns,
-				ref: g_chain_sample_1.ref,
+			const dp_get_partial_1 = FooBars.get({
+				ns: g_foobar_1.ns,
+				ref: g_foobar_1.ref,
 			});
 
-			await expect(dp_get_partial_1).resolves.toMatchObject(g_chain_sample_1);
+			await expect(dp_get_partial_1).resolves.toMatchObject(g_foobar_1);
 
-			await Chains.put(g_chain_sample_3);
+			await FooBars.put(g_foobar_3);
 
-			const dp_get_partial_3 = Chains.get({
-				ns: g_chain_sample_3.ns,
-				ref: g_chain_sample_3.ref,
+			const dp_get_partial_3 = FooBars.get({
+				ns: g_foobar_3.ns,
+				ref: g_foobar_3.ref,
 			});
 
-			await expect(dp_get_partial_3).resolves.toMatchObject(g_chain_sample_3);
+			await expect(dp_get_partial_3).resolves.toMatchObject(g_foobar_3);
 		},
 
 		async 'get at 2/1 matches'() {
-			const {Chains, g_chain_sample_1, g_chain_sample_2, g_chain_sample_3} = await init_destruct(Stage.PUT_2);
+			const {FooBars, g_foobar_1, g_foobar_2, g_foobar_3} = await init_destruct(Stage.PUT_2);
 
-			await expect(Chains.getAt([g_chain_sample_1.ns, g_chain_sample_1.ref]))
-				.resolves.toMatchObject(g_chain_sample_1);
+			await expect(FooBars.getAt([g_foobar_1.ns, g_foobar_1.ref]))
+				.resolves.toMatchObject(g_foobar_1);
 
-			await expect(Chains.getAt([g_chain_sample_2.ns, g_chain_sample_2.ref]))
-				.resolves.toMatchObject(g_chain_sample_2);
+			await expect(FooBars.getAt([g_foobar_2.ns, g_foobar_2.ref]))
+				.resolves.toMatchObject(g_foobar_2);
 
-			await Chains.put(g_chain_sample_3);
+			await FooBars.put(g_foobar_3);
 
-			await expect(Chains.getAt([g_chain_sample_3.ns, g_chain_sample_3.ref]))
-				.resolves.toMatchObject(g_chain_sample_3);
+			await expect(FooBars.getAt([g_foobar_3.ns, g_foobar_3.ref]))
+				.resolves.toMatchObject(g_foobar_3);
 		},
 
 		async 'entries 3 matches'() {
-			const {Chains, g_chain_sample_1, g_chain_sample_2, g_chain_sample_3} = await init_destruct(Stage.PUT_3);
+			const {FooBars, g_foobar_1, g_foobar_2, g_foobar_3} = await init_destruct(Stage.PUT_3);
 
-			const a_values = entries_to_values(await spread_async(Chains.entries()));
+			const a_values = entries_to_values(await spread_async(FooBars.entries()));
 
 			expect(a_values).toMatchObject([
-				g_chain_sample_1,
-				g_chain_sample_2,
-				g_chain_sample_3,
+				g_foobar_1,
+				g_foobar_2,
+				g_foobar_3,
 			]);
 		},
 
 		async 'filter match all'() {
-			const {Chains, g_chain_sample_1, g_chain_sample_2, g_chain_sample_3} = await init_destruct(Stage.PUT_3);
+			const {FooBars, g_foobar_1, g_foobar_2, g_foobar_3} = await init_destruct(Stage.PUT_3);
 
-			expect(await spread_async(Chains.filter({}))).toMatchObject([
-				g_chain_sample_1,
-				g_chain_sample_2,
-				g_chain_sample_3,
+			expect(await spread_async(FooBars.filter({}))).toMatchObject([
+				g_foobar_1,
+				g_foobar_2,
+				g_foobar_3,
 			]);
 		},
 
 		async 'filter match none'() {
-			const {Chains} = await init_destruct(Stage.PUT_3);
+			const {FooBars} = await init_destruct(Stage.PUT_3);
 
-			expect(await spread_async(Chains.filter({
-				ns: ChainNamespace.UNKNOWN,
+			expect(await spread_async(FooBars.filter({
+				ns: FooBarNamespace.UNKNOWN,
 			}))).toMatchObject([]);
 		},
 
 		async 'filter match 1'() {
-			const {Chains, g_chain_sample_2} = await init_destruct(Stage.PUT_3);
+			const {FooBars, g_foobar_2} = await init_destruct(Stage.PUT_3);
 
-			const a_values = await spread_async(Chains.filter({
-				ns: ChainNamespace.COSMOS,
-				ref: g_chain_sample_2.ref,
+			const a_values = await spread_async(FooBars.filter({
+				ns: FooBarNamespace.COMMON,
+				ref: g_foobar_2.ref,
 			}));
 
 			expect(a_values).toMatchObject([
-				g_chain_sample_2,
+				g_foobar_2,
 			]);
 
 			expect(a_values).toHaveLength(1);
 		},
 
 		async 'filter match 2; Set<string> by key part'() {
-			const {Chains, g_chain_sample_1, g_chain_sample_3} = await init_destruct(Stage.PUT_3);
+			const {FooBars, g_foobar_1, g_foobar_3} = await init_destruct(Stage.PUT_3);
 
-			const a_values = await spread_async(Chains.filter({
-				ns: ChainNamespace.COSMOS,
-				ref: new Set([g_chain_sample_1.ref, g_chain_sample_3.ref]),
+			const a_values = await spread_async(FooBars.filter({
+				ns: FooBarNamespace.COMMON,
+				ref: new Set([g_foobar_1.ref, g_foobar_3.ref]),
 			}));
 
 			expect(a_values).toMatchObject([
-				g_chain_sample_1,
-				g_chain_sample_3,
+				g_foobar_1,
+				g_foobar_3,
 			]);
 
 			expect(a_values).toHaveLength(2);
 		},
 
 		async 'filter match 2; Set<string> by field'() {
-			const {Chains, g_chain_sample_1, g_chain_sample_2} = await init_destruct(Stage.PUT_3);
+			const {FooBars, g_foobar_1, g_foobar_2} = await init_destruct(Stage.PUT_3);
 
-			const a_values = await spread_async(Chains.filter({
-				ns: ChainNamespace.COSMOS,
-				str: new Set([g_chain_sample_1.str, g_chain_sample_2.str]),
+			const a_values = await spread_async(FooBars.filter({
+				ns: FooBarNamespace.COMMON,
+				str: new Set([g_foobar_1.str, g_foobar_2.str]),
 			}));
 
 			expect(a_values).toMatchObject([
-				g_chain_sample_1,
-				g_chain_sample_2,
+				g_foobar_1,
+				g_foobar_2,
 			]);
 		},
 
 		async 'filter match 2; Set<Uint8Array> by field'() {
-			const {Chains, g_chain_sample_1, g_chain_sample_2} = await init_destruct(Stage.PUT_3);
+			const {FooBars, g_foobar_1, g_foobar_2} = await init_destruct(Stage.PUT_3);
 
-			const a_values = await spread_async(Chains.filter({
-				ns: ChainNamespace.COSMOS,
-				bytes: new Set([g_chain_sample_1.bytes, g_chain_sample_2.bytes]),
+			const a_values = await spread_async(FooBars.filter({
+				ns: FooBarNamespace.COMMON,
+				bytes: new Set([g_foobar_1.bytes, g_foobar_2.bytes]),
 			}));
 
 			expect(a_values).toMatchObject([
-				g_chain_sample_1,
-				g_chain_sample_2,
+				g_foobar_1,
+				g_foobar_2,
 			]);
 
 			expect(a_values).toHaveLength(2);
 		},
 
 		async 'filter match 2; regex'() {
-			const {Chains, g_chain_sample_2, g_chain_sample_3} = await init_destruct(Stage.PUT_3);
+			const {FooBars, g_foobar_2, g_foobar_3} = await init_destruct(Stage.PUT_3);
 
-			const a_values = await spread_async(Chains.filter({
+			const a_values = await spread_async(FooBars.filter({
 				str: /^ba/,
 			}));
 
 			expect(a_values).toMatchObject([
-				g_chain_sample_2,
-				g_chain_sample_3,
+				g_foobar_2,
+				g_foobar_3,
 			]);
 
 			expect(a_values).toHaveLength(2);
@@ -470,7 +470,7 @@ describe('item', () => {
 	});
 });
 
-// describe('filter', () => {
+// describe('filter', () => {k
 // 	filters({
 // 		'Set<string> on part': ({g1, g2}) => [{
 // 			ns: ChainNamespace.COSMOS,
@@ -482,19 +482,19 @@ describe('item', () => {
 describe('rotation', () => {
 	tests({
 		async 'rotation interrupt'() {
-			const {k_client, Chains, g_chain_sample_1, g_chain_sample_2, g_chain_sample_3} = await init_destruct(Stage.PUT_3);
+			const {k_client, FooBars, g_foobar_1, g_foobar_2, g_foobar_3} = await init_destruct(Stage.PUT_3);
 
 			// TODO: force an interrupt somehow
 			await k_client.withExclusive(async() => {
 				await timeout(XT_ROTATION_DEBOUNCE*1.1);
 			});
 
-			const a_values = entries_to_values(await spread_async(Chains.entries()));
+			const a_values = entries_to_values(await spread_async(FooBars.entries()));
 
 			expect(a_values).toMatchObject([
-				g_chain_sample_1,
-				g_chain_sample_2,
-				g_chain_sample_3,
+				g_foobar_1,
+				g_foobar_2,
+				g_foobar_3,
 			]);
 		},
 	});

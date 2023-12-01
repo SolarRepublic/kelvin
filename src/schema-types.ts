@@ -74,7 +74,7 @@ export type FieldStruct = {
 
 export type TaggedDatatypeToEsTypeGetter<xc_type extends TaggedDatatype> = {
 	[TaggedDatatype.UNKNOWN]: unknown;
-	[TaggedDatatype.REF]: ItemRef;
+	[TaggedDatatype.REF]: ItemRef | null;
 	[TaggedDatatype.ARRAY]: FieldArray;
 	[TaggedDatatype.TUPLE]: FieldTuple;
 	[TaggedDatatype.STRUCT]: FieldStruct;
@@ -83,7 +83,7 @@ export type TaggedDatatypeToEsTypeGetter<xc_type extends TaggedDatatype> = {
 
 export type TaggedDatatypeToEsTypeSetter<xc_type extends TaggedDatatype> = {
 	[TaggedDatatype.UNKNOWN]: unknown;
-	[TaggedDatatype.REF]: RuntimeItem | ItemRef;
+	[TaggedDatatype.REF]: RuntimeItem | ItemRef | null;
 	[TaggedDatatype.ARRAY]: any[];
 	[TaggedDatatype.TUPLE]: any[];
 	[TaggedDatatype.STRUCT]: object;

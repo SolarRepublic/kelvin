@@ -1,4 +1,4 @@
-import type {GenericItemController, ItemController} from './controller';
+import type {GenericItemController} from './controller';
 import type {RuntimeItem} from './item-proto';
 
 import type {DomainLabel, ItemCode, ItemIdent} from './types';
@@ -11,8 +11,7 @@ export class ItemRef<
 > implements PromiseLike<g_runtime> {
 	constructor(
 		protected _k_src: GenericItemController<g_dst, g_runtime>,
-		protected _i_item: ItemCode,
-		protected _si_domain: DomainLabel
+		protected _i_item: ItemCode
 	) {}
 
 	get code(): ItemCode {
@@ -28,7 +27,7 @@ export class ItemRef<
 	}
 
 	get domain(): DomainLabel {
-		return this._si_domain;
+		return this._k_src.domain;
 	}
 
 	then<
@@ -38,10 +37,10 @@ export class ItemRef<
 		fk_resolve?: ((w_value: g_runtime) => w_value | PromiseLike<w_value>) | null | undefined,
 		fe_reject?: ((e_reason: any) => e_reason | PromiseLike<e_reason>) | null | undefined
 	): PromiseLike<w_value | e_reason> {
-		const k_dst = this._k_src.hub.vault.controllerFor<g_dst, g_runtime>(this._si_domain);
+		const k_dst = this._k_src.hub.vault.controllerFor<g_dst, g_runtime>(this.domain);
 
 		if(!k_dst) {
-			throw new Error(`No item controller was registered for "${this._si_domain}" domain while trying to dereference item ${this.ident}`);
+			throw new Error(`No item controller was registered for "${this.domain}" domain while trying to dereference item ${this.ident}`);
 		}
 
 		// load the item

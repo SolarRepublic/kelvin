@@ -1,13 +1,13 @@
 
 import type {GenericItemController, ItemController} from './controller';
 import type {KnownEsDatatypes, PartableDatatype, PrimitiveDatatypeToEsType, TaggedDatatypeToEsTypeGetter, TaggedDatatypeToEsTypeSetter} from './schema-types';
-import type {DomainCode, ItemCode, SerField, SerSchema, SerTaggedDatatype, SerTaggedDatatypeMap} from './types';
+import type {DomainCode, FieldPath, SerFieldPath, ItemCode, SerField, SerSchema, SerTaggedDatatype, SerTaggedDatatypeMap, SerFieldSwitch, FieldLabel} from './types';
 
-import type {JsonValue, JsonObject, JsonArray, Dict} from '@blake.regalia/belt';
+import type {JsonValue, JsonObject, JsonArray, Dict, Subtype} from '@blake.regalia/belt';
 
 import {ode, base93_to_buffer, buffer_to_base93, F_IDENTITY, fodemtv} from '@blake.regalia/belt';
 
-import {SchemaError, SchemaWarning, TypeFieldNotWritableError, UnparseableSchemaError} from './errors';
+import {Bug, SchemaError, SchemaWarning, TypeFieldNotWritableError, UnparseableSchemaError} from './errors';
 import {FieldArray} from './field-array';
 import {ItemRef} from './item-ref';
 import {PrimitiveDatatype, TaggedDatatype} from './schema-types';
@@ -17,26 +17,37 @@ export const $_CODE = Symbol('item-code');
 export const $_TUPLE = Symbol('item-tuple');
 export const $_LINKS = Symbol('item-links');
 
-type FieldPath = (string | number)[];
 
 export type GenericItem = Record<string, KnownEsDatatypes>;
 
-export type RefDelta = [
-	i_item: ItemCode,
-	a_path: FieldPath,
-];
+// export type RefDelta = [
+// 	i_item: ItemCode,
+// 	a_path: FieldPath,
+// ];
+
+export type RefDeltas = Record<SerFieldPath, ItemCode>;
 
 export type RuntimeItem<g_item extends object=GenericItem> = {
 	[$_CODE]: ItemCode;
 	[$_CONTROLLER]: GenericItemController;
 	[$_TUPLE]: JsonValue[];
 	[$_LINKS]: Record<DomainCode, {
-		remove: RefDelta[];
-		insert: RefDelta[];
+		remove: RefDeltas;
+		insert: RefDeltas;
 	}>;
 } & g_item;
 
-export type ItemStruct<g_controller=GenericItemController> = g_controller extends ItemController<infer s_domain, infer si_domain, infer a_parts, infer g_schema, infer f_schema, infer g_item, infer g_proto, infer g_runtime, infer g_parts>
+export type ItemStruct<g_controller=GenericItemController> = g_controller extends ItemController<
+	infer g_schema,
+	infer g_item,
+	infer g_proto,
+	infer g_runtime,
+	infer s_domain,
+	infer si_domain,
+	infer a_parts,
+	infer f_schema,
+	infer g_parts
+>
 	? g_item
 	: GenericItem;
 
@@ -110,7 +121,7 @@ const H_DEFAULTS_PRIMITIVE: {
 };
 
 type TaggedSerializer<xc_type extends TaggedDatatype> = (w_value: TaggedDatatypeToEsTypeSetter<xc_type>, a_path: FieldPath, k_this: RuntimeItem) => JsonValue;
-type TaggedDeserializer<xc_type extends TaggedDatatype> = (w_value: JsonValue, a_path: FieldPath) => TaggedDatatypeToEsTypeSetter<xc_type>;
+type TaggedDeserializer<xc_type extends TaggedDatatype> = (w_value: JsonValue, a_path: FieldPath, k_this: RuntimeItem) => TaggedDatatypeToEsTypeSetter<xc_type>;
 type TaggedDefaulter<xc_type extends TaggedDatatype> = () => TaggedDatatypeToEsTypeSetter<xc_type>;
 
 // TODO make this compatible with primitive datatype versions
@@ -131,6 +142,23 @@ const access_path = <w_leaf>(
 	? access_path(w_subject[a_path[0]] as SubjectTree<w_leaf>, a_path.slice(1))
 	: w_subject as w_leaf;
 
+
+const unwrap_datatype = (z_datatype: SerTaggedDatatype[1], k_item: GenericItemController) => primitive_or_tagged(z_datatype, {
+	// primitive member
+	primitive: xc_subtype => [
+		// serializer
+		H_SERIALIZERS_PRIMITIVE[xc_subtype],
+
+		// deserializer
+		H_DESERIALIZERS_PRIMITIVE[xc_subtype],
+
+		// defaults
+		H_DEFAULTS_PRIMITIVE[xc_subtype],
+	],
+	// tagged member
+	tagged: (...a_ser) => tagged_serdefaults(a_ser, k_item),
+}) as SerdefaultsTuple;
+
 const tagged_serdefaults = <
 	xc_tag extends TaggedDatatype,
 >(
@@ -146,12 +174,18 @@ const tagged_serdefaults = <
 		case TaggedDatatype.REF: return [
 			// ref serializer
 			(k_ref, a_path, g_runtime) => {
-				// resolve item code
-				const i_code = (k_ref as RuntimeItem)[$_CODE] || (k_ref as ItemRef).code;
+				// prep referenced item's code
+				let i_code = 0 as ItemCode;
 
-				// no code
-				if(!i_code) {
-					throw Error(`Cannot assign to ${a_path.join('.')} property a reference item that has not yet been saved to vault`);
+				// not intentional null
+				if(null !== k_ref) {
+					// resolve item code
+					i_code = (k_ref as RuntimeItem)[$_CODE] || (k_ref as ItemRef).code;
+
+					// no code
+					if(!i_code) {
+						throw Error(`Cannot assign to ${a_path.join('.')} property a reference item that has not yet been saved to vault`);
+					}
 				}
 
 				// normalize to controller
@@ -175,25 +209,51 @@ const tagged_serdefaults = <
 
 				// lookup/create links staging struct
 				const g_links = g_runtime[$_LINKS][sb92_domain] ??= {
-					remove: [],
-					insert: [],
+					remove: {},
+					insert: {},
 				};
+
+				// path ident
+				const sr_path = a_path.join('.') as SerFieldPath;
+
+				// // insertion queue
+				// const as_insert = g_links.insert[sr_path] ??= new Set();
 
 				// removing/replacing previous
 				const g_prev = access_path<KnownEsDatatypes>(g_runtime, a_path);
 				if(g_prev instanceof ItemRef) {
-					// add instruction to remove previous item reference from links
-					g_links.remove.push([g_prev.code, a_path]);
+					// // removal queue
+					// const as_remove = g_links.remove[sr_path] ??= new Set();
+
+					// // item being deleted was queued for 
+
+					// // item being added is currently queued for deletion
+					// if(as_remove.has(i_code)) {
+					// 	// cancel its removal
+					// 	as_remove.delete(i_code);
+
+					// 	// do not re-insert it
+					// 	return i_code;
+					// }
+
+					// // add instruction to remove previous item reference from links
+					// as_remove.add(g_prev.code);
+
+					// only remove the stored item code
+					g_links.remove[sr_path] ??= g_prev.code;
 				}
 
-				// insert new item reference into links
-				g_links.insert.push([i_code, a_path]);
+				// // insert new item reference into links
+				// as_insert.add(i_code);
+
+				// only store the latest write
+				g_links.insert[sr_path] = i_code;
 
 				return i_code;
 			},
 
 			// ref deserializer
-			i_code => new ItemRef(k_item, i_code as ItemCode, w_info),
+			i_code => new ItemRef(k_item, i_code as ItemCode),
 
 			// ref default
 			F_DEFAULT_ZERO,
@@ -230,7 +290,7 @@ const tagged_serdefaults = <
 						(a_items, a_path, g_runtime) => (a_items as any[]).map((w_item, i_item) => f_serializer(w_item, [...a_path, i_item], g_runtime)),
 
 						// deserializer
-						(a_items, a_path) => (a_items as JsonArray).map((w_item, i_item) => f_deserializer(w_item, [...a_path, i_item])),
+						(a_items, a_path, g_runtime) => (a_items as JsonArray).map((w_item, i_item) => f_deserializer(w_item, [...a_path, i_item], g_runtime)),
 
 						// default
 						() => [],
@@ -242,21 +302,7 @@ const tagged_serdefaults = <
 		// tuple
 		case TaggedDatatype.TUPLE: {
 			// transform each tuple member's datatype into a serdef
-			const a_serdefaults = w_info.map(z_field => primitive_or_tagged(z_field, {
-				// primitive member
-				primitive: xc_subtype => [
-					// serializer
-					H_SERIALIZERS_PRIMITIVE[xc_subtype],
-
-					// deserializer
-					H_DESERIALIZERS_PRIMITIVE[xc_subtype],
-
-					// defaults
-					H_DEFAULTS_PRIMITIVE[xc_subtype],
-				],
-				// tagged member
-				tagged: (...a_ser) => tagged_serdefaults(a_ser, k_item),
-			})) as SerdefaultsTuple<xc_tag>[];
+			const a_serdefaults = w_info.map(z_field => unwrap_datatype(z_field, k_item));
 
 			// return joint serdef
 			return [
@@ -265,54 +311,18 @@ const tagged_serdefaults = <
 					a_items[i_field] as TaggedDatatypeToEsTypeSetter<xc_tag>, [...a_path, i_field], g_runtime)),
 
 				// deserializer
-				(a_items, a_path) => a_serdefaults.map((a_serdef, i_field) => a_serdef[1](
-					(a_items as JsonArray)[i_field], [...a_path, i_field])),
+				(a_items, a_path, g_runtime) => a_serdefaults.map((a_serdef, i_field) => a_serdef[1](
+					(a_items as JsonArray)[i_field], [...a_path, i_field], g_runtime)),
 
 				// defaults
 				() => a_serdefaults.map(a_serdef => a_serdef[2]()),
 			];
-
-			// return [
-			// 	// serializer
-			// 	(a_items, a_path) => w_info.map((z_field, i_field) => primitive_or_tagged(z_field, {
-			// 		primitive: xc_subtype => H_SERIALIZERS_PRIMITIVE[xc_subtype](a_items[i_field] as never),
-			// 		tagged: (...a_ser) => tagged_serdefaults(a_ser, k_item)[0](a_items[i_field], [...a_path, i_field]),
-			// 	})),
-
-			// 	// deserializer
-			// 	(a_items, a_path) => w_info.map((z_field, i_field) => primitive_or_tagged(z_field, {
-			// 		primitive: xc_subtype => H_DESERIALIZERS_PRIMITIVE[xc_subtype]((a_items as JsonArray)[i_field]),
-			// 		tagged: (...a_ser) => tagged_serdefaults(a_ser, k_item)[1](a_items as JsonArray, [...a_path, i_field]),
-			// 	})),
-
-			// 	// defaults
-			// 	() => w_info.map(z_field => primitive_or_tagged(z_field, {
-			// 		primitive: xc_subtype => H_DEFAULTS_PRIMITIVE[xc_subtype],
-			// 		tagged: (...a_ser) => tagged_serdefaults(a_ser, k_item)[2](),
-			// 	})),
-			// ];
 		}
 
 		// struct
 		case TaggedDatatype.STRUCT: {
-			debugger;
-
-			const h_serdefs: Dict<SerdefaultsTuple> = fodemtv(w_info, z_field => primitive_or_tagged(z_field, {
-				// primitive member
-				primitive: xc_subtype => [
-					// serializer
-					H_SERIALIZERS_PRIMITIVE[xc_subtype],
-
-					// deserializer
-					H_DESERIALIZERS_PRIMITIVE[xc_subtype],
-
-					// defaults
-					H_DEFAULTS_PRIMITIVE[xc_subtype],
-				],
-
-				// tagged member
-				tagged: (...a_ser) => tagged_serdefaults(a_ser, k_item),
-			}));
+			// transform each struct member's datatype into a serdef
+			const h_serdefs = fodemtv(w_info, z_field => unwrap_datatype(z_field, k_item));
 
 			// return joint serdef
 			return [
@@ -321,8 +331,8 @@ const tagged_serdefaults = <
 					? f_ser(h_items[si_field], [...a_path, si_field], g_runtime): f_def()),
 
 				// deserializer
-				(h_items, a_path) => fodemtv(h_serdefs, ([, f_deser, f_def], si_field) => si_field in (h_items as JsonObject)
-					? f_deser((h_items as JsonObject)[si_field], [...a_path, si_field]): f_def()),
+				(h_items, a_path, g_runtime) => fodemtv(h_serdefs, ([, f_deser, f_def], si_field) => si_field in (h_items as JsonObject)
+					? f_deser((h_items as JsonObject)[si_field], [...a_path, si_field], g_runtime): f_def()),
 
 				// default
 				() => fodemtv(h_serdefs, ([,, f_def]) => f_def()),
@@ -331,9 +341,43 @@ const tagged_serdefaults = <
 
 		// switch
 		case TaggedDatatype.SWITCH: {
+			// transform each switch option's datatype into a serdef
+			const h_options = fodemtv(a_tail[0] as SerFieldSwitch[1], z_field => unwrap_datatype(z_field, k_item));
+
 			debugger;
 
-			break;
+
+			// return joint serdef
+			return [
+				// serializer
+				(h_switch, a_path, g_runtime) => {
+					// depending on which option is set on instance
+					const si_opt = g_runtime[$_TUPLE][w_info]+'' as FieldLabel;
+
+					// get its serializer
+					const [f_ser] = h_options[si_opt];
+
+					// apply
+					return f_ser(h_switch, a_path, g_runtime);
+				},
+
+				// deserializer
+				(h_items, a_path, g_runtime) => {
+					// depending on which option is set on instance
+					const si_opt = g_runtime[$_TUPLE][w_info]+'' as FieldLabel;
+
+					// get its deserializer
+					const [f_deser] = h_options[si_opt];
+
+					// apply
+					return f_deser(h_items, a_path, g_runtime);
+				},
+
+				// default
+				() => {
+					debugger;
+				},
+			];
 		}
 
 		default: {
@@ -373,7 +417,10 @@ const H_DESCRIPTORS_PARTS: {
 
 	[PrimitiveDatatype.INT]: b_writable => (i_field, a_path) => ({
 		get() {
-			if(!this[$_TUPLE]) console.warn(`Not defined: ${this as unknown as string}`, this);
+			if(!this[$_TUPLE]) {
+				throw new Bug(`Something went horribly wrong while attempting to access int datatype ${this[$_CONTROLLER]?.domain}.${a_path.join('.')}`);
+			}
+
 			return +this[$_TUPLE][i_field]!;
 		},
 
@@ -542,7 +589,7 @@ const tagged_descriptor = <
 
 	return {
 		get() {
-			return f_deserializer(this[$_TUPLE][i_field] as JsonValue, a_path);
+			return f_deserializer(this[$_TUPLE][i_field] as JsonValue, a_path, this);
 		},
 
 		set(w_value) {

@@ -73,6 +73,11 @@ export type FieldLabel = Subtype<string, 'field-label'>;
 
 export type FieldCode = Subtype<number, 'field-code'>;
 
+export type FieldPath = (string | number)[];
+
+export type SerFieldPath = Subtype<string, 'field-path'>;
+
+export type FieldPathCode= Subtype<number, 'field-path-code'>;
 
 export type LockSpecifier = Subtype<string, 'lock-specifier'>;
 
@@ -169,7 +174,7 @@ export type SerFieldSwitch = [
 	/**
 	 * Maps switch values to subschemas
 	 */
-	z_options: SerField[] | SerFieldStruct,
+	z_options: SerFieldStruct,  // | SerField[]
 ];
 
 export type SerTaggedDatatypeMap = {
@@ -264,6 +269,28 @@ export type SerDomainMetadata = [
 	strategy: DomainStorageStrategy,
 ];
 
+
+/**
+ * Serialized link belonging to a source item
+ */
+export type SerLink = ItemCode | [
+	...a_path_exts: FieldPath[],
+	i_item: ItemCode,
+];
+
+/**
+ * Links belonging to a target/source domain pair, coupling path lookups with the item code mappings
+ */
+export type SerLinksTuple = [
+	a_paths: Record<SerFieldPath, number>,  // ref counter
+	h_items: Record<ItemCode, Record<FieldPathCode, SerLink>>,
+];
+
+/**
+ * Links keyed by source domain
+ */
+export type SerDomainLinks = Record<DomainCode, SerLinksTuple>;
+
 /**
  * Serialized database hub object
  */
@@ -293,6 +320,11 @@ export type SerVaultHub = {
 	 * Indexes keyed by their name, storing a dict of item codes keyed by the index's value
 	 */
 	indexes: Dict<Dict<ItemCode[]>>;
+
+	/**
+	 * Links between items keyed by the target's domain
+	 */
+	links: Record<DomainCode, SerDomainLinks>;
 
 	/**
 	 * Bucket storage keys stored in sequence

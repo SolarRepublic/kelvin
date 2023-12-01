@@ -1,5 +1,9 @@
 
-import {ChainNamespace, init_chains} from './chains';
+import {ode} from '@blake.regalia/belt';
+
+import {expect} from 'vitest';
+
+import {FooBarNamespace, init_foobars} from './foo-bars';
 import {Stage, init_destruct, spread_async} from './kit';
 
 // const k_content = new MemoryWrapper('content');
@@ -32,28 +36,35 @@ import {Stage, init_destruct, spread_async} from './kit';
 // 	await k_client.unlock(text_to_buffer(sh_phrase));
 // }
 
-const {Chains, g_chain_sample_1, g_chain_sample_2, g_chain_sample_3} = await init_destruct(Stage.PUT_3);
+const {FooBars, g_foobar_1, g_foobar_2, g_foobar_3} = await init_destruct(Stage.PUT_3);
 
 // // attempt to open the vault
 // const k_hub = await k_client.open();
 
-// await Chains.put(g_chain_sample_1);
+// await Chains.put(g_foobar_1);
 
-// await Chains.put(g_chain_sample_2);
+// await Chains.put(g_foobar_2);
 
-// await Chains.put(g_chain_sample_3);
+// await Chains.put(g_foobar_3);
 
 
-// const g_read_1 = await Chains.get(g_chain_sample_1);
+const g_read_1 = await FooBars.get(g_foobar_1);
 
-// const g_read_2 = await Chains.get(g_chain_sample_2);
+for(const [si_key, w_value] of ode(g_foobar_1)) {
+	console.log(`expect ${si_key} `, g_foobar_1[si_key], g_read_1![si_key]);
+}
 
-// const g_read_3 = await Chains.get(g_chain_sample_3);
+await expect(FooBars.get(g_foobar_1))
+	.resolves.toMatchObject(g_foobar_1);
+
+// const g_read_2 = await Chains.get(g_foobar_2);
+
+// const g_read_3 = await Chains.get(g_foobar_3);
 debugger;
 
-const a_vals = await spread_async(Chains.filter({
-	ns: ChainNamespace.COSMOS,
-	ref: new Set([g_chain_sample_1.ref, g_chain_sample_3.ref]),
+const a_vals = await spread_async(FooBars.filter({
+	ns: FooBarNamespace.COMMON,
+	ref: new Set([g_foobar_1.ref, g_foobar_3.ref]),
 }));
 
 // const a_values = [];

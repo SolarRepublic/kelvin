@@ -1,6 +1,6 @@
 import type {F} from 'ts-toolbelt';
 
-import type {VaultHub} from './hub';
+import type {HubEffects, VaultHub} from './hub';
 import type {RuntimeItem} from './item-proto';
 import type {Reader} from './reader';
 
@@ -13,8 +13,10 @@ import {F_IDENTITY, __UNDEFINED, escape_regex} from '@blake.regalia/belt';
 
 import {apply_filter_struct, type GenericStructMatchCriteria, type MatchCriteria} from './filter';
 import {$_CODE, $_CONTROLLER, $_LINKS, $_TUPLE, is_runtime_item, item_prototype} from './item-proto';
+import {ItemRef} from './item-ref';
 import {interpret_schema} from './schema-impl';
 import {DomainStorageStrategy} from './types';
+
 
 // export interface GenericItemController1<
 // 	g_schema extends StructuredSchema=StructuredSchema,
@@ -297,6 +299,14 @@ export class ItemController<
 		return this._encode_item(a_parts);
 	}
 
+	getItemRef(g_parts: g_parts): ItemRef<g_item, g_runtime> | null {
+		const i_item = this.getItemCode(g_parts);
+
+		if(!i_item) return null;
+
+		return new ItemRef(this, i_item);
+	}
+
 	has1<a_local extends Readonly<a_parts>>(
 		a_parts: a_local
 	): boolean {
@@ -339,7 +349,7 @@ export class ItemController<
 		return g_item;
 	}
 
-	_serialize(g_item: g_item | g_runtime): [ItemPath, SerItem] {
+	_serialize(g_item: g_item | g_runtime): [ItemPath, SerItem, HubEffects] {
 		// prep runtime item
 		let g_runtime = g_item as g_runtime;
 
@@ -368,6 +378,9 @@ export class ItemController<
 		return [
 			g_runtime[$_TUPLE].slice(1, i_break).join(':') as ItemPath,
 			g_runtime[$_TUPLE].slice(i_break),
+			{
+				links: g_runtime[$_LINKS],
+			},
 		];
 	}
 
@@ -382,10 +395,10 @@ export class ItemController<
 		const {_k_hub} = this;
 
 		// serialize item
-		const [sr_item, w_ser] = this._serialize(g_item);
+		const [sr_item, w_ser, g_effects] = this._serialize(g_item);
 
 		// write item to storage
-		await _k_hub.putItem(this._si_domain, sr_item, w_ser);
+		await _k_hub.putItem(this._si_domain, sr_item, w_ser, g_effects);
 
 		// 
 		return [sr_item, w_ser];

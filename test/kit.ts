@@ -1,10 +1,10 @@
-import type {ChainStruct} from './chains';
+import type {FooBarsStruct} from './foo-bars';
 import type {VaultHub} from '../src/hub';
 import type {TestContext} from 'vitest';
 
 import {text_to_buffer} from '@blake.regalia/belt';
 
-import {init_chains} from './chains';
+import {init_foobars} from './foo-bars';
 import {Vault} from '../src/vault';
 import {MemoryWrapper} from '../src/wrappers/memory';
 
@@ -12,10 +12,10 @@ import {MemoryWrapper} from '../src/wrappers/memory';
 type TestContextExtension = {
 	k_client: Vault;
 	k_hub?: VaultHub;
-	Chains: ReturnType<typeof init_chains>['Chains'];
-	g_chain_sample_1: ChainStruct;
-	g_chain_sample_2: ChainStruct;
-	g_chain_sample_3: ChainStruct;
+	FooBars: ReturnType<typeof init_foobars>['FooBars'];
+	g_foobar_1: FooBarsStruct;
+	g_foobar_2: FooBarsStruct;
+	g_foobar_3: FooBarsStruct;
 };
 
 declare module 'vitest' {
@@ -59,8 +59,8 @@ export const client = async(xc_stage: Stage) => {
 
 		if(xc_stage >= Stage.REGISTER) {
 			// data
-			const g_init = init_chains(k_client);
-			const {Chains, g_chain_sample_1, g_chain_sample_2, g_chain_sample_3} = g_init;
+			const g_init = init_foobars(k_client);
+			const {FooBars, g_foobar_1, g_foobar_2, g_foobar_3} = g_init;
 			if(xc_stage >= Stage.DATA) {
 				Object.assign(g_context, g_init);
 			}
@@ -72,13 +72,13 @@ export const client = async(xc_stage: Stage) => {
 			}
 
 			if(xc_stage >= Stage.PUT_1) {
-				await Chains.put(g_chain_sample_1);
+				await FooBars.put(g_foobar_1);
 
 				if(xc_stage >= Stage.PUT_2) {
-					await Chains.put(g_chain_sample_2);
+					await FooBars.put(g_foobar_2);
 
 					if(xc_stage >= Stage.PUT_3) {
-						await Chains.put(g_chain_sample_3);
+						await FooBars.put(g_foobar_3);
 					}
 				}
 			}

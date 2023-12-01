@@ -265,10 +265,17 @@ function reshape_tagged_value([xc_type, w_info, w_extra]: SerTaggedDatatype, sr_
 
 	// depending on type
 	switch(xc_type) {
-		// trivial. unwrap
-		case TaggedDatatype.REF:
+		// // ref
+		// case TaggedDatatype.REF: {
+		// 	const sr_inner = sr_local+'<>';
+		// 	// a_mids[0] = reshape_fields(sr_inner, [w_info]).fields['0' as FieldLabel];
+		// 	// a_mids[0] = w_info;
+		// 	break;
+		// }
+
+		// array
 		case TaggedDatatype.ARRAY: {
-			const sr_inner = sr_local+(TaggedDatatype.ARRAY === xc_type? '[]': '<>');
+			const sr_inner = sr_local+'[]';
 			a_mids[0] = reshape_fields(sr_inner, [w_info]).fields['0' as FieldLabel];
 			break;
 		}
@@ -337,7 +344,7 @@ function reshape_fields(
 
 		// misalignment
 		if(i_mark !== i_field+1) {
-			throw new SchemaError(`detected field misalignment in schema builder for at ${sr_local}`);
+			throw new SchemaError(`detected field misalignment in schema builder at ${sr_local}; expected ${i_field+1} but found ${i_mark}`);
 		}
 
 		// part key
