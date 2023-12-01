@@ -87,6 +87,8 @@ export interface GenericItemController<
 
 	getItemCode(g_parts: g_parts): ItemCode | undefined;
 
+	getItemRef(g_parts: g_parts): ItemRef<g_item, g_runtime> | null;
+
 	has(a_parts: Readonly<AcceptablePartTuples>): boolean;
 
 	get(g_parts: g_parts): Promise<g_runtime | undefined>;

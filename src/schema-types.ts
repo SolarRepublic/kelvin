@@ -148,7 +148,7 @@ export type StructuredSchema = Dict<Datatype>;
  * Reinterprets the given type as being JSON-compatible
  */
 export type ReduceSchema<z_test> =
-	z_test extends DatatypeRef<infer g_ref>? g_ref
+	z_test extends DatatypeRef<infer g_ref>? g_ref | null
 		: z_test extends SchemaSubtype<infer w_estype, infer s_id>? ReduceSchema<w_estype>
 			: z_test extends {[ES_TYPE]: any}? z_test
 				: z_test extends JsonPrimitive? z_test

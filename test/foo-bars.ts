@@ -123,7 +123,6 @@ export const init_foobars = (k_client: Vault) => {
 		g_foobar_1,
 		g_foobar_2,
 		g_foobar_3,
-		// g_pfp_1,
 	};
 };
 
@@ -134,7 +133,14 @@ export enum BazQuxesType {
 	QUX=2,
 }
 
-export const init_tagged = (k_client: Vault, {FooBars}: {FooBars: FooBarsController}) => {
+export const init_tagged = (k_client: Vault, g_foobars: ReturnType<typeof init_foobars>) => {
+	const {
+		FooBars,
+		g_foobar_1,
+		g_foobar_2,
+		g_foobar_3,
+	} = g_foobars;
+
 	const BazQuxes = new ItemController({
 		client: k_client,
 		domain: 'baz-quxes',
@@ -181,11 +187,24 @@ export const init_tagged = (k_client: Vault, {FooBars}: {FooBars: FooBarsControl
 	type LocalBazQuxesStruct = ItemStruct<typeof BazQuxes>;
 
 	const g_bazqux_1: LocalBazQuxesStruct = {
-		type: BazQuxesType.BAZ,
+		type: BazQuxesType.UNKNOWN,
+		id: 'nil',
+		on: Toggle.ON,
+
+		ref: null,
+		array: [],
+		tuple: [[], 0],
+		switch: 9,
+	};
+
+	const g_bazqux_2: LocalBazQuxesStruct = {
+		type: BazQuxesType.UNKNOWN,
 		id: 'baz',
-		// array: [],
-		// tuple: [[], 0],
-		// // pfp: k_pfp_1,
-		// switch: G_SWITCH_COMMON,
+		on: Toggle.ON,
+
+		ref: FooBars.getItemRef(g_foobar_1)!,
+		array: [],
+		tuple: [[], 0],
+		switch: 9,
 	};
 };

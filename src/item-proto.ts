@@ -186,25 +186,25 @@ const tagged_serdefaults = <
 					if(!i_code) {
 						throw Error(`Cannot assign to ${a_path.join('.')} property a reference item that has not yet been saved to vault`);
 					}
-				}
 
-				// normalize to controller
-				const k_controller = (k_ref as RuntimeItem)[$_CONTROLLER] || (k_ref as ItemRef).controller;
+					// normalize to controller
+					const k_controller = (k_ref as RuntimeItem)[$_CONTROLLER] || (k_ref as ItemRef).controller;
 
-				// resolve domain
-				const si_domain_ref = k_controller.domain;
+					// resolve domain
+					const si_domain_ref = k_controller.domain;
 
-				// wrong domain
-				if(w_info !== si_domain_ref) {
-					throw Error(`Cannot assign to ${a_path.join('.')} property a reference item in the "${si_domain_ref}" domain; must be in the "${w_info}" domain`);
+					// wrong domain
+					if(w_info !== si_domain_ref) {
+						throw Error(`Cannot assign to ${a_path.join('.')} property a reference item in the "${si_domain_ref}" domain; must be in the "${w_info}" domain`);
+					}
 				}
 
 				// lookup code
-				const sb92_domain = k_controller.hub.encodeDomain(si_domain_ref);
+				const sb92_domain = g_runtime[$_CONTROLLER].hub.encodeDomain(w_info);
 
 				// could not encode domain
 				if(!sb92_domain) {
-					throw Error(`Failed to encode domain "${si_domain_ref}" while attempting to assign item reference to ${a_path.join('.')}`);
+					throw Error(`Failed to encode domain "${w_info}" while attempting to assign item reference to ${a_path.join('.')}`);
 				}
 
 				// lookup/create links staging struct
@@ -216,44 +216,22 @@ const tagged_serdefaults = <
 				// path ident
 				const sr_path = a_path.join('.') as SerFieldPath;
 
-				// // insertion queue
-				// const as_insert = g_links.insert[sr_path] ??= new Set();
-
 				// removing/replacing previous
 				const g_prev = access_path<KnownEsDatatypes>(g_runtime, a_path);
 				if(g_prev instanceof ItemRef) {
-					// // removal queue
-					// const as_remove = g_links.remove[sr_path] ??= new Set();
-
-					// // item being deleted was queued for 
-
-					// // item being added is currently queued for deletion
-					// if(as_remove.has(i_code)) {
-					// 	// cancel its removal
-					// 	as_remove.delete(i_code);
-
-					// 	// do not re-insert it
-					// 	return i_code;
-					// }
-
-					// // add instruction to remove previous item reference from links
-					// as_remove.add(g_prev.code);
-
 					// only remove the stored item code
 					g_links.remove[sr_path] ??= g_prev.code;
 				}
 
-				// // insert new item reference into links
-				// as_insert.add(i_code);
+				// ref is present; only store the latest write
+				if(i_code) g_links.insert[sr_path] = i_code;
 
-				// only store the latest write
-				g_links.insert[sr_path] = i_code;
-
+				// return item code (encoding 0 for null)
 				return i_code;
 			},
 
 			// ref deserializer
-			i_code => new ItemRef(k_item, i_code as ItemCode),
+			i_code => i_code? new ItemRef(k_item, i_code as ItemCode): null,
 
 			// ref default
 			F_DEFAULT_ZERO,
