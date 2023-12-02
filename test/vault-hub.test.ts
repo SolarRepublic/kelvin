@@ -7,7 +7,7 @@ import {ode, timeout} from '@blake.regalia/belt';
 import {XT_ROTATION_DEBOUNCE} from 'src/constants';
 import {$_CODE} from 'src/item-proto';
 import {ItemRef} from 'src/item-ref';
-import {beforeEach, describe, expect, it, vi} from 'vitest';
+import {beforeEach, describe, expect, expectTypeOf, it, vi} from 'vitest';
 
 import {FooBarNamespace, init_bazquxes, init_foobars} from './foo-bars';
 import {SI_DATABASE, client, Stage, init, phrase, init_destruct, spread_async} from './kit';
@@ -549,23 +549,104 @@ describe('baz-quxes', () => {
 			await expect(BazQuxes.get(g_bazqux_1)).resolves.toMatchObject({
 				ref: null,
 			});
+
+			expect((await BazQuxes.get(g_bazqux_1))!.ref).toEqual(null);
 		},
 
-		async 'get ref 1'({FooBars, g_foobar_1, BazQuxes, g_bazqux_1, g_bazqux_2}) {
-			const g_ref_1 = (await FooBars.get(g_foobar_1))!;
+		async 'put/get ref via fromItem'({FooBars, g_foobar_1, BazQuxes, g_bazqux_1, g_bazqux_2}) {
+			const g_runtime_1 = (await FooBars.get(g_foobar_1))!;
 
-			console.warn(`###################\n${g_ref_1.str}\n#########FINDME#`);
+			const g_ref_1 = ItemRef.fromItem(g_runtime_1);
 
 			await BazQuxes.put({
 				...g_bazqux_1,
-				ref: ItemRef.fromItem(g_ref_1),
+				ref: g_ref_1,
 			});
 
-			await expect(BazQuxes.get(g_bazqux_1)).resolves.toMatchObject({
-				ref: {
-					code: g_ref_1,
-				},
-			});
+			const g_read_bq1 = (await BazQuxes.get(g_bazqux_1))!;
+
+			const g_ref_round = g_read_bq1.ref;
+
+			expect(g_ref_round!.code).toEqual(g_ref_1.code);
+			expect(g_ref_round!.ident).toEqual(g_ref_1.ident);
+			expect(g_ref_round!.controller).toEqual(g_ref_1.controller);
+
+			await expect(g_ref_round).resolves.toMatchObject(g_runtime_1);
 		},
+
+		async 'put/get ref via struct'({FooBars, g_foobar_1, BazQuxes, g_bazqux_1, g_bazqux_2}) {
+			const g_runtime_1 = (await FooBars.get(g_foobar_1))!;
+
+			await BazQuxes.put({
+				...g_bazqux_1,
+				ref: g_runtime_1,
+			});
+
+			const g_read_bq1 = (await BazQuxes.get(g_bazqux_1))!;
+
+			const g_ref_round = g_read_bq1.ref;
+
+			const g_ref_1 = ItemRef.fromItem(g_runtime_1);
+
+			expect(g_ref_round!.code).toEqual(g_ref_1.code);
+			expect(g_ref_round!.ident).toEqual(g_ref_1.ident);
+			expect(g_ref_round!.controller).toEqual(g_ref_1.controller);
+
+			await expect(g_ref_round).resolves.toMatchObject(g_runtime_1);
+		},
+
+		async 'put/get ref via setter'({FooBars, g_foobar_1, BazQuxes, g_bazqux_1, g_bazqux_2}) {
+			const g_runtime_1 = (await FooBars.get(g_foobar_1))!;
+
+			await BazQuxes.put({
+				...g_bazqux_1,
+				ref: null,
+			});
+
+			const g_read_bq1 = (await BazQuxes.get(g_bazqux_1))!;
+
+			g_read_bq1.ref = ItemRef.fromItem(g_runtime_1);
+
+			await BazQuxes.put(g_read_bq1);
+
+			const g_read_bq2 = (await BazQuxes.get(g_bazqux_1))!;
+
+			const g_ref_round = g_read_bq2.ref;
+
+			const g_ref_1 = ItemRef.fromItem(g_runtime_1);
+
+			expect(g_ref_round!.code).toEqual(g_ref_1.code);
+			expect(g_ref_round!.ident).toEqual(g_ref_1.ident);
+			expect(g_ref_round!.controller).toEqual(g_ref_1.controller);
+
+			await expect(g_ref_round).resolves.toMatchObject(g_runtime_1);
+		},
+
+
+		async 'get empty array'({FooBars, g_foobar_1, BazQuxes, g_bazqux_1, g_bazqux_2}) {
+			await BazQuxes.put(g_bazqux_1);
+
+			const g_read_bq1 = (await BazQuxes.get(g_bazqux_1))!;
+
+			expect(g_read_bq1).toMatchObject({
+				array: expect.arrayContaining([]),
+			});
+
+			expect(g_read_bq1.array).toHaveLength(0);
+		},
+
+		async 'get non-empty array'({FooBars, g_foobar_1, BazQuxes, g_bazqux_1, g_bazqux_2}) {
+			await BazQuxes.put(g_bazqux_2);
+
+			const g_read_bq1 = (await BazQuxes.get(g_bazqux_2))!;
+
+			// expect(g_read_bq1).toMatchObject({
+			// 	array: expect.arrayContaining(g_bazqux_2.array),
+			// });
+
+			expect(g_read_bq1.array).toHaveLength(g_bazqux_2.array.length);
+		},
+
+		// console.warn(`##### FINDME ####\n${g_ref_round?.controller.domain} : ${g_ref_1.controller.domain}`);
 	});
 });

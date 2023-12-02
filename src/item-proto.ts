@@ -231,7 +231,7 @@ const tagged_serdefaults = <
 			},
 
 			// ref deserializer
-			i_code => i_code? new ItemRef(k_item, i_code as ItemCode): null,
+			i_code => i_code? new ItemRef(k_item.hub.vault.controllerFor(w_info)!, i_code as ItemCode): null,
 
 			// ref default
 			F_DEFAULT_ZERO,

@@ -4,7 +4,7 @@ import type {HubEffects, VaultHub} from './hub';
 import type {RuntimeItem} from './item-proto';
 import type {Reader} from './reader';
 
-import type {ItemShapesFromSchema, StructuredSchema, PartableSchemaSpecifier, AcceptablePartTuples, SchemaBuilder, PartFields, PartableEsType, FieldStruct} from './schema-types';
+import type {SchemaToItemShape, StructuredSchema, PartableSchemaSpecifier, AcceptablePartTuples, SchemaBuilder, PartFields, PartableEsType, FieldStruct, MakeItemFieldsSettable} from './schema-types';
 import type {DomainLabel, ItemCode, ItemIdent, ItemPath, SerFieldStruct, SerItem, SerKeyStruct, SerSchema} from './types';
 import type {Vault} from './vault';
 import type {Dict, JsonArray, JsonObject} from '@blake.regalia/belt';
@@ -98,9 +98,9 @@ export interface GenericItemController<
 
 	getAt(a_parts: Readonly<AcceptablePartTuples>): Promise<g_runtime | undefined>;
 
-	put(g_item: g_item): Promise<[ItemPath, SerItem]>;
+	put(g_item: MakeItemFieldsSettable<g_item>): Promise<[ItemPath, SerItem]>;
 
-	putMany(a_items: g_item[]): Promise<[ItemPath, SerItem][]>;
+	putMany(a_items: MakeItemFieldsSettable<g_item>[]): Promise<[ItemPath, SerItem][]>;
 
 	entries(): AsyncIterableIterator<[ItemIdent, g_item]>;
 
@@ -111,7 +111,7 @@ export interface GenericItemController<
 
 export class ItemController<
 	g_schema extends StructuredSchema,
-	g_item extends ItemShapesFromSchema<g_schema>,
+	g_item extends SchemaToItemShape<g_schema>,
 	g_proto,
 	g_runtime extends RuntimeItem<g_item & g_proto>,
 	s_domain extends string,
@@ -360,7 +360,7 @@ export class ItemController<
 		return g_item;
 	}
 
-	_serialize(g_item: g_item | g_runtime): [ItemPath, SerItem, HubEffects] {
+	_serialize(g_item: MakeItemFieldsSettable<g_item> | g_runtime): [ItemPath, SerItem, HubEffects] {
 		// prep runtime item
 		let g_runtime = g_item as g_runtime;
 
@@ -402,7 +402,7 @@ export class ItemController<
 		return this.getByCode(this._encode_item(a_parts), a_parts);
 	}
 
-	async put(g_item: g_item): Promise<[ItemPath, SerItem]> {
+	async put(g_item: MakeItemFieldsSettable<g_item>): Promise<[ItemPath, SerItem]> {
 		const {_k_hub} = this;
 
 		// serialize item
@@ -415,7 +415,7 @@ export class ItemController<
 		return a_ser.slice(0, 2) as [ItemPath, SerItem];
 	}
 
-	async putMany(a_items: g_item[]): Promise<[ItemPath, SerItem][]> {
+	async putMany(a_items: MakeItemFieldsSettable<g_item>[]): Promise<[ItemPath, SerItem][]> {
 		const {_k_hub} = this;
 
 		// serialize items

@@ -149,10 +149,6 @@ export const init_foobars = (k_client: Vault) => {
 		object: {
 			a: 'apple',
 		},
-		// array: ['a'],
-		// tuple: [['A'], 1],
-		// // pfp: k_pfp_1,
-		// switch: G_SWITCH_COMMON,
 	};
 
 	const g_foobar_3: LocalFooBarStruct = {
@@ -167,10 +163,6 @@ export const init_foobars = (k_client: Vault) => {
 			b: ['banana', 3, true],
 			c: {},
 		},
-		// array: ['a', 'b'],
-		// tuple: [['A', 'B'], 2],
-		// // pfp: k_pfp_1,
-		// switch: G_SWITCH_COMMON,
 	};
 
 
@@ -212,7 +204,7 @@ export const init_bazquxes = (
 		on: Toggle.ON,
 
 		ref: FooBars.getItemRef(g_foobar_1)!,
-		array: [],
+		array: ['hello', 'world'],
 		tuple: [[], 0],
 		switch: 9,
 	};

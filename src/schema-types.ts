@@ -151,12 +151,13 @@ export type ReduceSchema<z_test> =
 	z_test extends DatatypeRef<infer g_ref>? g_ref | null
 		: z_test extends SchemaSubtype<infer w_estype, infer s_id>? ReduceSchema<w_estype>
 			: z_test extends {[ES_TYPE]: any}? z_test
-				: z_test extends JsonPrimitive? z_test
-					: z_test extends Array<infer w_type>
-						? ReduceSchema<w_type>[]
-						: {
-							[si_each in keyof z_test]: ReduceSchema<z_test[si_each]>;
-						};
+				: z_test extends Uint8Array? z_test
+					: z_test extends JsonPrimitive? z_test
+						: z_test extends Array<infer w_type>
+							? ReduceSchema<w_type>[]
+							: {
+								[si_each in keyof z_test]: ReduceSchema<z_test[si_each]>;
+							};
 
 
 export type DatatypeInt<
@@ -241,7 +242,7 @@ type FindSwitches<
 }>;
 
 
-export type ItemShapesFromSchema<g_schema> = FindSwitches<g_schema> extends never
+export type SchemaToItemShape<g_schema> = FindSwitches<g_schema> extends never
 	? ReduceSchema<g_schema>
 	: FindSwitches<g_schema> extends infer h_switches
 		? AllValues<{
@@ -275,6 +276,14 @@ export type ItemShapesFromSchema<g_schema> = FindSwitches<g_schema> extends neve
 		}>
 		: never;
 
+export type MakeItemFieldsSettable<z_item> = z_item extends Uint8Array
+	? z_item
+	: z_item extends Dict<any>
+		? {
+			[si_key in keyof z_item]: z_item[si_key] extends (ItemRef<infer g_dst, infer g_runtime> | null)
+				? g_runtime | z_item[si_key]
+				: MakeItemFieldsSettable<z_item[si_key]>;
+		}: z_item;
 
 export type PartFields<g_schema> = ReduceSchema<FilterDrop<{
 	[si_key in keyof g_schema]: g_schema[si_key] extends {[PART_FIELD]: infer b_part_field}
@@ -294,7 +303,7 @@ export type SelectionCriteria<a_parts extends readonly any[], g_schema> = KvTupl
 export type ExtractWherePartsMatch<
 	a_parts extends readonly any[],
 	g_schema,
-> = Extract<ItemShapesFromSchema<g_schema>, SelectionCriteria<a_parts, g_schema>>;
+> = Extract<SchemaToItemShape<g_schema>, SelectionCriteria<a_parts, g_schema>>;
 
 export type ExtractedMembers<
 	a_parts extends readonly any[],
@@ -415,6 +424,7 @@ export type SchemaSpecifier = ImplementsSchemaTypes<{
 	): SchemaSwitch<si_dep, w_classifier, h_switch>;
 }>;
 
+
 /**
  * Ammends the core specifier with methods for partable datatypes
  */
@@ -465,7 +475,7 @@ export type SubschemaBuilder<
 
 	type reduced = ReduceSchema<start>;
 
-	type shape = ItemShapesFromSchema<start>;
+	type shape = SchemaToItemShape<start>;
 
 	type test = PartFields<start>;
 
@@ -473,7 +483,7 @@ export type SubschemaBuilder<
 
 	type Demo = {
 		type: DatatypeInt<ItemType, 1>;
-		// ref: DatatypeRef<GenericItemController<start>>;
+		ref: DatatypeRef<ItemRef<start>>;
 		switch: SchemaSwitch<'type', ItemType, {
 			[ItemType.UNKNOWN]: (k1: SchemaSpecifier) => DatatypeInt<number, 0>;
 			[ItemType.THING]: (k1: SchemaSpecifier) => DatatypeString<'thing', 0>;
@@ -481,5 +491,7 @@ export type SubschemaBuilder<
 		}>;
 	};
 
-	type inspp = ItemShapesFromSchema<Demo>;
+	type examine = MakeItemFieldsSettable<SchemaToItemShape<Demo>>;
+
+	type inspp = SchemaToItemShape<Demo>;
 }

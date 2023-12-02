@@ -60,52 +60,46 @@ const {FooBars, g_foobar_1, g_foobar_2, g_foobar_3, BazQuxes} = g_init_foobars;
 const g_init_bazquxes = init_bazquxes(g_init_foobars);
 const {g_bazqux_1, g_bazqux_2} = g_init_bazquxes;
 
-await BazQuxes.put(g_bazqux_1);
+// await BazQuxes.put(g_bazqux_1);
 
-await BazQuxes.putMany([g_bazqux_1, g_bazqux_2]);
-// await BazQuxes.put(g_bazqux_2);
+// await BazQuxes.putMany([g_bazqux_1, g_bazqux_2]);
+// // await BazQuxes.put(g_bazqux_2);
 
-// const g_read_2 = await Chains.get(g_foobar_2);
+// // const g_read_2 = await Chains.get(g_foobar_2);
 
-// const g_read_3 = await Chains.get(g_foobar_3);
+// // const g_read_3 = await Chains.get(g_foobar_3);
 
-const g_ref_1 = (await FooBars.get(g_foobar_1))!;
+// const g_ref_1 = (await FooBars.get(g_foobar_1))!;
 
-await BazQuxes.put({
-	...g_bazqux_1,
-	ref: ItemRef.fromItem(g_ref_1),
-});
+// await BazQuxes.put({
+// 	...g_bazqux_1,
+// 	ref: ItemRef.fromItem(g_ref_1),
+// });
 
-const g_read_bq1 = await BazQuxes.get(g_bazqux_1);
+// const g_read_bq1 = await BazQuxes.get(g_bazqux_1);
+
+// const g_ref_round = g_read_bq1!.ref;
+
+// debugger;
+
+// console.log(g_ref_round);
+
+await BazQuxes.put(g_bazqux_2);
+
+const g_read_bq1 = (await BazQuxes.get(g_bazqux_2))!;
 
 debugger;
-const a_vals = await spread_async(FooBars.filter({
-	ns: FooBarNamespace.COMMON,
-	ref: new Set([g_foobar_1.ref, g_foobar_3.ref]),
-}));
+g_read_bq1.array.length;
+g_read_bq1.array.slice(1);
+
+debugger;
+
+// const a_vals = await spread_async(FooBars.filter({
+// 	ns: FooBarNamespace.COMMON,
+// 	ref: new Set([g_foobar_1.ref, g_foobar_3.ref]),
+// }));
 
 // const a_values = [];
 // for await(const [si_item, g_item] of Chains.entries()) {
 // 	a_values.push(g_item);
 // }
-
-console.log(a_vals);
-
-debugger;
-
-// const g_read = await Chains.getAt([ChainNamespace.COSMOS, 'test-1']);
-
-debugger;
-// console.log(g_read_1);
-// console.log(g_read_2);
-
-// // use item
-// const g_item = await Contacts.getAt([ContactType.HUMAN, buffer_to_base93(text_to_buffer('data'))]);
-
-// debugger;
-
-// console.log({
-// 	k_content,
-// 	k_session,
-// 	k_client,
-// });
