@@ -11,6 +11,7 @@ import type {Dict, JsonArray, JsonObject} from '@blake.regalia/belt';
 
 import {F_IDENTITY, __UNDEFINED, escape_regex} from '@blake.regalia/belt';
 
+import {AppError} from './errors';
 import {apply_filter_struct, type GenericStructMatchCriteria, type MatchCriteria} from './filter';
 import {$_CODE, $_CONTROLLER, $_LINKS, $_TUPLE, is_runtime_item, item_prototype} from './item-proto';
 import {ItemRef} from './item-ref';
@@ -99,6 +100,8 @@ export interface GenericItemController<
 
 	put(g_item: g_item): Promise<[ItemPath, SerItem]>;
 
+	putMany(a_items: g_item[]): Promise<[ItemPath, SerItem][]>;
+
 	entries(): AsyncIterableIterator<[ItemIdent, g_item]>;
 
 	filter(h_criteria: MatchCriteria<g_item>, n_limit?: number): AsyncIterableIterator<g_item>;
@@ -117,8 +120,9 @@ export class ItemController<
 	f_schema extends SchemaBuilder<PartableSchemaSpecifier, a_parts, g_schema>,
 	g_parts extends PartFields<g_schema>,
 > implements
-	GenericItemController<g_item, g_runtime, g_schema, a_parts, g_parts>,
-	GenericItemController {
+	GenericItemController<g_item, g_runtime, g_schema, a_parts, g_parts>
+	// GenericItemController
+{
 	protected _k_vault: Vault;
 	protected _si_domain!: si_domain;
 	protected _xc_strategy: DomainStorageStrategy;
@@ -154,6 +158,11 @@ export class ItemController<
 			proto: f_proto,
 		} = gc_type;
 
+		// vault is already open
+		if(k_vault.isOpened()) {
+			throw new AppError(`ItemController "${si_domain}" must be created before the vault is opened`);
+		}
+
 		// save to fields
 		this._k_vault = k_vault;
 
@@ -166,8 +175,11 @@ export class ItemController<
 		// interpret schema
 		const a_schema = this._a_schema = interpret_schema(si_domain, f_builder);
 
+		// cast to generic (shouldn't have to tho...)
+		const k_generic = this as GenericItemController;
+
 		// build schema descriptor
-		const g_descriptor_schema = this._g_descriptor_schema = item_prototype(a_schema, this, false);
+		const g_descriptor_schema = this._g_descriptor_schema = item_prototype(a_schema, k_generic, false);
 
 		// get descriptor from proto
 		const g_descriptor_proto = this._g_descriptor_proto = f_proto? Object.getOwnPropertyDescriptors(f_proto(F_IDENTITY)): {};
@@ -176,10 +188,10 @@ export class ItemController<
 		this._g_prototype = Object.create({}, Object.assign({}, g_descriptor_proto, g_descriptor_schema));
 
 		// create loader prototype
-		this._g_loader = Object.create({}, item_prototype(a_schema, this, true));
+		this._g_loader = Object.create({}, item_prototype(a_schema, k_generic, true));
 
 		// register controller with client
-		this._k_vault.registerController(this._si_domain, this);
+		this._k_vault.registerController(this._si_domain, k_generic);
 
 		// cache part length
 		this._nl_parts = Object.keys(a_schema[1]).length;
@@ -225,7 +237,7 @@ export class ItemController<
 			delete g_copy[si_label];
 
 			// add to key parts
-			return g_criteria[si_label as keyof g_parts];
+			return (g_criteria as Dict)[si_label as unknown as string];
 		}) as unknown as Readonly<a_parts>, g_copy];
 	}
 
@@ -235,7 +247,7 @@ export class ItemController<
 		return [a_parts.join(':') as ItemPath, g_copy];
 	}
 
-	protected _backing(a_parts: PartableEsType[]=[], a_fields: JsonArray=[]): PropertyDescriptorMap {
+	protected _backing(a_parts: PartableEsType[]=[], a_fields: JsonArray=[], i_code=0 as ItemCode): PropertyDescriptorMap {
 		const {_nl_parts, _nl_fields} = this;
 
 		const a_tuple = Array(1+this._nl_parts+this._nl_fields);
@@ -252,7 +264,7 @@ export class ItemController<
 
 		return {
 			[$_CODE]: {
-				value: 0,
+				value: i_code,
 			},
 			[$_CONTROLLER]: {
 				value: this,
@@ -261,10 +273,7 @@ export class ItemController<
 				value: a_tuple,
 			},
 			[$_LINKS]: {
-				value: {
-					remove: [],
-					insert: [],
-				},
+				value: {},
 			},
 		};
 	}
@@ -306,7 +315,7 @@ export class ItemController<
 
 		if(!i_item) return null;
 
-		return new ItemRef(this, i_item);
+		return new ItemRef<g_item, g_runtime>(this as GenericItemController<g_item, g_runtime>, i_item);
 	}
 
 	has1<a_local extends Readonly<a_parts>>(
@@ -326,7 +335,7 @@ export class ItemController<
 		return this.getAt(a_parts);
 	}
 
-	_instantiate(si_item: ItemIdent, a_tuple: SerItem): g_runtime {
+	_instantiate(si_item: ItemIdent, a_tuple: SerItem, i_item: ItemCode): g_runtime {
 		// split ident by reserved delimiter
 		const a_split = si_item.split(':');
 
@@ -334,7 +343,7 @@ export class ItemController<
 		const a_parts = [...a_split.slice(1, this._nl_parts), a_split.slice(this._nl_parts).join(':')] as a_parts;
 
 		// create instance
-		return Object.create(this._g_prototype, this._backing(a_parts, a_tuple));
+		return Object.create(this._g_prototype, this._backing(a_parts, a_tuple, i_item));
 	}
 
 	async getByCode(i_code: ItemCode | undefined, a_parts?: a_parts): Promise<g_runtime | undefined> {
@@ -345,7 +354,7 @@ export class ItemController<
 		const a_tuple = await this._k_hub.getItemContent(i_code);
 
 		// create instance and set its local properties
-		const g_item = Object.create(this._g_prototype, this._backing(a_parts, a_tuple));
+		const g_item = Object.create(this._g_prototype, this._backing(a_parts, a_tuple, i_code));
 
 		// return instance
 		return g_item;
@@ -397,13 +406,26 @@ export class ItemController<
 		const {_k_hub} = this;
 
 		// serialize item
-		const [sr_item, w_ser, g_effects] = this._serialize(g_item);
+		const a_ser = this._serialize(g_item);
 
 		// write item to storage
-		await _k_hub.putItem(this._si_domain, sr_item, w_ser, g_effects);
+		await _k_hub.putItems(this._si_domain, [a_ser]);
 
 		// 
-		return [sr_item, w_ser];
+		return a_ser.slice(0, 2) as [ItemPath, SerItem];
+	}
+
+	async putMany(a_items: g_item[]): Promise<[ItemPath, SerItem][]> {
+		const {_k_hub} = this;
+
+		// serialize items
+		const a_sers = a_items.map(g_item => this._serialize(g_item));
+
+		// write items to storage
+		await _k_hub.putItems(this._si_domain, a_sers);
+
+		// 
+		return a_sers.map(a_ser => a_ser.slice(0, 2) as [ItemPath, SerItem]);
 	}
 
 
@@ -416,7 +438,7 @@ export class ItemController<
 		// each item entry from hub
 		for await(const [i_item, si_item, a_tuple] of this._k_hub.itemEntries(this._si_domain)) {
 			// create item
-			const g_item = this._instantiate(si_item, a_tuple);
+			const g_item = this._instantiate(si_item, a_tuple, i_item);
 
 			if(!g_item[$_TUPLE]) {
 				throw new Error(`Item missing TUPLE?!`);
@@ -487,7 +509,7 @@ export class ItemController<
 			const a_tuple = await _k_hub.getItemContent(i_item);
 
 			// load item
-			const g_item = this._instantiate(si_item, a_tuple);
+			const g_item = this._instantiate(si_item, a_tuple, i_item);
 
 			// filter does not match; next candidate
 			if(!apply_filter_struct(g_item as FieldStruct, h_fields as GenericStructMatchCriteria, '', _h_schema_fields, _h_schema_parts)) continue;

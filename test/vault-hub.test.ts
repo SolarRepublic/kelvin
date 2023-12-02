@@ -1,13 +1,15 @@
 /* eslint-disable @typescript-eslint/no-unused-expressions */
 /* eslint-disable quote-props */
-import type {TestFunction} from 'vitest';
+import type {TestContext, TestFunction} from 'vitest';
 
 import {ode, timeout} from '@blake.regalia/belt';
 
 import {XT_ROTATION_DEBOUNCE} from 'src/constants';
+import {$_CODE} from 'src/item-proto';
+import {ItemRef} from 'src/item-ref';
 import {beforeEach, describe, expect, it, vi} from 'vitest';
 
-import {FooBarNamespace} from './foo-bars';
+import {FooBarNamespace, init_bazquxes, init_foobars} from './foo-bars';
 import {SI_DATABASE, client, Stage, init, phrase, init_destruct, spread_async} from './kit';
 import {VaultHub} from '../src/hub';
 import {Vault} from '../src/vault';
@@ -496,6 +498,74 @@ describe('rotation', () => {
 				g_foobar_2,
 				g_foobar_3,
 			]);
+		},
+	});
+});
+
+
+describe('baz-quxes', () => {
+	beforeEach(async(g_ctx: TestContext) => {
+		const g_init_foobars = await init_destruct(Stage.PUT_3);
+
+		Object.assign(g_ctx, g_init_foobars);
+		Object.assign(g_ctx, init_bazquxes(g_init_foobars));
+	});
+
+	tests({
+		async 'put 1'({BazQuxes, g_bazqux_1}) {
+			await expect(BazQuxes.put(g_bazqux_1)).resolves.toBeDefined();
+		},
+
+		async 'put many (0)'({BazQuxes, g_bazqux_1, g_bazqux_2}) {
+			await expect(BazQuxes.putMany([])).resolves.toBeDefined();
+		},
+
+		async 'put many (1 replace)'({BazQuxes, g_bazqux_1, g_bazqux_2}) {
+			await BazQuxes.put(g_bazqux_1);
+
+			await expect(BazQuxes.putMany([g_bazqux_1])).resolves.toBeDefined();
+		},
+
+		async 'put many (1 new)'({BazQuxes, g_bazqux_1, g_bazqux_2}) {
+			await expect(BazQuxes.putMany([g_bazqux_2])).resolves.toBeDefined();
+		},
+
+		async 'put many (1 existing + 1 new)'({BazQuxes, g_bazqux_1, g_bazqux_2}) {
+			await BazQuxes.put(g_bazqux_1);
+
+			await expect(BazQuxes.putMany([g_bazqux_1, g_bazqux_2])).resolves.toBeDefined();
+		},
+
+		async 'put many (2 new)'({BazQuxes, g_bazqux_1, g_bazqux_2}) {
+			await expect(BazQuxes.putMany([g_bazqux_1, g_bazqux_2])).resolves.toBeDefined();
+		},
+
+		async 'get ref null'({BazQuxes, g_bazqux_1, g_bazqux_2}) {
+			await BazQuxes.put({
+				...g_bazqux_1,
+				ref: null,
+			});
+
+			await expect(BazQuxes.get(g_bazqux_1)).resolves.toMatchObject({
+				ref: null,
+			});
+		},
+
+		async 'get ref 1'({FooBars, g_foobar_1, BazQuxes, g_bazqux_1, g_bazqux_2}) {
+			const g_ref_1 = (await FooBars.get(g_foobar_1))!;
+
+			console.warn(`###################\n${g_ref_1.str}\n#########FINDME#`);
+
+			await BazQuxes.put({
+				...g_bazqux_1,
+				ref: ItemRef.fromItem(g_ref_1),
+			});
+
+			await expect(BazQuxes.get(g_bazqux_1)).resolves.toMatchObject({
+				ref: {
+					code: g_ref_1,
+				},
+			});
 		},
 	});
 });

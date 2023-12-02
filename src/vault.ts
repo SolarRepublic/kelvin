@@ -730,6 +730,14 @@ export class Vault {
 		return !!g_privates?.dk_root;
 	}
 
+	/**
+	 * Check if the vault is already opened
+	 * @returns `true` if it is opened, `false` otherwise
+	 */
+	isOpened(): boolean {
+		return !!this._k_hub;
+	}
+
 	async _unlock_subroutine(
 		kw_content: KelvinKeyValueWriter,
 		kn_root: SensitiveBytes,

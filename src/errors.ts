@@ -52,3 +52,5 @@ export class ClientBehindError extends BasicError('Your client software is older
 export class MissingMigrationRouterError extends BasicError('Missing migration router where expected') {}
 
 export class StorageError extends BasicError('A problem was detected with the storage backend') {}
+
+export class AppError extends BasicError('The application using Kelvin has an issue') {}

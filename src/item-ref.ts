@@ -1,14 +1,24 @@
 import type {GenericItemController} from './controller';
-import type {RuntimeItem} from './item-proto';
 
+import type {RuntimeItem} from './item-proto';
 import type {DomainLabel, ItemCode, ItemIdent} from './types';
 import type {Dict} from '@blake.regalia/belt';
+
+import {$_CODE, $_CONTROLLER, is_runtime_item} from './item-proto';
 
 
 export class ItemRef<
 	g_dst extends Dict<any>=Dict<any>,
 	g_runtime extends RuntimeItem<g_dst>=RuntimeItem<g_dst>,
 > implements PromiseLike<g_runtime> {
+	static fromItem<g_dst extends Dict<any>>(g_item: RuntimeItem<g_dst>): ItemRef<g_dst> {
+		if(!is_runtime_item(g_item)) {
+			throw TypeError(`Argument passed to ItemRef.to() must be a RuntimeItem`);
+		}
+
+		return new ItemRef(g_item[$_CONTROLLER], g_item[$_CODE]) as ItemRef<g_dst>;
+	}
+
 	constructor(
 		protected _k_src: GenericItemController<g_dst, g_runtime>,
 		protected _i_item: ItemCode

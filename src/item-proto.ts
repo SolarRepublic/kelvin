@@ -214,10 +214,10 @@ const tagged_serdefaults = <
 				};
 
 				// path ident
-				const sr_path = a_path.join('.') as SerFieldPath;
+				const sr_path = a_path.slice(1).join('.') as SerFieldPath;
 
 				// removing/replacing previous
-				const g_prev = access_path<KnownEsDatatypes>(g_runtime, a_path);
+				const g_prev = access_path<KnownEsDatatypes>(g_runtime, a_path.slice(1));
 				if(g_prev instanceof ItemRef) {
 					// only remove the stored item code
 					g_links.remove[sr_path] ??= g_prev.code;
@@ -322,9 +322,6 @@ const tagged_serdefaults = <
 			// transform each switch option's datatype into a serdef
 			const h_options = fodemtv(a_tail[0] as SerFieldSwitch[1], z_field => unwrap_datatype(z_field, k_item));
 
-			debugger;
-
-
 			// return joint serdef
 			return [
 				// serializer
@@ -396,7 +393,7 @@ const H_DESCRIPTORS_PARTS: {
 	[PrimitiveDatatype.INT]: b_writable => (i_field, a_path) => ({
 		get() {
 			if(!this[$_TUPLE]) {
-				throw new Bug(`Something went horribly wrong while attempting to access int datatype ${this[$_CONTROLLER]?.domain}.${a_path.join('.')}`);
+				throw new Bug(`Something went horribly wrong while attempting to access int datatype ${a_path.join('.')}`);
 			}
 
 			return +this[$_TUPLE][i_field]!;

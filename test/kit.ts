@@ -1,4 +1,4 @@
-import type {FooBarsStruct} from './foo-bars';
+import type {BazQuxesController, BazQuxesStruct, BazQuxesType, FooBarsController, FooBarsStruct, init_bazquxes} from './foo-bars';
 import type {VaultHub} from '../src/hub';
 import type {TestContext} from 'vitest';
 
@@ -12,10 +12,15 @@ import {MemoryWrapper} from '../src/wrappers/memory';
 type TestContextExtension = {
 	k_client: Vault;
 	k_hub?: VaultHub;
-	FooBars: ReturnType<typeof init_foobars>['FooBars'];
+
+	FooBars: FooBarsController;
 	g_foobar_1: FooBarsStruct;
 	g_foobar_2: FooBarsStruct;
 	g_foobar_3: FooBarsStruct;
+
+	BazQuxes: BazQuxesController;
+	g_bazqux_1: BazQuxesStruct;
+	g_bazqux_2: BazQuxesStruct;
 };
 
 declare module 'vitest' {
