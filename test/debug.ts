@@ -4,7 +4,7 @@ import {ode} from '@blake.regalia/belt';
 import {ItemRef} from 'src/item-ref';
 import {expect} from 'vitest';
 
-import {FooBarNamespace, init_bazquxes, init_foobars} from './foo-bars';
+import {BazQuxesType, FooBarNamespace, init_bazquxes, init_foobars} from './foo-bars';
 import {Stage, init_destruct, spread_async} from './kit';
 
 // const k_content = new MemoryWrapper('content');
@@ -58,7 +58,7 @@ const {FooBars, g_foobar_1, g_foobar_2, g_foobar_3, BazQuxes} = g_init_foobars;
 // }
 
 const g_init_bazquxes = init_bazquxes(g_init_foobars);
-const {g_bazqux_1, g_bazqux_2} = g_init_bazquxes;
+const {g_bazqux_1, g_bazqux_2, g_bazqux_3} = g_init_bazquxes;
 
 // await BazQuxes.put(g_bazqux_1);
 
@@ -85,14 +85,32 @@ const {g_bazqux_1, g_bazqux_2} = g_init_bazquxes;
 // console.log(g_ref_round);
 
 await BazQuxes.put(g_bazqux_2);
+await BazQuxes.put(g_bazqux_3);
 
-const g_read_bq1 = (await BazQuxes.get(g_bazqux_2))!;
-
-debugger;
-g_read_bq1.array.length;
-g_read_bq1.array.slice(1);
+const g_read_bq2 = (await BazQuxes.get(g_bazqux_2))!;
+const g_read_bq3 = (await BazQuxes.get(g_bazqux_3))!;
 
 debugger;
+
+if(BazQuxesType.BAZ === g_read_bq2.type && BazQuxesType.BAZ === g_bazqux_2.type) {
+	const a_actual = g_read_bq2.switch.slice(0, 2);
+	const a_expect = g_bazqux_2.switch.slice(0, 2);
+	debugger;
+}
+
+
+g_read_bq3.array.length = 3;
+
+debugger;
+// g_read_bq1.array.length;
+// g_read_bq1.array.slice(1);
+// g_read_bq1.array.filter(x => x);
+
+// delete g_read_bq1.array[0];
+
+// console.log(g_read_bq1.array.join(', '));
+
+// debugger;
 
 // const a_vals = await spread_async(FooBars.filter({
 // 	ns: FooBarNamespace.COMMON,

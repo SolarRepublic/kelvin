@@ -141,7 +141,12 @@ export type Datatype =
 	| DatatypeTuple;
 
 
-export type StructuredSchema = Dict<Datatype>;
+// export type StructuredSchema = Dict<CoreDatatype>;
+
+// eslint-disable-next-line @typescript-eslint/consistent-indexed-object-style
+export type StructuredSchema = {
+	[si_key: string]: Datatype;
+};
 
 
 /**
@@ -206,7 +211,7 @@ export type DatatypeTuple<
 > = SchemaSubtype<w_subtype, 'tuple'>;
 
 export type DatatypeStruct<
-	w_subtype extends JsonObject=JsonObject,
+	w_subtype extends StructuredSchema=StructuredSchema,
 > = SchemaSubtype<w_subtype, 'struct'>;
 
 type SchemaBuilderSwitchMap<
@@ -405,9 +410,18 @@ export type SchemaSpecifier = ImplementsSchemaTypes<{
 		f_sub: SubschemaBuilder<a_tuple>
 	): DatatypeTuple<a_tuple>;
 
-	struct<w_subtype extends JsonObject=JsonObject>(
-		f_sub: SubschemaBuilder<SchemaSimulator<0, DatatypeStruct<w_subtype>>>,
-	): DatatypeStruct<w_subtype>;
+	struct<
+		// w_subtype extends JsonObject=JsonObject
+		h_subschema extends StructuredSchema,
+	>(
+		// f_sub: SubschemaBuilder<SchemaSimulator<0, DatatypeStruct<w_subtype>>>,
+		// f_sub: SubschemaStructBuilder<Datatype>,
+		// f_sub: {
+		// 	[si_key in keyof h_subschema]: 
+		// }
+		f_sub: (k: SchemaSpecifier) => h_subschema,
+		// f_sub: SchemaBuilder<SchemaSimulator<0>, []>,
+	): DatatypeStruct<h_subschema>;
 
 	switch<
 		si_dep extends string,
@@ -440,6 +454,13 @@ export type PartableSchemaSpecifier = SchemaSpecifier & {
 export type SubschemaBuilder<
 	w_return,
 > = (k: SchemaSpecifier) => w_return;
+
+/**
+ * Sub-level schema builder for nested fields
+ */
+export type SubschemaStructBuilder<
+	w_return,
+> = (k: SchemaSpecifier) => Dict<w_return>;
 
 // /**
 //  * Sub-level schema builder for nested fields

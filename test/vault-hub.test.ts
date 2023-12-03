@@ -2,14 +2,14 @@
 /* eslint-disable quote-props */
 import type {TestContext, TestFunction} from 'vitest';
 
-import {ode, timeout} from '@blake.regalia/belt';
+import {__UNDEFINED, fold, ode, timeout} from '@blake.regalia/belt';
 
 import {XT_ROTATION_DEBOUNCE} from 'src/constants';
 import {$_CODE} from 'src/item-proto';
 import {ItemRef} from 'src/item-ref';
 import {beforeEach, describe, expect, expectTypeOf, it, vi} from 'vitest';
 
-import {FooBarNamespace, init_bazquxes, init_foobars} from './foo-bars';
+import {BazQuxesType, FooBarNamespace, init_bazquxes, init_foobars} from './foo-bars';
 import {SI_DATABASE, client, Stage, init, phrase, init_destruct, spread_async} from './kit';
 import {VaultHub} from '../src/hub';
 import {Vault} from '../src/vault';
@@ -22,6 +22,8 @@ type Tree<w_leaf> = {
 type TestFunctionTree = Tree<TestFunction<{}>>;
 
 const entries_to_values = (a_entries: [any, any][]) => a_entries.map(([, w_value]) => w_value);
+
+const f_arrayify = (z: unknown) => Array.isArray(z)? [...z]: z;
 
 const tests = (h_tests: TestFunctionTree) => {
 	for(const [si_key, z_value] of ode(h_tests)) {
@@ -623,30 +625,144 @@ describe('baz-quxes', () => {
 		},
 
 
-		async 'get empty array'({FooBars, g_foobar_1, BazQuxes, g_bazqux_1, g_bazqux_2}) {
-			await BazQuxes.put(g_bazqux_1);
-
-			const g_read_bq1 = (await BazQuxes.get(g_bazqux_1))!;
-
-			expect(g_read_bq1).toMatchObject({
-				array: expect.arrayContaining([]),
-			});
-
-			expect(g_read_bq1.array).toHaveLength(0);
-		},
-
-		async 'get non-empty array'({FooBars, g_foobar_1, BazQuxes, g_bazqux_1, g_bazqux_2}) {
-			await BazQuxes.put(g_bazqux_2);
-
-			const g_read_bq1 = (await BazQuxes.get(g_bazqux_2))!;
-
-			// expect(g_read_bq1).toMatchObject({
-			// 	array: expect.arrayContaining(g_bazqux_2.array),
-			// });
-
-			expect(g_read_bq1.array).toHaveLength(g_bazqux_2.array.length);
-		},
-
 		// console.warn(`##### FINDME ####\n${g_ref_round?.controller.domain} : ${g_ref_1.controller.domain}`);
+	});
+});
+
+describe('fully loaded', () => {
+	beforeEach(async(g_ctx) => {
+		const g_init_foobars = await init_destruct(Stage.PUT_3);
+
+		Object.assign(g_ctx, g_init_foobars);
+		const {BazQuxes, g_bazqux_1, g_bazqux_2, g_bazqux_3} = Object.assign(g_ctx, init_bazquxes(g_init_foobars));
+
+		await BazQuxes.put(g_bazqux_1);
+		await BazQuxes.put(g_bazqux_2);
+		await BazQuxes.put(g_bazqux_3);
+
+		Object.assign(g_ctx, {
+			g_read_bq1: await BazQuxes.get(g_bazqux_1),
+			g_read_bq2: await BazQuxes.get(g_bazqux_2),
+			g_read_bq3: await BazQuxes.get(g_bazqux_3),
+		});
+	});
+
+	tests({
+		'tagged': {
+			'arrays'({g_bazqux_1, g_bazqux_2, g_bazqux_3, g_read_bq1, g_read_bq2, g_read_bq3}) {
+				expect([...g_read_bq1.array]).toMatchObject(g_bazqux_1.array);
+				expect([...g_read_bq2.array]).toMatchObject(g_bazqux_2.array);
+				expect([...g_read_bq3.array]).toMatchObject(g_bazqux_3.array);
+			},
+
+			'tuples'({g_bazqux_1, g_bazqux_2, g_bazqux_3, g_read_bq1, g_read_bq2, g_read_bq3}) {
+				expect([...g_read_bq1.tuple].map(f_arrayify)).toMatchObject(g_bazqux_1.tuple);
+				expect([...g_read_bq2.tuple].map(f_arrayify)).toMatchObject(g_bazqux_2.tuple);
+				expect([...g_read_bq3.tuple].map(f_arrayify)).toMatchObject(g_bazqux_3.tuple);
+			},
+
+			'structs'({g_bazqux_1, g_bazqux_2, g_bazqux_3, g_read_bq1, g_read_bq2, g_read_bq3}) {
+				expect(g_read_bq1.struct).toMatchObject(g_bazqux_1.struct);
+				expect(g_read_bq2.struct).toMatchObject(g_bazqux_2.struct);
+				expect(g_read_bq3.struct).toMatchObject(g_bazqux_3.struct);
+			},
+		},
+
+		'field array': {
+			'get length'({g_bazqux_1, g_bazqux_2, g_bazqux_3, g_read_bq1, g_read_bq2, g_read_bq3}) {
+				expect(g_read_bq1.array).toHaveLength(g_bazqux_1.array.length);
+				expect(g_read_bq2.array).toHaveLength(g_bazqux_2.array.length);
+				expect(g_read_bq3.array).toHaveLength(g_bazqux_3.array.length);
+			},
+
+			async 'set length grow'({BazQuxes, g_bazqux_1, g_bazqux_2, g_bazqux_3, g_read_bq1, g_read_bq2, g_read_bq3}) {
+				g_read_bq1.array.length = 3;
+
+				await BazQuxes.put(g_read_bq1);
+
+				expect(g_read_bq1.array).toHaveLength(3);
+
+				const g_read2_bq1 = (await BazQuxes.get(g_read_bq1))!;
+
+				expect(g_read2_bq1.array).toHaveLength(3);
+
+				// expect new slot to be filled with default value for item type
+				expect(g_read2_bq1.array[2]).toEqual('');
+			},
+
+			async 'set length shrink'({BazQuxes, g_bazqux_1, g_bazqux_2, g_bazqux_3, g_read_bq1, g_read_bq2, g_read_bq3}) {
+				g_read_bq3.array.length = 1;
+
+				await BazQuxes.put(g_read_bq3);
+
+				expect(g_read_bq3.array).toHaveLength(1);
+
+				const g_read2_bq3 = (await BazQuxes.get(g_read_bq3))!;
+
+				expect(g_read2_bq3.array).toHaveLength(1);
+			},
+
+			async 'set length clear'({BazQuxes, g_bazqux_1, g_bazqux_2, g_bazqux_3, g_read_bq1, g_read_bq2, g_read_bq3}) {
+				g_read_bq3.array.length = 0;
+
+				await BazQuxes.put(g_read_bq3);
+
+				expect(g_read_bq3.array).toHaveLength(0);
+
+				const g_read2_bq3 = (await BazQuxes.get(g_read_bq3))!;
+
+				expect(g_read2_bq3.array).toHaveLength(0);
+			},
+
+			'0-arg mutators': fold(['shift', 'pop', 'reverse', 'sort'], si_method => ({
+				[si_method]: ({BazQuxes, g_bazqux_1, g_bazqux_2, g_bazqux_3, g_read_bq1, g_read_bq2, g_read_bq3}) => {
+					g_read_bq1.array[si_method as 'pop']();
+					g_bazqux_1.array[si_method as 'pop']();
+
+					expect([...g_read_bq1.array]).toMatchObject(g_bazqux_1.array);
+				},
+			})),
+
+			'delete'({BazQuxes, g_bazqux_1, g_bazqux_2, g_bazqux_3, g_read_bq1, g_read_bq2, g_read_bq3}) {
+				delete g_read_bq3.array[0];
+				delete g_bazqux_3.array[0];
+
+				expect([...g_read_bq3.array]).toMatchObject(g_bazqux_3.array);
+			},
+
+			// 'splice'({BazQuxes, g_bazqux_1, g_bazqux_2, g_bazqux_3, g_read_bq1, g_read_bq2, g_read_bq3}) {
+			// 	g_read_bq1.array.splice();
+			// 	g_bazqux_1.array.shift
+
+			// 	expect(g_read2_bq1.array).toHaveLength(3);
+			// },
+		},
+
+		'switches': {
+			'switch primitive (numeric)'({g_bazqux_1, g_bazqux_2, g_bazqux_3, g_read_bq1, g_read_bq2, g_read_bq3}) {
+				expectTypeOf(g_read_bq1.switch).toBeNumber(__UNDEFINED as never);
+				expect(g_read_bq1.switch).toEqual(g_bazqux_1.switch);
+			},
+
+			'switch tagged (tuple)'({g_bazqux_1, g_bazqux_2, g_bazqux_3, g_read_bq1, g_read_bq2, g_read_bq3}) {
+				if(BazQuxesType.BAZ === g_read_bq2.type && BazQuxesType.BAZ === g_bazqux_2.type) {
+					expectTypeOf(g_read_bq2.switch).toBeArray(__UNDEFINED as never);
+					expect(g_read_bq2.switch.slice(0, 2)).toEqual(g_bazqux_2.switch.slice(0, 2));
+				}
+				else {
+					throw Error('Fix test case');
+				}
+			},
+
+			'switch tagged (struct)'({g_bazqux_1, g_bazqux_2, g_bazqux_3, g_read_bq1, g_read_bq2, g_read_bq3}) {
+				if(BazQuxesType.QUX === g_read_bq3.type) {
+					expectTypeOf(g_read_bq3.switch).toBeObject();
+					expect(g_read_bq3.switch).toEqual(g_bazqux_3.switch);
+				}
+				else {
+					throw Error('Fix test case');
+				}
+			},
+		},
 	});
 });

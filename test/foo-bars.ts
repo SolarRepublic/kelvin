@@ -94,18 +94,22 @@ export const init_foobars = (k_client: Vault) => {
 			ref: k.ref(FooBars),
 			array: k.arr(k1 => k1.str()),
 			tuple: k.tuple(k1 => [k1.arr(k2 => k2.str()), k1.int()]),
+			struct: k.struct(k1 => ({
+				int: k1.int(),
+				str: k1.str(),
+			})),
 			switch: k.switch('type', xc_type, {
 				[BazQuxesType.UNKNOWN]: k1 => k1.int(),
-				[BazQuxesType.BAZ]: k1 => ({
-					a: k1.str(),
-					b: k1.str(),
-					c: k1.str(),
-				}),
-				[BazQuxesType.QUX]: k1 => k1.tuple(k2 => [
+				[BazQuxesType.BAZ]: k1 => k1.tuple(k2 => [
 					k2.int(),
 					k2.str(),
 					k2.ref(FooBars),
 				]),
+				[BazQuxesType.QUX]: k1 => ({
+					a: k1.str(),
+					b: k1.str(),
+					c: k1.str(),
+				}),
 			}),
 		}),
 
@@ -195,22 +199,54 @@ export const init_bazquxes = (
 		ref: null,
 		array: [],
 		tuple: [[], 0],
+		struct: {
+			int: 0,
+			str: '',
+		},
 		switch: 9,
 	};
 
 	const g_bazqux_2: BazQuxesStruct = {
-		type: BazQuxesType.UNKNOWN,
+		type: BazQuxesType.BAZ,
 		id: 'baz',
 		on: Toggle.ON,
 
 		ref: FooBars.getItemRef(g_foobar_1)!,
 		array: ['hello', 'world'],
 		tuple: [[], 0],
-		switch: 9,
+		struct: {
+			int: 1,
+			str: 'Apple',
+		},
+		switch: [
+			42,
+			'color',
+			FooBars.getItemRef(g_foobar_3),
+		],
+	};
+
+	const g_bazqux_3: BazQuxesStruct = {
+		type: BazQuxesType.QUX,
+		id: 'qux',
+		on: Toggle.ON,
+
+		ref: FooBars.getItemRef(g_foobar_2)!,
+		array: ['lorem', 'ipsum', 'dolor', 'fa'],
+		tuple: [['apple', 'banana'], 17],
+		struct: {
+			int: 21,
+			str: 'red',
+		},
+		switch: {
+			a: 'apple',
+			b: 'banana',
+			c: 'cantelope',
+		},
 	};
 
 	return {
 		g_bazqux_1,
 		g_bazqux_2,
+		g_bazqux_3,
 	};
 };

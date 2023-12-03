@@ -216,11 +216,14 @@ const tagged_serdefaults = <
 				// path ident
 				const sr_path = a_path.slice(1).join('.') as SerFieldPath;
 
-				// removing/replacing previous
-				const g_prev = access_path<KnownEsDatatypes>(g_runtime, a_path.slice(1));
-				if(g_prev instanceof ItemRef) {
-					// only remove the stored item code
-					g_links.remove[sr_path] ??= g_prev.code;
+				// previous item ref might exist
+				if(g_runtime[$_CODE]) {
+					// removing/replacing previous
+					const g_prev = access_path<KnownEsDatatypes>(g_runtime, a_path.slice(1));
+					if(g_prev instanceof ItemRef) {
+						// only remove the stored item code
+						g_links.remove[sr_path] ??= g_prev.code;
+					}
 				}
 
 				// ref is present; only store the latest write
@@ -325,7 +328,7 @@ const tagged_serdefaults = <
 			// return joint serdef
 			return [
 				// serializer
-				(h_switch, a_path, g_runtime) => {
+				(z_value, a_path, g_runtime) => {
 					// depending on which option is set on instance
 					const si_opt = g_runtime[$_TUPLE][w_info]+'' as FieldLabel;
 
@@ -333,19 +336,19 @@ const tagged_serdefaults = <
 					const [f_ser] = h_options[si_opt];
 
 					// apply
-					return f_ser(h_switch, a_path, g_runtime);
+					return f_ser(z_value, a_path, g_runtime);
 				},
 
 				// deserializer
-				(h_items, a_path, g_runtime) => {
+				(z_value, a_path, g_runtime) => {
 					// depending on which option is set on instance
 					const si_opt = g_runtime[$_TUPLE][w_info]+'' as FieldLabel;
 
 					// get its deserializer
-					const [f_deser] = h_options[si_opt];
+					const [, f_deser] = h_options[si_opt];
 
 					// apply
-					return f_deser(h_items, a_path, g_runtime);
+					return f_deser(z_value, a_path, g_runtime);
 				},
 
 				// default

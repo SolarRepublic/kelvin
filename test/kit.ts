@@ -1,5 +1,6 @@
 import type {BazQuxesController, BazQuxesStruct, BazQuxesType, FooBarsController, FooBarsStruct, init_bazquxes} from './foo-bars';
 import type {VaultHub} from '../src/hub';
+import type {RuntimeItem} from 'src/item-proto';
 import type {TestContext} from 'vitest';
 
 import {text_to_buffer} from '@blake.regalia/belt';
@@ -21,6 +22,11 @@ type TestContextExtension = {
 	BazQuxes: BazQuxesController;
 	g_bazqux_1: BazQuxesStruct;
 	g_bazqux_2: BazQuxesStruct;
+	g_bazqux_3: BazQuxesStruct;
+
+	g_read_bq1: RuntimeItem<BazQuxesStruct>;
+	g_read_bq2: RuntimeItem<BazQuxesStruct>;
+	g_read_bq3: RuntimeItem<BazQuxesStruct>;
 };
 
 declare module 'vitest' {
