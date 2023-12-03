@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/naming-convention */
 import type {F} from 'ts-toolbelt';
 
 import type {HubEffects, VaultHub} from './hub';
@@ -18,60 +19,6 @@ import {ItemRef} from './item-ref';
 import {interpret_schema} from './schema-impl';
 import {DomainStorageStrategy} from './types';
 
-
-// export interface GenericItemController1<
-// 	g_schema extends StructuredSchema=StructuredSchema,
-// 	a_parts extends AcceptablePartTuples=AcceptablePartTuples,
-// 	g_item extends ItemShapesFromSchema<g_schema>=ItemShapesFromSchema<g_schema>,
-// 	g_runtime extends RuntimeItem<g_item>=RuntimeItem<g_item>,
-// 	g_parts extends PartFields<g_schema>=PartFields<g_schema>,
-// > {
-// 	strategy: DomainStorageStrategy;
-// 	schema: Readonly<SerSchema>;
-// 	partLength: number;
-// 	domain: DomainLabel;
-// 	hub: VaultHub;
-
-// 	getItemCode(g_parts: g_parts): ItemCode | undefined;
-
-// 	has(a_parts: Readonly<AcceptablePartTuples>): boolean;
-
-// 	get(g_parts: g_parts): Promise<g_runtime | undefined>;
-
-// 	getByCode(i_code: ItemCode | undefined, a_parts?: a_parts): Promise<g_runtime | undefined>;
-
-// 	getAt(a_parts: Readonly<AcceptablePartTuples>): Promise<g_runtime | undefined>;
-
-// 	put(g_item: g_item): Promise<[ItemPath, SerItem]>;
-
-// 	entries(): AsyncIterableIterator<[ItemIdent, g_item]>;
-
-// 	filter(h_criteria: MatchCriteria<g_item>, n_limit?: number): AsyncIterableIterator<g_item>;
-// }
-
-// export interface GenericItemControllerPlain {
-// 	strategy: DomainStorageStrategy;
-// 	schema: Readonly<SerSchema>;
-// 	partLength: number;
-// 	domain: DomainLabel;
-// 	hub: VaultHub;
-
-// 	getItemCode(g_parts: object): ItemCode | undefined;
-
-// 	has(a_parts: Readonly<AcceptablePartTuples>): boolean;
-
-// 	get(g_parts: object): Promise<RuntimeItem | undefined>;
-
-// 	getByCode(i_code: ItemCode | undefined, a_parts?: PartableEsType): Promise<RuntimeItem | undefined>;
-
-// 	getAt(a_parts: Readonly<AcceptablePartTuples>): Promise<RuntimeItem | undefined>;
-
-// 	put(g_item: object): Promise<[ItemPath, SerItem]>;
-
-// 	entries(): AsyncIterableIterator<[ItemIdent, RuntimeItem]>;
-
-// 	filter(h_criteria: MatchCriteria<object>, n_limit?: number): AsyncIterableIterator<RuntimeItem>;
-// }
 
 export interface GenericItemController<
 	g_item extends Dict<any>=Dict<any>,
@@ -98,9 +45,9 @@ export interface GenericItemController<
 
 	getAt(a_parts: Readonly<AcceptablePartTuples>): Promise<g_runtime | undefined>;
 
-	put(g_item: MakeItemFieldsSettable<g_item>): Promise<[ItemPath, SerItem]>;
+	put(g_item: SchemaToItemShape<g_schema, 1>): Promise<[ItemPath, SerItem]>;
 
-	putMany(a_items: MakeItemFieldsSettable<g_item>[]): Promise<[ItemPath, SerItem][]>;
+	putMany(a_items: SchemaToItemShape<g_schema, 1>[]): Promise<[ItemPath, SerItem][]>;
 
 	entries(): AsyncIterableIterator<[ItemIdent, g_item]>;
 
@@ -360,7 +307,7 @@ export class ItemController<
 		return g_item;
 	}
 
-	_serialize(g_item: MakeItemFieldsSettable<g_item> | g_runtime): [ItemPath, SerItem, HubEffects] {
+	_serialize(g_item: SchemaToItemShape<g_schema, 1> | g_runtime): [ItemPath, SerItem, HubEffects] {
 		// prep runtime item
 		let g_runtime = g_item as g_runtime;
 
@@ -402,7 +349,7 @@ export class ItemController<
 		return this.getByCode(this._encode_item(a_parts), a_parts);
 	}
 
-	async put(g_item: MakeItemFieldsSettable<g_item>): Promise<[ItemPath, SerItem]> {
+	async put(g_item: SchemaToItemShape<g_schema, 1>): Promise<[ItemPath, SerItem]> {
 		const {_k_hub} = this;
 
 		// serialize item
@@ -415,7 +362,7 @@ export class ItemController<
 		return a_ser.slice(0, 2) as [ItemPath, SerItem];
 	}
 
-	async putMany(a_items: MakeItemFieldsSettable<g_item>[]): Promise<[ItemPath, SerItem][]> {
+	async putMany(a_items: SchemaToItemShape<g_schema, 1>[]): Promise<[ItemPath, SerItem][]> {
 		const {_k_hub} = this;
 
 		// serialize items
@@ -522,26 +469,3 @@ export class ItemController<
 		}
 	}
 }
-
-// export type GenericItemController = ItemController<
-// 	string,
-// 	DomainLabel,
-// 	AcceptablePartTuples,
-// 	StructuredSchema,
-// 	any,
-// 	ItemShapesFromSchema<StructuredSchema>,
-// 	any,
-// 	RuntimeItem<object>,
-// 	PartFields<StructuredSchema>
-// >;
-
-
-// s_domain extends string,
-// si_domain extends s_domain & DomainLabel,
-// a_parts extends AcceptablePartTuples,
-// g_schema extends StructuredSchema,
-// f_schema extends SchemaBuilder<PartableSchemaSpecifier, a_parts, g_schema>,
-// g_item extends ItemShapesFromSchema<g_schema>,
-// g_proto,
-// g_runtime extends RuntimeItem<g_item & g_proto>,
-// g_parts extends PartFields<g_schema>,

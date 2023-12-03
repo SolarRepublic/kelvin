@@ -150,18 +150,24 @@ export type StructuredSchema = {
 
 
 /**
- * Reinterprets the given type as being JSON-compatible
+ * Reinterprets the given type as being JSON-compatible.
+ * @param b_setter - value of `1` indicates that target type is inteded for setters
  */
-export type ReduceSchema<z_test> =
-	z_test extends DatatypeRef<infer g_ref>? g_ref | null
+export type ReduceSchema<z_test, b_setter extends 0|1=0> =
+	z_test extends DatatypeRef<infer g_ref>? g_ref | null | (
+		b_setter extends 1
+			? g_ref extends ItemRef<infer g_dst, infer g_runtime>
+				? g_runtime
+				: never
+			: never)
 		: z_test extends SchemaSubtype<infer w_estype, infer s_id>? ReduceSchema<w_estype>
 			: z_test extends {[ES_TYPE]: any}? z_test
 				: z_test extends Uint8Array? z_test
 					: z_test extends JsonPrimitive? z_test
 						: z_test extends Array<infer w_type>
-							? ReduceSchema<w_type>[]
+							? ReduceSchema<w_type, b_setter>[]
 							: {
-								[si_each in keyof z_test]: ReduceSchema<z_test[si_each]>;
+								[si_each in keyof z_test]: ReduceSchema<z_test[si_each], b_setter>;
 							};
 
 
@@ -247,8 +253,8 @@ type FindSwitches<
 }>;
 
 
-export type SchemaToItemShape<g_schema> = FindSwitches<g_schema> extends never
-	? ReduceSchema<g_schema>
+export type SchemaToItemShape<g_schema, b_setter extends 0|1=0> = FindSwitches<g_schema> extends never
+	? ReduceSchema<g_schema, b_setter>
 	: FindSwitches<g_schema> extends infer h_switches
 		? AllValues<{
 			// each switch (there should only be one per block level)
@@ -276,19 +282,10 @@ export type SchemaToItemShape<g_schema> = FindSwitches<g_schema> extends never
 						& Omit<g_schema, (si_dep & Key) | si_switch>;
 
 						/* eslint-enable */
-				}>>
+				}>, b_setter>
 				: g_schema;
 		}>
 		: never;
-
-export type MakeItemFieldsSettable<z_item> = z_item extends Uint8Array
-	? z_item
-	: z_item extends Dict<any>
-		? {
-			[si_key in keyof z_item]: z_item[si_key] extends (ItemRef<infer g_dst, infer g_runtime> | null)
-				? g_runtime | z_item[si_key]
-				: MakeItemFieldsSettable<z_item[si_key]>;
-		}: z_item;
 
 export type PartFields<g_schema> = ReduceSchema<FilterDrop<{
 	[si_key in keyof g_schema]: g_schema[si_key] extends {[PART_FIELD]: infer b_part_field}
@@ -512,7 +509,7 @@ export type SubschemaStructBuilder<
 		}>;
 	};
 
-	type examine = MakeItemFieldsSettable<SchemaToItemShape<Demo>>;
+	type examine = SchemaToItemShape<Demo, 1>;
 
 	type inspp = SchemaToItemShape<Demo>;
 }

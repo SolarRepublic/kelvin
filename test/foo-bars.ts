@@ -39,12 +39,31 @@ export enum BazQuxesType {
 
 export type FooBarsController = ReturnType<typeof init_foobars>['FooBars'];
 
-export type FooBarsStruct = ItemStruct<FooBarsController>;
-
+export type FooBarsStruct = FooBarsController extends ItemController<
+	infer g_schema,
+	infer g_item,
+	infer g_proto,
+	infer g_runtime,
+	infer s_domain,
+	infer si_domain,
+	infer a_parts,
+	infer f_schema,
+	infer g_parts
+>? g_item: never;
 
 export type BazQuxesController = ReturnType<typeof init_foobars>['BazQuxes'];
 
-export type BazQuxesStruct = ItemStruct<BazQuxesController>;
+export type BazQuxesStruct = BazQuxesController extends ItemController<
+	infer g_schema,
+	infer g_item,
+	infer g_proto,
+	infer g_runtime,
+	infer s_domain,
+	infer si_domain,
+	infer a_parts,
+	infer f_schema,
+	infer g_parts
+>? g_item: never;
 
 
 export const init_foobars = (k_client: Vault) => {
@@ -130,10 +149,7 @@ export const init_foobars = (k_client: Vault) => {
 	});
 
 
-
-	type LocalFooBarStruct = ItemStruct<typeof FooBars>;
-
-	const g_foobar_1: LocalFooBarStruct = {
+	const g_foobar_1 = {
 		ns: FooBarNamespace.COMMON,
 		ref: 'test-1',
 		on: Toggle.ON,
@@ -143,7 +159,7 @@ export const init_foobars = (k_client: Vault) => {
 		object: {},
 	};
 
-	const g_foobar_2: LocalFooBarStruct = {
+	const g_foobar_2 = {
 		ns: FooBarNamespace.COMMON,
 		ref: 'test-2',
 		on: Toggle.ON,
@@ -155,7 +171,7 @@ export const init_foobars = (k_client: Vault) => {
 		},
 	};
 
-	const g_foobar_3: LocalFooBarStruct = {
+	const g_foobar_3 = {
 		ns: FooBarNamespace.COMMON,
 		ref: 'test-3',
 		on: Toggle.ON,
@@ -191,7 +207,7 @@ export const init_bazquxes = (
 		g_foobar_3,
 	} = g_foobars;
 
-	const g_bazqux_1: BazQuxesStruct = {
+	const g_bazqux_1 = {
 		type: BazQuxesType.UNKNOWN,
 		id: 'nil',
 		on: Toggle.ON,
@@ -206,7 +222,7 @@ export const init_bazquxes = (
 		switch: 9,
 	};
 
-	const g_bazqux_2: BazQuxesStruct = {
+	const g_bazqux_2 = {
 		type: BazQuxesType.BAZ,
 		id: 'baz',
 		on: Toggle.ON,
@@ -225,7 +241,7 @@ export const init_bazquxes = (
 		],
 	};
 
-	const g_bazqux_3: BazQuxesStruct = {
+	const g_bazqux_3 = {
 		type: BazQuxesType.QUX,
 		id: 'qux',
 		on: Toggle.ON,
