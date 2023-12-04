@@ -34,7 +34,8 @@ export enum TaggedDatatype {
 	TUPLE=4,
 	STRUCT=5,
 	DICT=6,
-	SWITCH=7,
+	REGISTRY=7,
+	SWITCH=8,
 }
 
 export type PrimitiveDatatypeToEsType<xc_type extends PrimitiveDatatype=PrimitiveDatatype> = {
@@ -89,6 +90,7 @@ export type TaggedDatatypeToEsTypeGetter<xc_type extends TaggedDatatype> = {
 	[TaggedDatatype.DICT]: FieldDict;
 	[TaggedDatatype.TUPLE]: FieldTuple;
 	[TaggedDatatype.STRUCT]: FieldStruct;
+	[TaggedDatatype.REGISTRY]: Partial<FieldStruct>;
 	[TaggedDatatype.SWITCH]: any;
 }[xc_type];
 
@@ -100,6 +102,7 @@ export type TaggedDatatypeToEsTypeSetter<xc_type extends TaggedDatatype> = {
 	[TaggedDatatype.DICT]: Record<string, KnownEsDatatypes>;
 	[TaggedDatatype.TUPLE]: any[];
 	[TaggedDatatype.STRUCT]: object;
+	[TaggedDatatype.REGISTRY]: object;
 	[TaggedDatatype.SWITCH]: any;
 }[xc_type];
 
@@ -146,9 +149,10 @@ export type CoreDatatype =
 	| DatatypeRef
 	| DatatypeArray<Datatype[]>
 	| DatatypeSet<Set<Datatype>>
-	| DatatypeStruct
 	// eslint-disable-next-line @typescript-eslint/consistent-indexed-object-style
 	| DatatypeDict<{[si_key: string]: Datatype}>
+	| DatatypeStruct
+	| DatatypeRegistry
 	// | SchemaSwitch<string, Classifier, Datatype, SchemaBuilderSwitchMap<Classifier, Datatype>>;
 	| SchemaSwitch<string, Classifier>;
 
@@ -238,6 +242,10 @@ export type DatatypeStruct<
 	w_subtype extends StructuredSchema=StructuredSchema,
 > = SchemaSubtype<w_subtype, 'struct'>;
 
+export type DatatypeRegistry<
+	w_subtype extends StructuredSchema=StructuredSchema,
+> = SchemaSubtype<w_subtype, 'registry'>;
+
 export type DatatypeDict<
 	w_subtype extends Record<string, Datatype>,
 > = SchemaSubtype<w_subtype, 'dict'>;
@@ -275,6 +283,7 @@ type FindSwitches<
 }>;
 
 
+// TODO: support multiple switches. rather complicated. requires collating by classifier
 export type SchemaToItemShape<g_schema, b_setter extends 0|1=0> = FindSwitches<g_schema> extends never
 	? ReduceSchema<g_schema, b_setter>
 	: FindSwitches<g_schema> extends infer h_switches
@@ -359,6 +368,7 @@ export type SchemaSimulator<
 	tuple(f_sub: SubschemaSimulator<w_return>): w_return;
 	struct(f_sub: SubschemaSimulator<w_return>): w_return;
 	dict(f_sub: SubschemaSimulator<w_return>): w_return;
+	registry(f_sub: SubschemaSimulator<w_return>): w_return;
 	switch(
 		si_dep: string,
 		w_classifier: Classifier,
@@ -454,6 +464,12 @@ export type SchemaSpecifier = ImplementsSchemaTypes<{
 		f_sub: (k: SchemaSpecifier) => h_subschema,
 	): DatatypeStruct<h_subschema>;
 
+	registry<
+		h_subschema extends StructuredSchema,
+	>(
+		f_sub: (k: SchemaSpecifier) => h_subschema,
+	): DatatypeRegistry<h_subschema>;
+
 	switch<
 		si_dep extends string,
 		w_classifier extends Classifier,
@@ -536,7 +552,13 @@ export type SubschemaStructBuilder<
 	type Demo = {
 		type: DatatypeInt<ItemType, 1>;
 		ref: DatatypeRef<ItemRef<start>>;
-		switch: SchemaSwitch<'type', ItemType, {
+		switch0: SchemaSwitch<'type', ItemType, {
+			[ItemType.UNKNOWN]: (k1: SchemaSpecifier) => DatatypeInt<number, 0>;
+			[ItemType.THING]: (k1: SchemaSpecifier) => DatatypeString<'thing', 0>;
+			[ItemType.OTHER]: (k1: SchemaSpecifier) => DatatypeString<'other', 0>;
+		}>;
+
+		switch1: SchemaSwitch<'type', ItemType, {
 			[ItemType.UNKNOWN]: (k1: SchemaSpecifier) => DatatypeInt<number, 0>;
 			[ItemType.THING]: (k1: SchemaSpecifier) => DatatypeString<'thing', 0>;
 			[ItemType.OTHER]: (k1: SchemaSpecifier) => DatatypeString<'other', 0>;

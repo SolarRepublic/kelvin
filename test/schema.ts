@@ -69,6 +69,16 @@ export const controllers = (k_client: Vault) => {
 			ns: k0.int(xc_ns),
 			ref: k0.str(si_ref),
 			data: k0.str(),
+
+			switch0: k0.switch('ns', xc_ns, {
+				[ChainNamespace.UNKNOWN]: k1 => k1.int(),
+				[ChainNamespace.COSMOS]: k1 => k1.str(),
+			}),
+
+			switch1: k0.switch('ns', xc_ns, {
+				[ChainNamespace.UNKNOWN]: k1 => k1.int(),
+				[ChainNamespace.COSMOS]: k1 => k1.str(),
+			}),
 		}),
 
 		proto: cast => ({

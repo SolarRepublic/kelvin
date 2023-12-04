@@ -99,7 +99,7 @@ if(BazQuxesType.BAZ === g_read_bq2.type && BazQuxesType.BAZ === g_bazqux_2.type)
 }
 
 
-g_read_bq3.array.length = 3;
+g_read_bq3.array_str.length = 3;
 
 debugger;
 // g_read_bq1.array.length;

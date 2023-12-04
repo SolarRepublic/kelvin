@@ -39,6 +39,12 @@ export const FieldDict = {
 				return Reflect.deleteProperty(h_members, z_property);
 			},
 
+			// own keys
+			ownKeys() {
+				// forward to object
+				return Reflect.ownKeys(h_members);
+			},
+
 			// get own
 			getOwnPropertyDescriptor(k_target, z_property) {
 				// proeprty defined on dict
@@ -49,7 +55,7 @@ export const FieldDict = {
 					}, z_property);
 				}
 
-				// forward
+				// forward to object
 				return Reflect.getOwnPropertyDescriptor(h_members, z_property);
 			},
 		});

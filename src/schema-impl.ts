@@ -35,6 +35,8 @@ export type CountedValues = {
 	} | {
 		struct: Dict<CountedValues>;
 	} | {
+		registry: Dict<CountedValues>;
+	} | {
 		switch: Dict<CountedValues>;
 	};
 };
@@ -88,6 +90,12 @@ const spec_for_count = (): CountedSpec & {[$_COUNTER]: number} => {
 			[$_COUNT]: ++c_fields,
 			subcounts: {
 				struct: f_sub(spec_for_count()) as Dict<CountedValues>,
+			},
+		}),
+		registry: f_sub => ({
+			[$_COUNT]: ++c_fields,
+			subcounts: {
+				registry: f_sub(spec_for_count()) as Dict<CountedValues>,
 			},
 		}),
 		switch: (si_dep, w_classifier, h_switch) => ({
@@ -170,6 +178,10 @@ const spec_for_ser: (g_shape: ShapedFields, i_field?: number) => SchemaSimulator
 		const g_subshape = bind_shaper(g_shape.access(++i_field).struct!);
 		return [i_field, [TaggedDatatype.STRUCT, f_sub(spec_for_ser(g_subshape))]];
 	},
+	registry: (f_sub) => {
+		const g_subshape = bind_shaper(g_shape.access(++i_field).registry!);
+		return [i_field, [TaggedDatatype.REGISTRY, f_sub(spec_for_ser(g_subshape))]];
+	},
 	switch: (si_dep, w_classifier, h_switch) => {
 		const h_positions = g_shape.access(++i_field).switch!;
 
@@ -222,9 +234,9 @@ function validate_counted(g_counted: CountedValues, sr_path: string, i_count=0) 
 	if(g_subcounts) {
 		// nested
 		if(is_dict_es(g_subcounts)) {
-			// array
-			if(g_subcounts.array) {
-				validate_counted(g_subcounts.array, sr_local);
+			// array, set, or dict
+			if(g_subcounts.array || g_subcounts.set || g_subcounts.dict) {
+				validate_counted(g_subcounts.array || g_subcounts.set || g_subcounts.dict, sr_local);
 			}
 			// tuple
 			else if(g_subcounts.tuple) {
@@ -235,10 +247,10 @@ function validate_counted(g_counted: CountedValues, sr_path: string, i_count=0) 
 					validate_counted(a_subcounts[i_member], sr_local, i_member);
 				}
 			}
-			// struct
-			else if(g_subcounts.struct) {
+			// struct or registry
+			else if(g_subcounts.struct || g_subcounts.registry) {
 				// get as entries
-				const a_entries = Object.entries(g_subcounts.struct);
+				const a_entries = Object.entries(g_subcounts.struct || g_subcounts.registry);
 
 				// each entry
 				for(let i_entry=0; i_entry<a_entries.length; i_entry++) {
@@ -331,6 +343,12 @@ function reshape_tagged_value([xc_type, w_info, w_extra]: SerTaggedDatatype, sr_
 
 		// struct
 		case TaggedDatatype.STRUCT: {
+			a_mids[0] = reshape_fields(sr_local, w_info).fields;
+			break;
+		}
+
+		// registry
+		case TaggedDatatype.REGISTRY: {
 			a_mids[0] = reshape_fields(sr_local, w_info).fields;
 			break;
 		}

@@ -111,12 +111,16 @@ export const init_foobars = (k_client: Vault) => {
 			on: k.int<Toggle>(),
 
 			ref: k.ref(FooBars),
-			array: k.array(k1 => k1.str()),
+			array_str: k.array(k1 => k1.str()),
 			set_str: k.set(k1 => k1.str()),
 			tuple: k.tuple(k1 => [k1.array(k2 => k2.str()), k1.int()]),
 			struct: k.struct(k1 => ({
-				int: k1.int(),
-				str: k1.str(),
+				struct_int: k1.int(),
+				struct_str: k1.str(),
+			})),
+			registry: k.registry(k1 => ({
+				reg_int: k1.int(),
+				reg_str: k1.str(),
 			})),
 			dict_str: k.dict(k1 => k1.str()),
 			switch: k.switch('type', xc_type, {
@@ -215,13 +219,14 @@ export const init_bazquxes = (
 		on: Toggle.ON,
 
 		ref: null,
-		array: [],
+		array_str: [],
 		set_str: new Set(),
 		tuple: [[], 0],
 		struct: {
-			int: 0,
-			str: '',
+			struct_int: 0,
+			struct_str: '',
 		},
+		registry: {},
 		dict_str: {},
 		switch: 9,
 	};
@@ -232,12 +237,15 @@ export const init_bazquxes = (
 		on: Toggle.ON,
 
 		ref: FooBars.getItemRef(g_foobar_1)!,
-		array: ['hello', 'world'],
+		array_str: ['hello', 'world'],
 		set_str: new Set(['data', 'computer']),
 		tuple: [[], 0],
 		struct: {
-			int: 1,
-			str: 'Apple',
+			struct_int: 1,
+			struct_str: 'Apple',
+		},
+		registry: {
+			reg_int: 1,
 		},
 		dict_str: {
 			apple: 'red',
@@ -256,12 +264,16 @@ export const init_bazquxes = (
 		on: Toggle.ON,
 
 		ref: FooBars.getItemRef(g_foobar_2)!,
-		array: ['lorem', 'ipsum', 'dolor', 'fa'],
+		array_str: ['lorem', 'ipsum', 'dolor', 'fa'],
 		set_str: new Set(['red', 'orange', 'yellow', 'blue']),
 		tuple: [['apple', 'banana'], 17],
 		struct: {
-			int: 21,
-			str: 'red',
+			struct_int: 21,
+			struct_str: 'red',
+		},
+		registry: {
+			reg_int: 2,
+			reg_str: 'hi',
 		},
 		dict_str: {
 			red: 'apple',

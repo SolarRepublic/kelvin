@@ -185,6 +185,7 @@ export type SerTaggedDatatypeMap = {
 	[TaggedDatatype.DICT]: [SerField];
 	[TaggedDatatype.TUPLE]: [SerField[]];
 	[TaggedDatatype.STRUCT]: [SerFieldStruct];
+	[TaggedDatatype.REGISTRY]: [SerFieldStruct];
 	[TaggedDatatype.SWITCH]: [...SerFieldSwitch];
 };
 
@@ -201,6 +202,7 @@ export type SerTaggedDatatype =
 	| [TaggedDatatype.DICT, SerField]
 	| [TaggedDatatype.TUPLE, SerField[]]
 	| [TaggedDatatype.STRUCT, SerFieldStruct]
+	| [TaggedDatatype.REGISTRY, SerFieldStruct]
 	| [TaggedDatatype.SWITCH, ...SerFieldSwitch];
 
 

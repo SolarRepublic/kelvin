@@ -264,6 +264,7 @@ function apply_filter_any(z_value: KnownEsDatatypes, z_datatype: SerField, z_mat
 
 			// set
 			case TaggedDatatype.SET: {
+				// TODO: implement
 				throw Error(`Filtering on sets not yet implemented`);
 				// // value is not an array
 				// if(!(z_value instanceof FieldArray)) {
@@ -272,6 +273,19 @@ function apply_filter_any(z_value: KnownEsDatatypes, z_datatype: SerField, z_mat
 
 				// // apply array filter
 				// return apply_set_filter(apply_filter_array, z_value, z_match, sr_path, z_datatype[1] as SerField);
+			}
+
+			// dict
+			case TaggedDatatype.DICT: {
+				// TODO: implement
+				throw Error(`Filtering on dicts not yet implemented`);
+				// // value is not a dict
+				// if(!is_dict_es(z_value)) {
+				// 	throw new SchemaError(`Expected field value for '${sr_path}' to be a struct (object) but instead found: ${typeof z_value}`);
+				// }
+
+				// // apply struct filter
+				// return apply_set_filter(apply_filter_struct, z_value as FieldStruct, z_match as GenericStructMatchCriteria, sr_path, z_datatype[1] as SerFieldStruct);
 			}
 
 			// tuple
@@ -296,10 +310,11 @@ function apply_filter_any(z_value: KnownEsDatatypes, z_datatype: SerField, z_mat
 				return apply_set_filter(apply_filter_struct, z_value as FieldStruct, z_match as GenericStructMatchCriteria, sr_path, z_datatype[1] as SerFieldStruct);
 			}
 
-			// dict
-			case TaggedDatatype.DICT: {
+			// struct
+			case TaggedDatatype.REGISTRY: {
+				// TODO: implement
 				throw Error(`Filtering on dicts not yet implemented`);
-				// // value is not a dict
+				// // value is not a struct
 				// if(!is_dict_es(z_value)) {
 				// 	throw new SchemaError(`Expected field value for '${sr_path}' to be a struct (object) but instead found: ${typeof z_value}`);
 				// }

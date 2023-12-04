@@ -5,12 +5,13 @@ import type {DomainCode, FieldPath, SerFieldPath, ItemCode, SerField, SerSchema,
 
 import type {JsonValue, JsonObject, JsonArray, Dict} from '@blake.regalia/belt';
 
-import {ode, base93_to_buffer, buffer_to_base93, F_IDENTITY, fodemtv} from '@blake.regalia/belt';
+import {ode, base93_to_buffer, buffer_to_base93, F_IDENTITY, fodemtv, __UNDEFINED} from '@blake.regalia/belt';
 
 import {Bug, SchemaError, SchemaWarning, TypeFieldNotWritableError, UnparseableSchemaError} from './errors';
 import {FieldArray} from './field-array';
 import {FieldDict} from './field-dict';
 import {FieldSet} from './field-set';
+import {FieldStruct} from './field-struct';
 import {ItemRef} from './item-ref';
 import {PrimitiveDatatype, TaggedDatatype} from './schema-types';
 
@@ -122,7 +123,7 @@ type TaggedDeserializer<xc_type extends TaggedDatatype> = (w_value: JsonValue, a
 type TaggedDefaulter<xc_type extends TaggedDatatype> = () => TaggedDatatypeToEsTypeSetter<xc_type>;
 
 // TODO make this compatible with primitive datatype versions
-type SerdefaultsTuple<xc_tag extends TaggedDatatype=TaggedDatatype> = [
+export type SerdefaultsTuple<xc_tag extends TaggedDatatype=TaggedDatatype> = [
 	TaggedSerializer<xc_tag>,
 	TaggedDeserializer<xc_tag>,
 	TaggedDefaulter<xc_tag>,
@@ -328,7 +329,6 @@ const tagged_serdefaults = <
 			});
 		}
 
-
 		// tuple
 		case TaggedDatatype.TUPLE: {
 			// transform each tuple member's datatype into a serdef
@@ -357,12 +357,37 @@ const tagged_serdefaults = <
 			// return joint serdef
 			return [
 				// serializer
+				(h_items, a_path, g_runtime) => Object.values(fodemtv(h_serdefs, ([f_ser,, f_def], si_field) => si_field in h_items
+					? f_ser(h_items[si_field], [...a_path, si_field], g_runtime): f_def())),
+
+				// // deserializer
+				// (a_items, a_path, g_runtime) => fodemtv(h_serdefs, ([, f_deser, f_def], si_field, i_field) => {
+				// 	const z_item = (a_items as JsonValue[])[i_field];
+
+				// 	return f_deser(z_item, [...a_path, si_field], g_runtime);
+				// }),
+
+				(a_items, a_path, g_runtime) => FieldStruct.create(h_serdefs, a_items as JsonArray, a_path, g_runtime),
+
+				// default
+				() => fodemtv(h_serdefs, ([,, f_def]) => f_def()),
+			];
+		}
+
+		// registry
+		case TaggedDatatype.REGISTRY: {
+			// transform each struct member's datatype into a serdef
+			const h_serdefs = fodemtv(w_info, z_field => unwrap_datatype(z_field, k_item));
+
+			// return joint serdef
+			return [
+				// serializer
 				(h_items, a_path, g_runtime) => fodemtv(h_serdefs, ([f_ser,, f_def], si_field) => si_field in h_items
 					? f_ser(h_items[si_field], [...a_path, si_field], g_runtime): f_def()),
 
 				// deserializer
-				(h_items, a_path, g_runtime) => fodemtv(h_serdefs, ([, f_deser, f_def], si_field) => si_field in (h_items as JsonObject)
-					? f_deser((h_items as JsonObject)[si_field], [...a_path, si_field], g_runtime): f_def()),
+				(h_items, a_path, g_runtime) => fodemtv(h_serdefs, ([, f_deser], si_field) => si_field in (h_items as JsonObject)
+					? f_deser((h_items as JsonObject)[si_field], [...a_path, si_field], g_runtime): __UNDEFINED),
 
 				// default
 				() => fodemtv(h_serdefs, ([,, f_def]) => f_def()),

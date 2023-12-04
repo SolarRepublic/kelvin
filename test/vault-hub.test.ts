@@ -624,7 +624,6 @@ describe('baz-quxes', () => {
 			await expect(g_ref_round).resolves.toMatchObject(g_runtime_1);
 		},
 
-
 		// console.warn(`##### FINDME ####\n${g_ref_round?.controller.domain} : ${g_ref_1.controller.domain}`);
 	});
 });
@@ -650,9 +649,9 @@ describe('fully loaded', () => {
 	tests({
 		'tagged': {
 			'arrays'({g_bazqux_1, g_bazqux_2, g_bazqux_3, g_read_bq1, g_read_bq2, g_read_bq3}) {
-				expect([...g_read_bq1.array]).toMatchObject(g_bazqux_1.array);
-				expect([...g_read_bq2.array]).toMatchObject(g_bazqux_2.array);
-				expect([...g_read_bq3.array]).toMatchObject(g_bazqux_3.array);
+				expect([...g_read_bq1.array_str]).toMatchObject(g_bazqux_1.array_str);
+				expect([...g_read_bq2.array_str]).toMatchObject(g_bazqux_2.array_str);
+				expect([...g_read_bq3.array_str]).toMatchObject(g_bazqux_3.array_str);
 			},
 
 			'tuples'({g_bazqux_1, g_bazqux_2, g_bazqux_3, g_read_bq1, g_read_bq2, g_read_bq3}) {
@@ -670,64 +669,64 @@ describe('fully loaded', () => {
 
 		'field array': {
 			'get length'({g_bazqux_1, g_bazqux_2, g_bazqux_3, g_read_bq1, g_read_bq2, g_read_bq3}) {
-				expect(g_read_bq1.array).toHaveLength(g_bazqux_1.array.length);
-				expect(g_read_bq2.array).toHaveLength(g_bazqux_2.array.length);
-				expect(g_read_bq3.array).toHaveLength(g_bazqux_3.array.length);
+				expect(g_read_bq1.array_str).toHaveLength(g_bazqux_1.array_str.length);
+				expect(g_read_bq2.array_str).toHaveLength(g_bazqux_2.array_str.length);
+				expect(g_read_bq3.array_str).toHaveLength(g_bazqux_3.array_str.length);
 			},
 
 			async 'set length grow'({BazQuxes, g_bazqux_1, g_bazqux_2, g_bazqux_3, g_read_bq1, g_read_bq2, g_read_bq3}) {
-				g_read_bq1.array.length = 3;
+				g_read_bq1.array_str.length = 3;
 
 				await BazQuxes.put(g_read_bq1);
 
-				expect(g_read_bq1.array).toHaveLength(3);
+				expect(g_read_bq1.array_str).toHaveLength(3);
 
 				const g_read2_bq1 = (await BazQuxes.get(g_read_bq1))!;
 
-				expect(g_read2_bq1.array).toHaveLength(3);
+				expect(g_read2_bq1.array_str).toHaveLength(3);
 
 				// expect new slot to be filled with default value for item type
-				expect(g_read2_bq1.array[2]).toEqual('');
+				expect(g_read2_bq1.array_str[2]).toEqual('');
 			},
 
 			async 'set length shrink'({BazQuxes, g_bazqux_1, g_bazqux_2, g_bazqux_3, g_read_bq1, g_read_bq2, g_read_bq3}) {
-				g_read_bq3.array.length = 1;
+				g_read_bq3.array_str.length = 1;
 
 				await BazQuxes.put(g_read_bq3);
 
-				expect(g_read_bq3.array).toHaveLength(1);
+				expect(g_read_bq3.array_str).toHaveLength(1);
 
 				const g_read2_bq3 = (await BazQuxes.get(g_read_bq3))!;
 
-				expect(g_read2_bq3.array).toHaveLength(1);
+				expect(g_read2_bq3.array_str).toHaveLength(1);
 			},
 
 			async 'set length clear'({BazQuxes, g_bazqux_1, g_bazqux_2, g_bazqux_3, g_read_bq1, g_read_bq2, g_read_bq3}) {
-				g_read_bq3.array.length = 0;
+				g_read_bq3.array_str.length = 0;
 
 				await BazQuxes.put(g_read_bq3);
 
-				expect(g_read_bq3.array).toHaveLength(0);
+				expect(g_read_bq3.array_str).toHaveLength(0);
 
 				const g_read2_bq3 = (await BazQuxes.get(g_read_bq3))!;
 
-				expect(g_read2_bq3.array).toHaveLength(0);
+				expect(g_read2_bq3.array_str).toHaveLength(0);
 			},
 
 			'0-arg mutators': fold(['shift', 'pop', 'reverse', 'sort'], si_method => ({
 				[si_method]: ({BazQuxes, g_bazqux_1, g_bazqux_2, g_bazqux_3, g_read_bq1, g_read_bq2, g_read_bq3}) => {
-					g_read_bq1.array[si_method as 'pop']();
-					g_bazqux_1.array[si_method as 'pop']();
+					g_read_bq1.array_str[si_method as 'pop']();
+					g_bazqux_1.array_str[si_method as 'pop']();
 
-					expect([...g_read_bq1.array]).toMatchObject(g_bazqux_1.array);
+					expect([...g_read_bq1.array_str]).toMatchObject(g_bazqux_1.array_str);
 				},
 			})),
 
 			'delete'({BazQuxes, g_bazqux_1, g_bazqux_2, g_bazqux_3, g_read_bq1, g_read_bq2, g_read_bq3}) {
-				delete g_read_bq3.array[0];
-				delete g_bazqux_3.array[0];
+				delete g_read_bq3.array_str[0];
+				delete g_bazqux_3.array_str[0];
 
-				expect([...g_read_bq3.array]).toMatchObject(g_bazqux_3.array);
+				expect([...g_read_bq3.array_str]).toMatchObject(g_bazqux_3.array_str);
 			},
 
 			// 'splice'({BazQuxes, g_bazqux_1, g_bazqux_2, g_bazqux_3, g_read_bq1, g_read_bq2, g_read_bq3}) {
@@ -737,6 +736,11 @@ describe('fully loaded', () => {
 			// 	expect(g_read2_bq1.array).toHaveLength(3);
 			// },
 		},
+
+		// TODO: all proxy checks (incl. Object.keys(..), etc.) for the following:
+		// TODO: field-set
+		// TODO: field-dict
+		// TODO: field-struct
 
 		'switches': {
 			'switch primitive (numeric)'({g_bazqux_1, g_bazqux_2, g_bazqux_3, g_read_bq1, g_read_bq2, g_read_bq3}) {
