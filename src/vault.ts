@@ -1370,6 +1370,6 @@ export class Vault {
 		a_parts extends AcceptablePartTuples=AcceptablePartTuples,
 		g_parts extends PartFields<g_schema>=PartFields<g_schema>,
 	>(si_domain: DomainLabel): GenericItemController<g_item, g_runtime, g_schema, a_parts, g_parts> | undefined {
-		return this._h_controllers[si_domain] as GenericItemController<g_item, g_runtime, g_schema, a_parts, g_parts>;
+		return this._h_controllers[si_domain] as unknown as GenericItemController<g_item, g_runtime, g_schema, a_parts, g_parts>;
 	}
 }

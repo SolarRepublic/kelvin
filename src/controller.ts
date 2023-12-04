@@ -3,10 +3,9 @@ import type {F} from 'ts-toolbelt';
 
 import type {HubEffects, VaultHub} from './hub';
 import type {RuntimeItem} from './item-proto';
-import type {Reader} from './reader';
 
-import type {SchemaToItemShape, StructuredSchema, PartableSchemaSpecifier, AcceptablePartTuples, SchemaBuilder, PartFields, PartableEsType, FieldStruct, MakeItemFieldsSettable} from './schema-types';
-import type {DomainLabel, ItemCode, ItemIdent, ItemPath, SerFieldStruct, SerItem, SerKeyStruct, SerSchema} from './types';
+import type {SchemaToItemShape, StructuredSchema, PartableSchemaSpecifier, AcceptablePartTuples, SchemaBuilder, PartFields, PartableEsType, FieldStruct} from './schema-types';
+import type {DomainLabel, ItemCode, ItemIdent, ItemPath, SchemaCode, SerFieldStruct, SerItem, SerKeyStruct, SerSchema} from './types';
 import type {Vault} from './vault';
 import type {Dict, JsonArray, JsonObject} from '@blake.regalia/belt';
 
@@ -73,7 +72,6 @@ export class ItemController<
 	protected _k_vault: Vault;
 	protected _si_domain!: si_domain;
 	protected _xc_strategy: DomainStorageStrategy;
-	protected _k_reader!: Reader;
 	protected _nl_parts: number;
 	protected _nl_fields: number;
 
@@ -86,6 +84,11 @@ export class ItemController<
 
 	protected _g_prototype: object;
 	protected _g_loader: object;
+
+	/**
+	 * @internal
+	 */
+	_i_schema = -1 as SchemaCode;
 
 	constructor(gc_type: {
 		client: Vault;
@@ -157,6 +160,10 @@ export class ItemController<
 
 	get partLength(): number {
 		return this._nl_parts;
+	}
+
+	get schemaCode(): number {
+		return this._i_schema;
 	}
 
 	get _h_schema_parts(): SerKeyStruct {
@@ -356,7 +363,7 @@ export class ItemController<
 		const a_ser = this._serialize(g_item);
 
 		// write item to storage
-		await _k_hub.putItems(this._si_domain, [a_ser]);
+		await _k_hub.putItems(this._si_domain, this._i_schema, [a_ser]);
 
 		// 
 		return a_ser.slice(0, 2) as [ItemPath, SerItem];
@@ -369,7 +376,7 @@ export class ItemController<
 		const a_sers = a_items.map(g_item => this._serialize(g_item));
 
 		// write items to storage
-		await _k_hub.putItems(this._si_domain, a_sers);
+		await _k_hub.putItems(this._si_domain, this._i_schema, a_sers);
 
 		// 
 		return a_sers.map(a_ser => a_ser.slice(0, 2) as [ItemPath, SerItem]);
@@ -469,3 +476,5 @@ export class ItemController<
 		}
 	}
 }
+
+export type AnyItemController = ItemController<any, any, any, any, any, any, any, any, any>;

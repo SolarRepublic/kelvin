@@ -3,7 +3,7 @@ import type {L} from 'ts-toolbelt';
 import type {SchemaSimulator, SchemaBuilder, PartableSchemaSpecifier, AcceptablePartTuples, StructuredSchema} from './schema-types';
 import type {FieldLabel, SerField, SerFieldStruct, SerKeyStruct, SerSchema, SerTaggedDatatype} from './types';
 
-import type {Dict, Arrayable, DiscriminatedUnion} from '@blake.regalia/belt';
+import type {Dict, DiscriminatedUnion} from '@blake.regalia/belt';
 
 import {__UNDEFINED, fodemtv, is_dict_es, ode} from '@blake.regalia/belt';
 
@@ -35,7 +35,9 @@ export type CountedValues = {
 	};
 };
 
-const spec_for_count = (): SchemaSimulator<Arrayable<CountedValues>> & {[$_COUNTER]: number} => {
+type CountedSpec = SchemaSimulator<1, CountedValues | CountedValues[] | Dict<CountedValues>>;
+
+const spec_for_count = (): CountedSpec & {[$_COUNTER]: number} => {
 	let c_fields = 0;
 
 	const f_countable = (): CountedValues => ({
@@ -63,7 +65,7 @@ const spec_for_count = (): SchemaSimulator<Arrayable<CountedValues>> & {[$_COUNT
 		tuple: f_sub => ({
 			[$_COUNT]: ++c_fields,
 			subcounts: {
-				tuple: f_sub(spec_for_count() as SchemaSimulator<Arrayable<CountedValues>[]> & {[$_COUNTER]: number}),
+				tuple: f_sub(spec_for_count()) as CountedValues[],
 			},
 		}),
 		struct: f_sub => ({
@@ -121,7 +123,7 @@ type ShapeDescriptor = [
 	w_part?: symbol,
 ];
 
-const spec_for_ser: (g_shape: ShapedFields, i_field?: number) => SchemaSimulator<ShapeDescriptor> = (g_shape, i_field=0) => ({
+const spec_for_ser: (g_shape: ShapedFields, i_field?: number) => SchemaSimulator<1, ShapeDescriptor> = (g_shape, i_field=0) => ({
 	int: (w_part?: any) => [++i_field, PrimitiveDatatype.INT, w_part],
 	bigint: (w_part?: any) => [++i_field, PrimitiveDatatype.BIGINT, w_part],
 	double: () => [++i_field, PrimitiveDatatype.DOUBLE],
@@ -136,7 +138,7 @@ const spec_for_ser: (g_shape: ShapedFields, i_field?: number) => SchemaSimulator
 	},
 	tuple: (f_sub) => {
 		const g_subshape = bind_shaper(g_shape.access(++i_field).tuple!);
-		return [i_field, [TaggedDatatype.TUPLE, f_sub(spec_for_ser(g_subshape) as unknown as SchemaSimulator<ShapeDescriptor[]>)]];
+		return [i_field, [TaggedDatatype.TUPLE, f_sub(spec_for_ser(g_subshape))]];
 	},
 	struct: (f_sub) => {
 		const g_subshape = bind_shaper(g_shape.access(++i_field).struct!);

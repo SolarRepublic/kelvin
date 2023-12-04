@@ -1,7 +1,7 @@
 import type {Dict, JsonValue} from '@blake.regalia/belt';
 import type {StorageChanges} from 'src/store';
 
-import {fodemtv} from '@blake.regalia/belt';
+import {__UNDEFINED, fodemtv} from '@blake.regalia/belt';
 
 import {KelvinKeyValueStore, JsonBasedChange, KelvinKeyValueWriter} from 'src/store';
 
@@ -26,12 +26,12 @@ export class WebExtWriter extends KelvinKeyValueWriter<WebExtWrapper> {
 
 export class WebExtWrapper extends KelvinKeyValueStore<WebExtWriter> {
 	constructor(
-		si_lock_prefix: string,
 		/**
 		 * @internal
 		 */
 		public _d_area: chrome.storage.StorageArea=chrome.storage.local,
-		y_locks=navigator.locks
+		y_locks=navigator.locks,
+		si_lock_prefix: string|undefined=__UNDEFINED
 	) {
 		super(WebExtWriter, y_locks, si_lock_prefix);
 	}

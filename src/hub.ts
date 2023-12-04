@@ -1,4 +1,4 @@
-import type {GenericItemController} from './controller';
+import type {AnyItemController, GenericItemController, ItemController} from './controller';
 import type {$_LINKS, RuntimeItem} from './item-proto';
 import type {KelvinKeyValueWriter} from './store';
 import type {DomainCode, DomainLabel, ItemIdent, ItemCode, ItemPath, SerVaultHub, IndexLabel, IndexValue, IndexPosition, BucketKey, BucketCode, SchemaCode, SerSchema, SerItem, SerBucketMetadata, SerBucket, SerDomainLinks, FieldPathCode, FieldPath, SerFieldPath, SerLinksTuple} from './types';
@@ -197,6 +197,9 @@ export class VaultHub {
 			// serialize latest schema
 			const sx_schema_new = JSON.stringify(k_controller.schema);
 
+			// prep schema code
+			let i_schema = -1 as SchemaCode;
+
 			// domain not defined in hub
 			if(!_h_domains[si_domain]) {
 				// compute domain code
@@ -214,18 +217,18 @@ export class VaultHub {
 				_h_domain_labels[sc_domain] = si_domain;
 
 				// find next spot for schema
-				let i_schema = _a_schemas.indexOf(0);
+				i_schema = _a_schemas.indexOf(0) as SchemaCode;
 
 				// no open spots, append new spot to end
-				if(i_schema < 0) i_schema = _a_schemas.length;
+				if(i_schema < 0) i_schema = _a_schemas.length as SchemaCode;
 			}
 			// domain exists
 			else {
 				// destructure it
 				const [a_bucket_codes] = _h_domains[si_domain];
 
-				//
-				let i_schema_latest = -1;
+				// prep 
+				i_schema = -1 as SchemaCode;
 
 				// each bucket
 				for(const i_bucket of a_bucket_codes) {
@@ -233,7 +236,7 @@ export class VaultHub {
 					const i_schema_check = _a_buckets_to_schemas[i_bucket];
 
 					// schema is up-to-date; skip
-					if(i_schema_check === i_schema_latest) continue;
+					if(i_schema_check === i_schema) continue;
 
 					// serialize its schema
 					const sx_schema_old = JSON.stringify(_a_schemas[i_schema_check]);
@@ -241,7 +244,7 @@ export class VaultHub {
 					// same as latest
 					if(sx_schema_old === sx_schema_new) {
 						// capture schema code
-						i_schema_latest = i_schema_check;
+						i_schema = i_schema_check;
 
 						// next
 						continue;
@@ -251,9 +254,10 @@ export class VaultHub {
 					throw new SchemaError(`Schema for '${si_domain}' domain changed but items were not migrated`);
 				}
 			}
-		}
 
-		// 
+			// save schema code to controller
+			(k_controller as AnyItemController)._i_schema = i_schema;
+		}
 	}
 
 	_schedule_rotation(): void {
@@ -696,221 +700,221 @@ export class VaultHub {
 		return this._new_bucket(si_domain);
 	}
 
-	async putItem(si_domain: DomainLabel, sr_item: ItemPath, w_item: SerItem, g_effects: HubEffects): Promise<void> {
-		// obtain lock
-		await this._k_vault.withExclusive(async(kw_content) => {
-			// add item key
-			const [i_item, b_exists] = this.addItemKey(si_domain, sr_item);
+	// async putItem(si_domain: DomainLabel, i_schema: SchemaCode, sr_item: ItemPath, w_item: SerItem, g_effects: HubEffects): Promise<void> {
+	// 	// obtain lock
+	// 	await this._k_vault.withExclusive(async(kw_content) => {
+	// 		// add item key
+	// 		const [i_item, b_exists] = this.addItemKey(si_domain, sr_item);
 
-			// serialize item to calculate its length
-			const nb_item = text_to_buffer(`"${i_item}":${JSON.stringify(w_item)}`).length;
+	// 		// serialize item to calculate its length
+	// 		const nb_item = text_to_buffer(`"${i_item}":${JSON.stringify(w_item)}`).length;
 
-			// item is larger than capacity
-			if(nb_item + NB_BUCKET_CONTAINER > this._nb_bucket) {
-				console.warn(new SchemaWarning(`Item being stored to ${si_domain}:${sr_item} exceeds bucket capacity. This can lead to degradation of privacy.`));
-			}
+	// 		// item is larger than capacity
+	// 		if(nb_item + NB_BUCKET_CONTAINER > this._nb_bucket) {
+	// 			console.warn(new SchemaWarning(`Item being stored to ${si_domain}:${sr_item} exceeds bucket capacity. This can lead to degradation of privacy.`));
+	// 		}
 
-			// which bucket item is being place in
-			let i_bucket: BucketCode;
-			let si_bucket: BucketKey;
-			let h_bucket: SerBucket;
+	// 		// which bucket item is being place in
+	// 		let i_bucket: BucketCode;
+	// 		let si_bucket: BucketKey;
+	// 		let h_bucket: SerBucket;
 
-			// in case an old bucket needs to be deleted
-			let si_bucket_delete: BucketKey | undefined;
+	// 		// in case an old bucket needs to be deleted
+	// 		let si_bucket_delete: BucketKey | undefined;
 
-			// item already exists
-			if(b_exists) {
-				// get bucket code
-				const i_bucket_exist = this.getItemBucketCode(i_item);
+	// 		// item already exists
+	// 		if(b_exists) {
+	// 			// get bucket code
+	// 			const i_bucket_exist = this.getItemBucketCode(i_item);
 
-				// get bucket metadata
-				const [si_bucket_exist, nb_bucket_exist] = this.getBucketMetadata(i_bucket_exist);
+	// 			// get bucket metadata
+	// 			const [si_bucket_exist, nb_bucket_exist] = this.getBucketMetadata(i_bucket_exist);
 
-				// load bucket
-				const h_bucket_exist = await this._k_vault.readBucket(si_bucket_exist);
+	// 			// load bucket
+	// 			const h_bucket_exist = await this._k_vault.readBucket(si_bucket_exist);
 
-				// calculate size of existing item
-				const nb_item_exist = text_to_buffer(JSON.stringify(h_bucket_exist[i_item])).length;
+	// 			// calculate size of existing item
+	// 			const nb_item_exist = text_to_buffer(JSON.stringify(h_bucket_exist[i_item])).length;
 
-				// new item will fit (adding 1 for comma)
-				if(nb_item + 1 <= nb_item_exist || (nb_bucket_exist - nb_item_exist + nb_item + 1) <= this._nb_bucket) {
-					// select bucket
-					i_bucket = i_bucket_exist;
+	// 			// new item will fit (adding 1 for comma)
+	// 			if(nb_item + 1 <= nb_item_exist || (nb_bucket_exist - nb_item_exist + nb_item + 1) <= this._nb_bucket) {
+	// 				// select bucket
+	// 				i_bucket = i_bucket_exist;
 
-					// mark old entry for deletion
-					si_bucket_delete = si_bucket_exist;
+	// 				// mark old entry for deletion
+	// 				si_bucket_delete = si_bucket_exist;
 
-					// copy contents
-					h_bucket = {...h_bucket_exist};
+	// 				// copy contents
+	// 				h_bucket = {...h_bucket_exist};
 
-					// create new bucket key
-					si_bucket = new_bucket_key();
-				}
-				// item won't fit
-				else {
-					// create new bucket and select as destination
-					[i_bucket, si_bucket, h_bucket] = this._new_bucket(si_domain);
+	// 				// create new bucket key
+	// 				si_bucket = new_bucket_key();
+	// 			}
+	// 			// item won't fit
+	// 			else {
+	// 				// create new bucket and select as destination
+	// 				[i_bucket, si_bucket, h_bucket] = this._new_bucket(si_domain);
 
-					// set schema association
-					this._a_buckets_to_schemas[i_bucket] = i_schema;
-				}
-			}
-			// new item
-			else {
-				// determine which bucket to place item in
-				[i_bucket, si_bucket, h_bucket, si_bucket_delete] = await this._select_bucket_for_insert(si_domain, nb_item);
-			}
+	// 				// set schema association
+	// 				this._a_buckets_to_schemas[i_bucket] = i_schema;
+	// 			}
+	// 		}
+	// 		// new item
+	// 		else {
+	// 			// determine which bucket to place item in
+	// 			[i_bucket, si_bucket, h_bucket, si_bucket_delete] = await this._select_bucket_for_insert(si_domain, nb_item);
+	// 		}
 
-			// place item into bucket
-			h_bucket[i_item] = w_item;
+	// 		// place item into bucket
+	// 		h_bucket[i_item] = w_item;
 
-			// first, write the new bucket
-			await this._k_vault.writeBucket(si_bucket, h_bucket, this._nb_bucket, kw_content);
+	// 		// first, write the new bucket
+	// 		await this._k_vault.writeBucket(si_bucket, h_bucket, this._nb_bucket, kw_content);
 
-			// create copies of hub entries being modified
-			const a_buckets_mut = this._a_buckets.slice();
-			const a_locations_mut = this._a_locations.slice();
-			const h_links_mut = {...this._h_links};
+	// 		// create copies of hub entries being modified
+	// 		const a_buckets_mut = this._a_buckets.slice();
+	// 		const a_locations_mut = this._a_locations.slice();
+	// 		const h_links_mut = {...this._h_links};
 
-			// ref-clone bucket metadata
-			const a_metadata = a_buckets_mut[i_bucket] = a_buckets_mut[i_bucket].slice() as SerBucketMetadata;
+	// 		// ref-clone bucket metadata
+	// 		const a_metadata = a_buckets_mut[i_bucket] = a_buckets_mut[i_bucket].slice() as SerBucketMetadata;
 
-			// update bucket key
-			a_metadata[0] = si_bucket;
+	// 		// update bucket key
+	// 		a_metadata[0] = si_bucket;
 
-			// adjust bucket size
-			a_metadata[1] += nb_item;
+	// 		// adjust bucket size
+	// 		a_metadata[1] += nb_item;
 
-			// save item location
-			a_locations_mut[i_item] = i_bucket;
+	// 		// save item location
+	// 		a_locations_mut[i_item] = i_bucket;
 
-			// apply hub effects
-			{
-				// encode source domain
-				const sb92_domain_source = this.encodeDomain(si_domain)!;
+	// 		// apply hub effects
+	// 		{
+	// 			// encode source domain
+	// 			const sb92_domain_source = this.encodeDomain(si_domain)!;
 
-				// each affected domain
-				for(const [sb92_domain_target, g_links] of ode(g_effects.links)) {
-					// nothing to do; skip
-					if(!Object.keys(g_links.remove).length && !Object.keys(g_links.insert).length) continue;
+	// 			// each affected domain
+	// 			for(const [sb92_domain_target, g_links] of ode(g_effects.links)) {
+	// 				// nothing to do; skip
+	// 				if(!Object.keys(g_links.remove).length && !Object.keys(g_links.insert).length) continue;
 
-					debugger;
+	// 				debugger;
 
-					// ref-clone-create dict of incoming links for the specified target domain
-					const h_incoming_mut = {...h_links_mut[sb92_domain_target] || {}};
+	// 				// ref-clone-create dict of incoming links for the specified target domain
+	// 				const h_incoming_mut = {...h_links_mut[sb92_domain_target] || {}};
 
-					// ref-clone-create 
-					const [h_paths, h_items] = (h_incoming_mut[sb92_domain_source]?.slice() || [[], {}]) as SerLinksTuple;
+	// 				// ref-clone-create 
+	// 				const [h_paths, h_items] = (h_incoming_mut[sb92_domain_source]?.slice() || [[], {}]) as SerLinksTuple;
 
-					// convert to mutable entries
-					let h_paths_mut = {...h_paths};
+	// 				// convert to mutable entries
+	// 				let h_paths_mut = {...h_paths};
 
-					// create pseudo-sequence from keys
-					const a_paths_keys = Object.keys(h_paths_mut);
+	// 				// create pseudo-sequence from keys
+	// 				const a_paths_keys = Object.keys(h_paths_mut);
 
-					// ref-clone-create item
-					const h_refs_mut = {...h_items[i_item]};
+	// 				// ref-clone-create item
+	// 				const h_refs_mut = {...h_items[i_item]};
 
-					// each removal
-					for(const [sr_path_remove, w_remove] of ode(g_links.remove)) {
-						// path not found
-						if(!h_paths[sr_path_remove]) {
-							throw Error(`Cannot remove old item reference since field path (${sr_path_remove}) could not be encoded in ${this.decodeDomain(sb92_domain_target)}`);
-						}
+	// 				// each removal
+	// 				for(const [sr_path_remove, w_remove] of ode(g_links.remove)) {
+	// 					// path not found
+	// 					if(!h_paths[sr_path_remove]) {
+	// 						throw Error(`Cannot remove old item reference since field path (${sr_path_remove}) could not be encoded in ${this.decodeDomain(sb92_domain_target)}`);
+	// 					}
 
-						// encode field path
-						const i_path = a_paths_keys.indexOf(sr_path_remove) as FieldPathCode;
+	// 					// encode field path
+	// 					const i_path = a_paths_keys.indexOf(sr_path_remove) as FieldPathCode;
 
-						// confirm value being removed
-						const z_value = h_refs_mut[i_path];
-						if(Array.isArray(z_value)) {
-							if(JSON.stringify(w_remove) !== JSON.stringify(z_value)) {
-								throw Error(`Mismatch link removal; expected ${JSON.stringify(w_remove)} but found ${JSON.stringify(z_value)}`);
-							}
-						}
-						else if(w_remove !== z_value) {
-							throw Error(`Mismatch link removal; expected ${w_remove} but found ${z_value}`);
-						}
+	// 					// confirm value being removed
+	// 					const z_value = h_refs_mut[i_path];
+	// 					if(Array.isArray(z_value)) {
+	// 						if(JSON.stringify(w_remove) !== JSON.stringify(z_value)) {
+	// 							throw Error(`Mismatch link removal; expected ${JSON.stringify(w_remove)} but found ${JSON.stringify(z_value)}`);
+	// 						}
+	// 					}
+	// 					else if(w_remove !== z_value) {
+	// 						throw Error(`Mismatch link removal; expected ${w_remove} but found ${z_value}`);
+	// 					}
 
-						// delete from refs
-						delete h_refs_mut[i_path];
+	// 					// delete from refs
+	// 					delete h_refs_mut[i_path];
 
-						// decrement ref counter; no more usages
-						if(0 === (h_paths_mut[sr_path_remove] -= 1)) {
-							// convert object to entries to preserve order
-							const a_entries = ode(h_paths_mut);
+	// 					// decrement ref counter; no more usages
+	// 					if(0 === (h_paths_mut[sr_path_remove] -= 1)) {
+	// 						// convert object to entries to preserve order
+	// 						const a_entries = ode(h_paths_mut);
 
-							// nullify entry
-							a_entries[i_path] = ['' as SerFieldPath, 0];
+	// 						// nullify entry
+	// 						a_entries[i_path] = ['' as SerFieldPath, 0];
 
-							// write serialized entries back to object
-							h_paths_mut = ofe(a_entries);
-						}
-					}
+	// 						// write serialized entries back to object
+	// 						h_paths_mut = ofe(a_entries);
+	// 					}
+	// 				}
 
-					// each insertion
-					for(const [sr_path_insert, w_insert] of ode(g_links.insert)) {
-						// prep path code
-						let i_path: FieldPathCode;
+	// 				// each insertion
+	// 				for(const [sr_path_insert, w_insert] of ode(g_links.insert)) {
+	// 					// prep path code
+	// 					let i_path: FieldPathCode;
 
-						// path already defined; deduce its code
-						if(h_paths[sr_path_insert]) {
-							i_path = a_paths_keys.indexOf(sr_path_insert) as FieldPathCode;
-						}
-						// add new path
-						else {
-							// find next free spot
-							i_path = a_paths_keys.indexOf('') as FieldPathCode;
+	// 					// path already defined; deduce its code
+	// 					if(h_paths[sr_path_insert]) {
+	// 						i_path = a_paths_keys.indexOf(sr_path_insert) as FieldPathCode;
+	// 					}
+	// 					// add new path
+	// 					else {
+	// 						// find next free spot
+	// 						i_path = a_paths_keys.indexOf('') as FieldPathCode;
 
-							// need to append
-							if(-1 === i_path) {
-								// append key
-								i_path = a_paths_keys.push(sr_path_insert) - 1 as FieldPathCode;
+	// 						// need to append
+	// 						if(-1 === i_path) {
+	// 							// append key
+	// 							i_path = a_paths_keys.push(sr_path_insert) - 1 as FieldPathCode;
 
-								// insert new entry, init ref counter to 0
-								h_paths_mut[sr_path_insert] = 0;
-							}
-						}
+	// 							// insert new entry, init ref counter to 0
+	// 							h_paths_mut[sr_path_insert] = 0;
+	// 						}
+	// 					}
 
-						// increment ref counter
-						h_paths_mut[sr_path_insert] += 1;
+	// 					// increment ref counter
+	// 					h_paths_mut[sr_path_insert] += 1;
 
-						// insert ref
-						h_refs_mut[i_path] = w_insert;
-					}
+	// 					// insert ref
+	// 					h_refs_mut[i_path] = w_insert;
+	// 				}
 
-					// ref-clone-set items
-					const h_items_mut = {
-						...h_items,
-						[i_item]: h_refs_mut,
-					};
+	// 				// ref-clone-set items
+	// 				const h_items_mut = {
+	// 					...h_items,
+	// 					[i_item]: h_refs_mut,
+	// 				};
 
-					// set incoming
-					h_incoming_mut[sb92_domain_source] = [h_paths_mut, h_items_mut];
+	// 				// set incoming
+	// 				h_incoming_mut[sb92_domain_source] = [h_paths_mut, h_items_mut];
 
-					// set links
-					h_links_mut[sb92_domain_target] = h_incoming_mut;
-				}
-			}
+	// 				// set links
+	// 				h_links_mut[sb92_domain_target] = h_incoming_mut;
+	// 			}
+	// 		}
 
-			// next, update the hub
-			await this._write_hub(kw_content, {
-				buckets: a_buckets_mut,
-				locations: a_locations_mut,
-			});
+	// 		// next, update the hub
+	// 		await this._write_hub(kw_content, {
+	// 			buckets: a_buckets_mut,
+	// 			locations: a_locations_mut,
+	// 		});
 
-			// add old bucket to deletion queue
-			if(si_bucket_delete) {
-				this._as_buckets_prune.add(si_bucket_delete);
-			}
+	// 		// add old bucket to deletion queue
+	// 		if(si_bucket_delete) {
+	// 			this._as_buckets_prune.add(si_bucket_delete);
+	// 		}
 
-			// schedule a bucket rotation
-			this._schedule_rotation();
-		});
-	}
+	// 		// schedule a bucket rotation
+	// 		this._schedule_rotation();
+	// 	});
+	// }
 
 
-	async putItems(si_domain: DomainLabel, a_items: [sr_item: ItemPath, w_item: SerItem, g_effects: HubEffects][]): Promise<void> {
+	async putItems(si_domain: DomainLabel, i_schema: SchemaCode, a_items: [sr_item: ItemPath, w_item: SerItem, g_effects: HubEffects][]): Promise<void> {
 		type DraftBucket = {
 			key: BucketKey;
 			code: BucketCode;
@@ -1007,8 +1011,7 @@ export class VaultHub {
 						// create new bucket and select as destination
 						[i_bucket, si_bucket, h_bucket] = this._new_bucket(si_domain);
 
-						// TODO: replace with mut
-						// set schema association
+						// set schema association (doesn't need mut since bucket is new)
 						this._a_buckets_to_schemas[i_bucket] = i_schema;
 					}
 				}
