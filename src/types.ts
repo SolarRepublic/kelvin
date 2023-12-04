@@ -181,6 +181,8 @@ export type SerTaggedDatatypeMap = {
 	[TaggedDatatype.UNKNOWN]: [...unknown[]];
 	[TaggedDatatype.REF]: [DomainLabel];
 	[TaggedDatatype.ARRAY]: [SerField];
+	[TaggedDatatype.SET]: [SerField];
+	[TaggedDatatype.DICT]: [SerField];
 	[TaggedDatatype.TUPLE]: [SerField[]];
 	[TaggedDatatype.STRUCT]: [SerFieldStruct];
 	[TaggedDatatype.SWITCH]: [...SerFieldSwitch];
@@ -195,6 +197,8 @@ export type SerTaggedDatatype =
 	| [TaggedDatatype.UNKNOWN, ...unknown[]]
 	| [TaggedDatatype.REF, DomainLabel]
 	| [TaggedDatatype.ARRAY, SerField]
+	| [TaggedDatatype.SET, SerField]
+	| [TaggedDatatype.DICT, SerField]
 	| [TaggedDatatype.TUPLE, SerField[]]
 	| [TaggedDatatype.STRUCT, SerFieldStruct]
 	| [TaggedDatatype.SWITCH, ...SerFieldSwitch];
@@ -211,7 +215,6 @@ export type SerKeyStruct = {
 export type SerFieldStruct = {
 	[si_label: FieldLabel]: SerField;
 };
-
 
 /**
  * 

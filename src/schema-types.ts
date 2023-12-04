@@ -71,7 +71,10 @@ export type FieldTuple = Array<KnownEsDatatypes>;
 
 export type FieldSet = Set<KnownEsDatatypes>;
 
-export type FieldDict = Record<string, KnownEsDatatypes>;
+// eslint-disable-next-line @typescript-eslint/consistent-indexed-object-style
+export type FieldDict = {
+	[si_key: string]: KnownEsDatatypes;
+};
 
 // eslint-disable-next-line @typescript-eslint/consistent-indexed-object-style
 export type FieldStruct = {
@@ -83,9 +86,9 @@ export type TaggedDatatypeToEsTypeGetter<xc_type extends TaggedDatatype> = {
 	[TaggedDatatype.REF]: ItemRef | null;
 	[TaggedDatatype.ARRAY]: FieldArray;
 	[TaggedDatatype.SET]: FieldSet;
+	[TaggedDatatype.DICT]: FieldDict;
 	[TaggedDatatype.TUPLE]: FieldTuple;
 	[TaggedDatatype.STRUCT]: FieldStruct;
-	[TaggedDatatype.DICT]: FieldDict;
 	[TaggedDatatype.SWITCH]: any;
 }[xc_type];
 
@@ -94,9 +97,9 @@ export type TaggedDatatypeToEsTypeSetter<xc_type extends TaggedDatatype> = {
 	[TaggedDatatype.REF]: RuntimeItem | ItemRef | null;
 	[TaggedDatatype.ARRAY]: any[];
 	[TaggedDatatype.SET]: any[] | Set<any>;
+	[TaggedDatatype.DICT]: Record<string, KnownEsDatatypes>;
 	[TaggedDatatype.TUPLE]: any[];
 	[TaggedDatatype.STRUCT]: object;
-	[TaggedDatatype.DICT]: Record<string, KnownEsDatatypes>;
 	[TaggedDatatype.SWITCH]: any;
 }[xc_type];
 
@@ -351,7 +354,7 @@ export type SchemaSimulator<
 	bytes(): w_return;
 	obj(): w_return;
 	ref(g_controller: GenericItemController): w_return;
-	arr(f_sub: SubschemaSimulator<w_return>): w_return;
+	array(f_sub: SubschemaSimulator<w_return>): w_return;
 	set(f_sub: SubschemaSimulator<w_return>): w_return;
 	tuple(f_sub: SubschemaSimulator<w_return>): w_return;
 	struct(f_sub: SubschemaSimulator<w_return>): w_return;
@@ -420,17 +423,23 @@ export type SchemaSpecifier = ImplementsSchemaTypes<{
 	>(g_controller: dc_controller): dc_controller extends GenericItemController<infer g_thing>
 		? DatatypeRef<ItemRef<g_thing>>: never;
 
-	arr<
+	array<
 		w_items extends Datatype,
 	>(
 		f_sub: SubschemaBuilder<w_items>
 	): DatatypeArray<w_items[]>;
 
 	set<
-		as_items extends Set<Datatype>,
+		w_items extends Datatype,
 	>(
-		f_sub: SubschemaBuilder<as_items>
-	): DatatypeSet<as_items>;
+		f_sub: SubschemaBuilder<w_items>
+	): DatatypeSet<Set<w_items>>;
+
+	dict<
+		w_items extends Datatype,
+	>(
+		f_sub: SubschemaBuilder<w_items>
+	): DatatypeDict<Record<string, w_items>>;
 
 	tuple<
 		const a_tuple extends Readonly<CoreDatatype[]>,
@@ -444,12 +453,6 @@ export type SchemaSpecifier = ImplementsSchemaTypes<{
 	>(
 		f_sub: (k: SchemaSpecifier) => h_subschema,
 	): DatatypeStruct<h_subschema>;
-
-	dict<
-		h_items extends Record<string, Datatype>,
-	>(
-		f_sub: SubschemaBuilder<h_items>
-	): DatatypeDict<h_items>;
 
 	switch<
 		si_dep extends string,

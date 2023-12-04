@@ -111,12 +111,14 @@ export const init_foobars = (k_client: Vault) => {
 			on: k.int<Toggle>(),
 
 			ref: k.ref(FooBars),
-			array: k.arr(k1 => k1.str()),
-			tuple: k.tuple(k1 => [k1.arr(k2 => k2.str()), k1.int()]),
+			array: k.array(k1 => k1.str()),
+			set_str: k.set(k1 => k1.str()),
+			tuple: k.tuple(k1 => [k1.array(k2 => k2.str()), k1.int()]),
 			struct: k.struct(k1 => ({
 				int: k1.int(),
 				str: k1.str(),
 			})),
+			dict_str: k.dict(k1 => k1.str()),
 			switch: k.switch('type', xc_type, {
 				[BazQuxesType.UNKNOWN]: k1 => k1.int(),
 				[BazQuxesType.BAZ]: k1 => k1.tuple(k2 => [
@@ -207,32 +209,39 @@ export const init_bazquxes = (
 		g_foobar_3,
 	} = g_foobars;
 
-	const g_bazqux_1 = {
+	const g_bazqux_1: BazQuxesStruct = {
 		type: BazQuxesType.UNKNOWN,
 		id: 'nil',
 		on: Toggle.ON,
 
 		ref: null,
 		array: [],
+		set_str: new Set(),
 		tuple: [[], 0],
 		struct: {
 			int: 0,
 			str: '',
 		},
+		dict_str: {},
 		switch: 9,
 	};
 
-	const g_bazqux_2 = {
+	const g_bazqux_2: BazQuxesStruct = {
 		type: BazQuxesType.BAZ,
 		id: 'baz',
 		on: Toggle.ON,
 
 		ref: FooBars.getItemRef(g_foobar_1)!,
 		array: ['hello', 'world'],
+		set_str: new Set(['data', 'computer']),
 		tuple: [[], 0],
 		struct: {
 			int: 1,
 			str: 'Apple',
+		},
+		dict_str: {
+			apple: 'red',
+			banana: 'yellow',
 		},
 		switch: [
 			42,
@@ -241,17 +250,23 @@ export const init_bazquxes = (
 		],
 	};
 
-	const g_bazqux_3 = {
+	const g_bazqux_3: BazQuxesStruct = {
 		type: BazQuxesType.QUX,
 		id: 'qux',
 		on: Toggle.ON,
 
 		ref: FooBars.getItemRef(g_foobar_2)!,
 		array: ['lorem', 'ipsum', 'dolor', 'fa'],
+		set_str: new Set(['red', 'orange', 'yellow', 'blue']),
 		tuple: [['apple', 'banana'], 17],
 		struct: {
 			int: 21,
 			str: 'red',
+		},
+		dict_str: {
+			red: 'apple',
+			yellow: 'banana',
+			blue: 'blueberry',
 		},
 		switch: {
 			a: 'apple',

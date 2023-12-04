@@ -27,6 +27,10 @@ export type CountedValues = {
 	subcounts?: {
 		array: CountedValues;
 	} | {
+		set: CountedValues;
+	} | {
+		dict: CountedValues;
+	} | {
 		tuple: CountedValues[];
 	} | {
 		struct: Dict<CountedValues>;
@@ -56,10 +60,22 @@ const spec_for_count = (): CountedSpec & {[$_COUNTER]: number} => {
 		bytes: f_countable,
 		obj: f_countable,
 		ref: f_countable,
-		arr: f_sub => ({
+		array: f_sub => ({
 			[$_COUNT]: ++c_fields,
 			subcounts: {
 				array: f_sub(spec_for_count()) as CountedValues,
+			},
+		}),
+		set: f_sub => ({
+			[$_COUNT]: ++c_fields,
+			subcounts: {
+				set: f_sub(spec_for_count()) as CountedValues,
+			},
+		}),
+		dict: f_sub => ({
+			[$_COUNT]: ++c_fields,
+			subcounts: {
+				set: f_sub(spec_for_count()) as CountedValues,
 			},
 		}),
 		tuple: f_sub => ({
@@ -131,10 +147,20 @@ const spec_for_ser: (g_shape: ShapedFields, i_field?: number) => SchemaSimulator
 	bytes: () => [++i_field, PrimitiveDatatype.BYTES],
 	obj: () => [++i_field, PrimitiveDatatype.OBJECT],
 	ref: g_item => [++i_field, [TaggedDatatype.REF, g_item.domain]],
-	arr: (f_sub) => {
+	array: (f_sub) => {
 		const g_subcounted = g_shape.access(++i_field);
 		const g_subshape = bind_shaper([g_subcounted.array]);
 		return [i_field, [TaggedDatatype.ARRAY, f_sub(spec_for_ser(g_subshape))]];
+	},
+	set: (f_sub) => {
+		const g_subcounted = g_shape.access(++i_field);
+		const g_subshape = bind_shaper([g_subcounted.set]);
+		return [i_field, [TaggedDatatype.SET, f_sub(spec_for_ser(g_subshape))]];
+	},
+	dict: (f_sub) => {
+		const g_subcounted = g_shape.access(++i_field);
+		const g_subshape = bind_shaper([g_subcounted.dict]);
+		return [i_field, [TaggedDatatype.DICT, f_sub(spec_for_ser(g_subshape))]];
 	},
 	tuple: (f_sub) => {
 		const g_subshape = bind_shaper(g_shape.access(++i_field).tuple!);
@@ -282,6 +308,20 @@ function reshape_tagged_value([xc_type, w_info, w_extra]: SerTaggedDatatype, sr_
 			break;
 		}
 
+		// set
+		case TaggedDatatype.SET: {
+			const sr_inner = sr_local+'<>';
+			a_mids[0] = reshape_fields(sr_inner, [w_info]).fields['0' as FieldLabel];
+			break;
+		}
+
+		// dict
+		case TaggedDatatype.DICT: {
+			const sr_inner = sr_local+'<>';
+			a_mids[0] = reshape_fields(sr_inner, [w_info]).fields['0' as FieldLabel];
+			break;
+		}
+
 		// tuple
 		case TaggedDatatype.TUPLE: {
 			const h_reshaped = reshape_fields(sr_local, w_info).fields;
@@ -415,7 +455,7 @@ function reshape_fields(
  */
 export function interpret_schema<a_parts extends AcceptablePartTuples>(
 	si_domain: string,
-	f_schema: SchemaBuilder<PartableSchemaSpecifier, a_parts, StructuredSchema>
+	f_schema: SchemaBuilder<SchemaSimulator<1>, a_parts, StructuredSchema>
 ): SerSchema {
 	// allow up to 8 part fields
 	const a_simulators: symbol[] = [];

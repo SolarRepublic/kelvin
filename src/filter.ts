@@ -9,7 +9,7 @@ import {__UNDEFINED, is_dict_es, ode, buffer_to_base64} from '@blake.regalia/bel
 
 import {SchemaError} from './errors';
 import {FieldArray} from './field-array';
-import {$_CODE, is_runtime_item} from './item-proto';
+import {$_CODE, is_runtime_item, type RuntimeItem} from './item-proto';
 import {ItemRef} from './item-ref';
 import {TaggedDatatype, PrimitiveDatatype} from './schema-types';
 
@@ -248,7 +248,7 @@ function apply_filter_any(z_value: KnownEsDatatypes, z_datatype: SerField, z_mat
 				}
 
 				// apply ref filter
-				return apply_set_filter(apply_filter_ref, z_value, z_match, sr_path);
+				return apply_set_filter(apply_filter_ref, z_value as ItemRef<Dict<any>, RuntimeItem>, z_match, sr_path);
 			}
 
 			// array

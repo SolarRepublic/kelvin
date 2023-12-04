@@ -3,12 +3,14 @@ import type {GenericItemController, ItemController} from './controller';
 import type {KnownEsDatatypes, PartableDatatype, PrimitiveDatatypeToEsType, TaggedDatatypeToEsTypeGetter, TaggedDatatypeToEsTypeSetter} from './schema-types';
 import type {DomainCode, FieldPath, SerFieldPath, ItemCode, SerField, SerSchema, SerTaggedDatatype, SerTaggedDatatypeMap, SerFieldSwitch, FieldLabel} from './types';
 
-import type {JsonValue, JsonObject, JsonArray, Dict, Subtype} from '@blake.regalia/belt';
+import type {JsonValue, JsonObject, JsonArray, Dict} from '@blake.regalia/belt';
 
 import {ode, base93_to_buffer, buffer_to_base93, F_IDENTITY, fodemtv} from '@blake.regalia/belt';
 
 import {Bug, SchemaError, SchemaWarning, TypeFieldNotWritableError, UnparseableSchemaError} from './errors';
 import {FieldArray} from './field-array';
+import {FieldDict} from './field-dict';
+import {FieldSet} from './field-set';
 import {ItemRef} from './item-ref';
 import {PrimitiveDatatype, TaggedDatatype} from './schema-types';
 
@@ -19,11 +21,6 @@ export const $_LINKS = Symbol('item-links');
 
 
 export type GenericItem = Record<string, KnownEsDatatypes>;
-
-// export type RefDelta = [
-// 	i_item: ItemCode,
-// 	a_path: FieldPath,
-// ];
 
 export type RefDeltas = Record<SerFieldPath, ItemCode>;
 
@@ -240,8 +237,14 @@ const tagged_serdefaults = <
 			F_DEFAULT_ZERO,
 		];
 
-		// array
+		// array or set
 		case TaggedDatatype.ARRAY: {
+			// // depending on presentation type
+			// const dc_backing = {
+			// 	[TaggedDatatype.ARRAY]: FieldArray,
+			// 	[TaggedDatatype.SET]: FieldSet,
+			// }[xc_tag as TaggedDatatype.ARRAY | TaggedDatatype.SET];
+
 			return primitive_or_tagged(w_info, {
 				// primitive item type
 				primitive: xc_type => [
@@ -270,6 +273,7 @@ const tagged_serdefaults = <
 						// serializer
 						(a_items, a_path, g_runtime) => (a_items as any[]).map((w_item, i_item) => f_serializer(w_item, [...a_path, i_item], g_runtime)),
 
+						// TODO: does this need to be wraped in FieldArray?
 						// deserializer
 						(a_items, a_path, g_runtime) => (a_items as JsonArray).map((w_item, i_item) => f_deserializer(w_item, [...a_path, i_item], g_runtime)),
 
@@ -279,6 +283,51 @@ const tagged_serdefaults = <
 				},
 			});
 		}
+
+		// set
+		case TaggedDatatype.SET: {
+			return primitive_or_tagged(w_info, {
+				// primitive item type
+				primitive: xc_type => [
+					// serializer
+					as_items => Array.from(as_items).map(w_value => H_SERIALIZERS_PRIMITIVE[xc_type](w_value as never)),
+
+					// deserializer
+					a_items => FieldSet.create(
+						a_items as JsonArray,
+						H_SERIALIZERS_PRIMITIVE[xc_type],
+						H_DESERIALIZERS_PRIMITIVE[xc_type],
+						H_DEFAULTS_PRIMITIVE[xc_type]
+					),
+
+					// default
+					() => [],
+				],
+
+				// tagged item type
+				tagged(...a_ser) {
+					// get serdefaults
+					const [f_serializer, f_deserializer, f_default] = tagged_serdefaults(a_ser, k_item);
+
+					// structure
+					return [
+						// serializer
+						(as_items, a_path, g_runtime) => Array.from(as_items as Set<any>).map((w_item, i_item) => f_serializer(w_item, [...a_path, i_item], g_runtime)),
+
+						// deserializer
+						(a_items, a_path, g_runtime) => {
+							debugger;
+							throw Error(`Sets of members having complex datatypes not yet implemented`);
+							// (a_items as JsonArray).map((w_item, i_item) => f_deserializer(w_item, [...a_path, i_item], g_runtime)),
+						},
+
+						// default
+						() => [],
+					];
+				},
+			});
+		}
+
 
 		// tuple
 		case TaggedDatatype.TUPLE: {
@@ -318,6 +367,46 @@ const tagged_serdefaults = <
 				// default
 				() => fodemtv(h_serdefs, ([,, f_def]) => f_def()),
 			];
+		}
+
+		// dict
+		case TaggedDatatype.DICT: {
+			return primitive_or_tagged(w_info, {
+				// primitive item type
+				primitive: xc_type => [
+					// serializer
+					h_items => fodemtv(h_items, w_value => H_SERIALIZERS_PRIMITIVE[xc_type](w_value as never)),
+
+					// deserializer
+					h_items => FieldDict.create(
+						h_items as JsonObject,
+						H_SERIALIZERS_PRIMITIVE[xc_type],
+						H_DESERIALIZERS_PRIMITIVE[xc_type],
+						H_DEFAULTS_PRIMITIVE[xc_type]
+					),
+
+					// default
+					() => [],
+				],
+
+				// tagged item type
+				tagged(...a_ser) {
+					// get serdefaults
+					const [f_serializer, f_deserializer, f_default] = tagged_serdefaults(a_ser, k_item);
+
+					// structure
+					return [
+						// serializer
+						(h_items, a_path, g_runtime) => fodemtv(h_items as Dict<any>, (w_item, si_key) => f_serializer(w_item, [...a_path, si_key], g_runtime)),
+
+						// deserializer
+						(h_items, a_path, g_runtime) => fodemtv(h_items as JsonObject, (w_item, si_key) => f_deserializer(w_item, [...a_path, si_key], g_runtime)),
+
+						// default
+						() => [],
+					];
+				},
+			});
 		}
 
 		// switch

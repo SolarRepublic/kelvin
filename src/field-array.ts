@@ -2,7 +2,7 @@ import type {F} from 'ts-toolbelt';
 
 import type {Key} from 'ts-toolbelt/out/Any/Key';
 
-import {ode, type JsonArray, type JsonValue} from '@blake.regalia/belt';
+import {ode, type JsonArray, type JsonValue, __UNDEFINED} from '@blake.regalia/belt';
 
 const F_CMP_DEFAULT = (w_a: any, w_b: any): -1 | 0 | 1 => {
 	const s_a = w_a+'';
@@ -64,6 +64,21 @@ export class FieldArray<
 		return new Proxy(k_array, {
 			// reads
 			get(k_target, z_property) {
+				// not symbol
+				if('symbol' !== typeof z_property) {
+					// as number
+					const i_pos = +z_property;
+
+					// index
+					if(Number.isInteger(i_pos)) {
+						// get from backing array
+						const z_value = k_array.#a_members[i_pos];
+
+						// deserialize if defined
+						return __UNDEFINED === z_value? z_value: k_array.#f_deserializer(z_value);
+					}
+				}
+
 				// property defined on prototype; resolve against class property/method
 				if(Object.hasOwn(w_prototype, z_property)) {
 					return resolve_methods(w_prototype, z_property, k_array);
