@@ -160,6 +160,12 @@ const spec_for_ser: (g_shape: ShapedFields, i_field?: number) => SchemaSimulator
 		const g_subshape = bind_shaper([g_subcounted.array]);
 		return [i_field, [TaggedDatatype.ARRAY, f_sub(spec_for_ser(g_subshape))]];
 	},
+	// get array() {
+	// 	const g_subcounted = g_shape.access(++i_field);
+	// 	const g_subshape = bind_shaper([g_subcounted.array]);
+	// 	return spec_for_ser(g_subshape);
+	// 	// [i_field, [TaggedDatatype.ARRAY, f_sub(spec_for_ser(g_subshape))]];
+	// },
 	set: (f_sub) => {
 		const g_subcounted = g_shape.access(++i_field);
 		const g_subshape = bind_shaper([g_subcounted.set]);

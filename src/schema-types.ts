@@ -244,7 +244,7 @@ export type DatatypeStruct<
 
 export type DatatypeRegistry<
 	w_subtype extends StructuredSchema=StructuredSchema,
-> = SchemaSubtype<w_subtype, 'registry'>;
+> = SchemaSubtype<Partial<w_subtype>, 'registry'>;
 
 export type DatatypeDict<
 	w_subtype extends Record<string, Datatype>,
@@ -303,9 +303,10 @@ export type SchemaToItemShape<g_schema, b_setter extends 0|1=0> = FindSwitches<g
 						// the switch value depending on the classifier value
 						& {
 							[si in si_switch]: w_value extends keyof h_switch
-								// ? SchemaVariants<h_switch[w_value]>
 								? h_switch[w_value] extends (...a_args: any[]) => infer w_out
-									? w_out
+									? w_out extends DatatypeStruct<infer h_struct>
+										? SchemaToItemShape<h_struct>
+										: w_out
 									: h_switch[w_value]
 								: never
 						}
@@ -412,6 +413,21 @@ export type SchemaBuilder<
 export type ImplementsSchemaTypes<g_impl extends SchemaSimulator> = g_impl;
 
 
+// type OptionalDatatype<g_spec> = {
+// 	[si_key in keyof g_spec]: g_spec[si_key] extends (...a_args: infer a_args) => SchemaSubtype<infer w_type, infer s_id>
+// 		? (...a_args: a_args) => SchemaSubtype<w_type | undefined, s_id>
+// 		: never;
+// };
+
+// allows for a more convenient way to express schemas
+export type ChainedSchemaSpecifier = {
+	[si_method in keyof SchemaSpecifier]: SchemaSpecifier[si_method] extends (...a_args: infer a_args) => infer w_return
+		? w_return extends Datatype
+			? (...a_args: a_args) => DatatypeArray<w_return[]>
+			: never
+		: never;
+};
+
 /**
  * Represents a dummy type assigned to the callback parameter of a `schema` function declaration.
  */
@@ -439,6 +455,13 @@ export type SchemaSpecifier = ImplementsSchemaTypes<{
 		f_sub: SubschemaBuilder<w_items>
 	): DatatypeArray<w_items[]>;
 
+	// eslint-disable-next-line @typescript-eslint/member-ordering
+	// array: ChainedSchemaSpecifier & (<
+	// 	w_items extends Datatype,
+	// >(
+	// 	f_sub: SubschemaBuilder<w_items>
+	// ) => DatatypeArray<w_items[]>);
+
 	set<
 		w_items extends Datatype,
 	>(
@@ -450,6 +473,14 @@ export type SchemaSpecifier = ImplementsSchemaTypes<{
 	>(
 		f_sub: SubschemaBuilder<w_items>
 	): DatatypeDict<Record<string, w_items>>;
+
+	dict<
+		s_keys extends string,
+		w_items extends Datatype,
+	>(
+		s_key: s_keys,
+		f_sub: SubschemaBuilder<w_items>
+	): DatatypeDict<Record<s_keys, w_items>>;
 
 	tuple<
 		const a_tuple extends Readonly<CoreDatatype[]>,
@@ -483,6 +514,8 @@ export type SchemaSpecifier = ImplementsSchemaTypes<{
 		w_classifier: w_classifier,
 		h_switch: h_switch,
 	): SchemaSwitch<si_dep, w_classifier, h_switch>;
+
+	// optional: OptionalDatatype<SchemaSpecifier>;
 }>;
 
 
@@ -555,14 +588,20 @@ export type SubschemaStructBuilder<
 		switch0: SchemaSwitch<'type', ItemType, {
 			[ItemType.UNKNOWN]: (k1: SchemaSpecifier) => DatatypeInt<number, 0>;
 			[ItemType.THING]: (k1: SchemaSpecifier) => DatatypeString<'thing', 0>;
-			[ItemType.OTHER]: (k1: SchemaSpecifier) => DatatypeString<'other', 0>;
+			[ItemType.OTHER]: (k1: SchemaSpecifier) => DatatypeStruct<{
+				on: DatatypeInt<0 | 1, 0>;
+				b: SchemaSwitch<'on', 0 | 1, {
+					0: (k1: SchemaSpecifier) => DatatypeInt<number, 0>;
+					1: (k1: SchemaSpecifier) => DatatypeString<'other', 0>;
+				}>;
+			}>;
 		}>;
 
-		switch1: SchemaSwitch<'type', ItemType, {
-			[ItemType.UNKNOWN]: (k1: SchemaSpecifier) => DatatypeInt<number, 0>;
-			[ItemType.THING]: (k1: SchemaSpecifier) => DatatypeString<'thing', 0>;
-			[ItemType.OTHER]: (k1: SchemaSpecifier) => DatatypeString<'other', 0>;
-		}>;
+		// switch1: SchemaSwitch<'type', ItemType, {
+		// 	[ItemType.UNKNOWN]: (k1: SchemaSpecifier) => DatatypeInt<number, 0>;
+		// 	[ItemType.THING]: (k1: SchemaSpecifier) => DatatypeString<'thing', 0>;
+		// 	[ItemType.OTHER]: (k1: SchemaSpecifier) => DatatypeString<'other', 0>;
+		// }>;
 	};
 
 	type examine = SchemaToItemShape<Demo, 1>;

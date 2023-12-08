@@ -1,6 +1,7 @@
 import type {ItemStruct} from '../src/item-proto';
 import type {Vault} from '../src/vault';
 
+import type {NaiveBase64} from '@blake.regalia/belt';
 import type {ItemCode} from 'src/types';
 
 import {ItemRef} from 'src/item-ref';
@@ -112,6 +113,7 @@ export const init_foobars = (k_client: Vault) => {
 
 			ref: k.ref(FooBars),
 			array_str: k.array(k1 => k1.str()),
+			// array_int: k.array.str(),
 			set_str: k.set(k1 => k1.str()),
 			tuple: k.tuple(k1 => [k1.array(k2 => k2.str()), k1.int()]),
 			struct: k.struct(k1 => ({
@@ -123,6 +125,7 @@ export const init_foobars = (k_client: Vault) => {
 				reg_str: k1.str(),
 			})),
 			dict_str: k.dict(k1 => k1.str()),
+			// dict_base64: k.dict('' as NaiveBase64, k1 => k1.str()),
 			switch: k.switch('type', xc_type, {
 				[BazQuxesType.UNKNOWN]: k1 => k1.int(),
 				[BazQuxesType.BAZ]: k1 => k1.tuple(k2 => [
@@ -130,11 +133,16 @@ export const init_foobars = (k_client: Vault) => {
 					k2.str(),
 					k2.ref(FooBars),
 				]),
-				[BazQuxesType.QUX]: k1 => ({
-					a: k1.str(),
-					b: k1.str(),
-					c: k1.str(),
-				}),
+				[BazQuxesType.QUX]: k1 => k1.struct(k2 => ({
+					a: k2.str(),
+					b: k2.str(),
+					c: k2.str(),
+					v: k2.int<Toggle>(),
+					sub: k2.switch('v', 0 as Toggle, {
+						[Toggle.OFF]: k3 => k3.str(),
+						[Toggle.ON]: k3 => k3.int(),
+					}),
+				})),
 			}),
 		}),
 
@@ -284,8 +292,11 @@ export const init_bazquxes = (
 			a: 'apple',
 			b: 'banana',
 			c: 'cantelope',
+			v: Toggle.ON,
+			sub: 3,
 		},
 	};
+
 
 	return {
 		g_bazqux_1,
