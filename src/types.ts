@@ -166,10 +166,15 @@ export type SerItem = JsonArray;
  * 
  */
 export type SerFieldSwitch = [
+	// /**
+	//  * Index of field being switched on
+	//  */
+	// i_switch: number,
+
 	/**
-	 * Index of field being switched on
+	 * Label of field being switched on
 	 */
-	i_switch: number,
+	si_field: FieldLabel,
 
 	/**
 	 * Maps switch values to subschemas

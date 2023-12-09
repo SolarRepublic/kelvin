@@ -1,8 +1,8 @@
-import type {A} from 'ts-toolbelt';
+import type {A, Any, O} from 'ts-toolbelt';
 
 import type {Key} from 'ts-toolbelt/out/Any/Key';
 
-import type {GenericItemController} from './controller';
+import type {GenericItemController, ItemController} from './controller';
 import type {FieldArray} from './field-array';
 import type {RuntimeItem} from './item-proto';
 import type {ItemRef} from './item-ref';
@@ -136,10 +136,14 @@ type SoftBool = 0 | 1;
  */
 type Classifier = string | number;
 
+declare const DATATYPE_PLACEHOLDER: unique symbol;
+export type DX = typeof DATATYPE_PLACEHOLDER;
+
 /**
  * Union of all schema datatypes
  */
 export type CoreDatatype =
+	| DX
 	| DatatypeInt
 	| DatatypeBigint
 	| DatatypeDouble
@@ -169,7 +173,7 @@ export type StructuredSchema = {
 
 /**
  * Reinterprets the given type as being JSON-compatible.
- * @param b_setter - value of `1` indicates that target type is inteded for setters
+ * @param b_setter - value of `1` indicates that target type is intended for setters
  */
 export type ReduceSchema<z_test, b_setter extends 0|1=0> =
 	z_test extends DatatypeRef<infer g_ref>? g_ref | null | (
@@ -178,15 +182,25 @@ export type ReduceSchema<z_test, b_setter extends 0|1=0> =
 				? g_runtime
 				: never
 			: never)
+		// cannot use ItemController unfortunately as it creates a circular type def
+		// : z_test extends ItemController<infer g_schema, infer g_item, infer g_proto, infer g_runtime, infer s_domain, infer si_domain, infer a_parts, infer f_schema, infer g_parts>
+		// 	? g_runtime
 		: z_test extends SchemaSubtype<infer w_estype, infer s_id>? ReduceSchema<w_estype>
-			: z_test extends {[ES_TYPE]: any}? z_test
+		// : z_test extends {[ES_TYPE]: any}? z_test
+		// : z_test extends {[ES_TYPE]: infer w_es}? w_es
+			: z_test extends Set<infer w_thing>? Set<ReduceSchema<w_thing>>
 				: z_test extends Uint8Array? z_test
 					: z_test extends JsonPrimitive? z_test
-						: z_test extends Array<infer w_type>
-							? ReduceSchema<w_type, b_setter>[]
-							: {
-								[si_each in keyof z_test]: ReduceSchema<z_test[si_each], b_setter>;
-							};
+						: JsonObject extends z_test
+							? string extends keyof z_test? JsonObject
+								: {
+									[si_each in keyof z_test]: ReduceSchema<z_test[si_each], b_setter>;
+								}
+							: z_test extends Array<infer w_type>
+								? ReduceSchema<w_type, b_setter>[]
+								: {
+									[si_each in keyof z_test]: ReduceSchema<z_test[si_each], b_setter>;
+								};
 
 
 export type DatatypeInt<
@@ -254,7 +268,7 @@ type SchemaBuilderSwitchMap<
 	w_classifier extends Classifier,
 	w_out=any,
 > = {
-	[w_key in w_classifier]: SubschemaBuilder<w_out>;
+	[w_key in w_classifier]: Datatype;
 };
 
 
@@ -303,9 +317,9 @@ export type SchemaToItemShape<g_schema, b_setter extends 0|1=0> = FindSwitches<g
 						// the switch value depending on the classifier value
 						& {
 							[si in si_switch]: w_value extends keyof h_switch
-								? h_switch[w_value] extends (...a_args: any[]) => infer w_out
+								? h_switch[w_value] extends infer w_out
 									? w_out extends DatatypeStruct<infer h_struct>
-										? SchemaToItemShape<h_struct>
+										? SchemaToItemShape<h_struct, 0>
 										: w_out
 									: h_switch[w_value]
 								: never
@@ -360,29 +374,30 @@ export type SchemaSimulator<
 		str(): w_return;
 	};
 }[b_partable]) & {
+	/* eslint-disable @typescript-eslint/member-ordering */
+
 	double(): w_return;
 	bytes(): w_return;
 	obj(): w_return;
 	ref(g_controller: GenericItemController): w_return;
-	array(f_sub: SubschemaSimulator<w_return>): w_return;
-	set(f_sub: SubschemaSimulator<w_return>): w_return;
-	tuple(f_sub: SubschemaSimulator<w_return>): w_return;
-	struct(f_sub: SubschemaSimulator<w_return>): w_return;
-	dict(f_sub: SubschemaSimulator<w_return>): w_return;
-	registry(f_sub: SubschemaSimulator<w_return>): w_return;
+	array: SchemaSimulator<0, w_return>;
+	set: SchemaSimulator<0, w_return>;
+	dict: SchemaSimulator<0, w_return>
+		// eslint-disable-next-line @typescript-eslint/indent
+		& ((as_keys: Extract<keyof w_return, string>, w_values: AllValues<w_return>) => w_return);
+	tuple(a_tuple: w_return[]): w_return;
+	struct(h_subschema: Dict<w_return>): w_return;
+	registry(h_subschema: Dict<w_return>): w_return;
 	switch(
 		si_dep: string,
 		w_classifier: Classifier,
 		h_switch: {
-			[w_key in typeof w_classifier]: SubschemaSimulator<w_return>;
+			[w_key in typeof w_classifier]: w_return;
 		}
 	): w_return;
+
+	/* eslint-disable */
 };
-
-
-type SubschemaSimulator<
-	w_return=any,
-> = (k: SchemaSimulator<0, w_return>) => w_return;
 
 
 
@@ -394,17 +409,6 @@ export type SchemaBuilder<
 	a_parts extends any[]=AcceptablePartTuples,
 	w_return=any,
 > = (k: k_spec, ...a_parts: a_parts) => w_return;
-
-
-// /**
-//  * Sub-level schema builder for nested fields
-//  */
-// export type SubschemaBuilder<
-// 	w_return,
-// 	// k_spec extends SchemaSimulator<0, w_return>=SchemaSimulator<0, w_return>,
-// 	k_spec extends PartableSchemaSpecifier=PartableSchemaSpecifier,
-// > = (k: k_spec) => Dict<w_return>;
-
 
 
 /**
@@ -419,19 +423,46 @@ export type ImplementsSchemaTypes<g_impl extends SchemaSimulator> = g_impl;
 // 		: never;
 // };
 
-// allows for a more convenient way to express schemas
-export type ChainedSchemaSpecifier = {
+// // allows for a more convenient way to express schemas
+// export type ChainedSchemaSpecifier<w_datatype extends SchemaSubtype<any, string>> = {
+// 	[si_method in keyof SchemaSpecifier]: SchemaSpecifier[si_method] extends (...a_args: infer a_args) => infer w_return
+// 		? w_return extends Datatype
+// 			? (...a_args: a_args) => w_return
+// 			: never
+// 		: never;
+// };
+
+type ChainedArray = {
 	[si_method in keyof SchemaSpecifier]: SchemaSpecifier[si_method] extends (...a_args: infer a_args) => infer w_return
 		? w_return extends Datatype
 			? (...a_args: a_args) => DatatypeArray<w_return[]>
 			: never
-		: never;
+		: SchemaSpecifier[si_method];
 };
+
+type ChainedSet = {
+	[si_method in keyof SchemaSpecifier]: SchemaSpecifier[si_method] extends (...a_args: infer a_args) => infer w_return
+		? w_return extends Datatype
+			? (...a_args: a_args) => DatatypeSet<Set<w_return>>
+			: never
+		: SchemaSpecifier[si_method];
+};
+
+type ChainedDict<as_keys extends string=string> = {
+	[si_method in keyof SchemaSpecifier]: SchemaSpecifier[si_method] extends (...a_args: infer a_args) => infer w_return
+		? w_return extends Datatype
+			? (...a_args: a_args) => DatatypeDict<Record<as_keys, w_return>>
+			: never
+		: SchemaSpecifier[si_method];
+};
+
 
 /**
  * Represents a dummy type assigned to the callback parameter of a `schema` function declaration.
  */
 export type SchemaSpecifier = ImplementsSchemaTypes<{
+	/* eslint-disable @typescript-eslint/member-ordering */
+
 	int<w_subtype extends number=number>(): DatatypeInt<w_subtype, 0>;
 
 	bigint<w_subtype extends bigint=bigint>(): DatatypeBigint<w_subtype, 0>;
@@ -447,67 +478,42 @@ export type SchemaSpecifier = ImplementsSchemaTypes<{
 	ref<
 		dc_controller extends GenericItemController,
 	>(g_controller: dc_controller): dc_controller extends GenericItemController<infer g_thing>
-		? DatatypeRef<ItemRef<g_thing>>: never;
+		? DatatypeRef<ItemRef<g_thing>>
+		: never;
 
-	array<
-		w_items extends Datatype,
-	>(
-		f_sub: SubschemaBuilder<w_items>
-	): DatatypeArray<w_items[]>;
+	array: ChainedArray;
 
-	// eslint-disable-next-line @typescript-eslint/member-ordering
-	// array: ChainedSchemaSpecifier & (<
-	// 	w_items extends Datatype,
-	// >(
-	// 	f_sub: SubschemaBuilder<w_items>
-	// ) => DatatypeArray<w_items[]>);
+	set: ChainedSet;
 
-	set<
-		w_items extends Datatype,
-	>(
-		f_sub: SubschemaBuilder<w_items>
-	): DatatypeSet<Set<w_items>>;
-
-	dict<
-		w_items extends Datatype,
-	>(
-		f_sub: SubschemaBuilder<w_items>
-	): DatatypeDict<Record<string, w_items>>;
-
-	dict<
-		s_keys extends string,
-		w_items extends Datatype,
-	>(
-		s_key: s_keys,
-		f_sub: SubschemaBuilder<w_items>
-	): DatatypeDict<Record<s_keys, w_items>>;
+	dict: ChainedDict
+		& (<
+			s_keys extends string,
+		>(s_keys?: s_keys) => ChainedDict<s_keys>);
 
 	tuple<
 		const a_tuple extends Readonly<CoreDatatype[]>,
 	>(
-		// f_sub: (k: SchemaSimulator) => a_tuple,
-		f_sub: SubschemaBuilder<a_tuple>
+		a_tuple: a_tuple,
 	): DatatypeTuple<a_tuple>;
 
 	struct<
 		h_subschema extends StructuredSchema,
 	>(
-		f_sub: (k: SchemaSpecifier) => h_subschema,
+		h_subschema: h_subschema,
 	): DatatypeStruct<h_subschema>;
 
 	registry<
 		h_subschema extends StructuredSchema,
 	>(
-		f_sub: (k: SchemaSpecifier) => h_subschema,
+		h_subschema: h_subschema,
 	): DatatypeRegistry<h_subschema>;
 
 	switch<
 		si_dep extends string,
 		w_classifier extends Classifier,
-		// h_switch extends SchemaBuilderSwitchMap<w_classifier>,
-		w_things,
+		w_things extends Datatype,
 		h_switch extends {
-			[w_key in w_classifier]: SubschemaBuilder<w_things>;
+			[w_key in w_classifier]: w_things;
 		},
 	>(
 		si_dep: si_dep,
@@ -516,6 +522,8 @@ export type SchemaSpecifier = ImplementsSchemaTypes<{
 	): SchemaSwitch<si_dep, w_classifier, h_switch>;
 
 	// optional: OptionalDatatype<SchemaSpecifier>;
+
+	/* eslint-enable */
 }>;
 
 
@@ -541,15 +549,6 @@ export type SubschemaBuilder<
 export type SubschemaStructBuilder<
 	w_return,
 > = (k: SchemaSpecifier) => Dict<w_return>;
-
-// /**
-//  * Sub-level schema builder for nested fields
-//  */
-// export type SubschemaBuilder<
-// 	w_return,
-// 	// k_spec extends SchemaSimulator<0, w_return>=SchemaSimulator<0, w_return>,
-// 	k_spec extends PartableSchemaSpecifier=PartableSchemaSpecifier,
-// > = (k: k_spec) => Dict<w_return>;
 
 
 /* Tests */
@@ -586,13 +585,13 @@ export type SubschemaStructBuilder<
 		type: DatatypeInt<ItemType, 1>;
 		ref: DatatypeRef<ItemRef<start>>;
 		switch0: SchemaSwitch<'type', ItemType, {
-			[ItemType.UNKNOWN]: (k1: SchemaSpecifier) => DatatypeInt<number, 0>;
-			[ItemType.THING]: (k1: SchemaSpecifier) => DatatypeString<'thing', 0>;
-			[ItemType.OTHER]: (k1: SchemaSpecifier) => DatatypeStruct<{
+			[ItemType.UNKNOWN]: DatatypeInt<number, 0>;
+			[ItemType.THING]: DatatypeString<'thing', 0>;
+			[ItemType.OTHER]: DatatypeStruct<{
 				on: DatatypeInt<0 | 1, 0>;
 				b: SchemaSwitch<'on', 0 | 1, {
-					0: (k1: SchemaSpecifier) => DatatypeInt<number, 0>;
-					1: (k1: SchemaSpecifier) => DatatypeString<'other', 0>;
+					0: DatatypeInt<number, 0>;
+					1: DatatypeString<'other', 0>;
 				}>;
 			}>;
 		}>;

@@ -14,11 +14,13 @@ import {ItemRef} from './item-ref';
 import {TaggedDatatype, PrimitiveDatatype} from './schema-types';
 
 export type MatchCriteria<g_item extends object> = {
-	[si_key in keyof g_item]?: g_item[si_key] | (g_item[si_key] extends PrimitiveDatatypeToEsType<PrimitiveDatatype>
-		? RegExp | Set<g_item[si_key]>
-		: g_item[si_key] extends GenericItemController
-			? Set<g_item[si_key]>
-			: never);
+	[si_key in keyof g_item]?: Extract<g_item[si_key], KnownEsDatatypes> extends infer z_value
+		? z_value | (z_value extends PrimitiveDatatypeToEsType<PrimitiveDatatype>
+			? RegExp | Set<z_value>
+			: z_value extends GenericItemController
+				? Set<z_value>
+				: never)
+		: never;
 };
 
 type Settable<w_item> = Set<w_item> | w_item;

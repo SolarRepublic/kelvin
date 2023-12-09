@@ -1,7 +1,7 @@
 
 import type {GenericItemController, ItemController} from './controller';
 import type {KnownEsDatatypes, PartableDatatype, PrimitiveDatatypeToEsType, TaggedDatatypeToEsTypeGetter, TaggedDatatypeToEsTypeSetter} from './schema-types';
-import type {DomainCode, FieldPath, SerFieldPath, ItemCode, SerField, SerSchema, SerTaggedDatatype, SerTaggedDatatypeMap, SerFieldSwitch, FieldLabel} from './types';
+import type {DomainCode, FieldPath, SerFieldPath, ItemCode, SerField, SerSchema, SerTaggedDatatype, SerTaggedDatatypeMap, SerFieldSwitch, FieldLabel, FieldCode} from './types';
 
 import type {JsonValue, JsonObject, JsonArray, Dict} from '@blake.regalia/belt';
 
@@ -444,7 +444,9 @@ const tagged_serdefaults = <
 				// serializer
 				(z_value, a_path, g_runtime) => {
 					// depending on which option is set on instance
-					const si_opt = g_runtime[$_TUPLE][w_info]+'' as FieldLabel;
+					const si_opt = (a_path.length > 2
+						? access_path(g_runtime, a_path.slice(1, -1))
+						: g_runtime)[w_info]+'' as FieldLabel;
 
 					// get its serializer
 					const [f_ser] = h_options[si_opt];
@@ -456,7 +458,9 @@ const tagged_serdefaults = <
 				// deserializer
 				(z_value, a_path, g_runtime) => {
 					// depending on which option is set on instance
-					const si_opt = g_runtime[$_TUPLE][w_info]+'' as FieldLabel;
+					const si_opt = (a_path.length > 2
+						? access_path(g_runtime, a_path.slice(1, -1))
+						: g_runtime)[w_info]+'' as FieldLabel;
 
 					// get its deserializer
 					const [, f_deser] = h_options[si_opt];
@@ -684,11 +688,46 @@ const tagged_descriptor = <
 			return f_deserializer(this[$_TUPLE][i_field] as JsonValue, a_path, this);
 		},
 
-		set(w_value) {
-			this[$_TUPLE][i_field] = f_serializer(w_value, a_path, this);
-		},
+		// special handling for switch
+		...TaggedDatatype.SWITCH === a_ser[0]
+			? {
+				set(w_value) {
+					// when a switch is used within a nested struct, it needs to read the primitive value of the switch field
+					// setting the tuple is OK since primitives should always be in canonical form
+					this[$_TUPLE][i_field] = Object.values(w_value);
+
+					// serialize the rest of the struct
+					this[$_TUPLE][i_field] = f_serializer(w_value, a_path, this);
+				},
+			}
+			: {
+				set(w_value) {
+					this[$_TUPLE][i_field] = f_serializer(w_value, a_path, this);
+				},
+			},
 	};
 };
+
+// const runtime_subitem = (
+// 	k_item: RuntimeItem,
+// 	i_field: number,
+// 	z_value: any
+// ): RuntimeItem => Object.assign(z_value, {
+// 	[$_CODE]: {
+// 		get() {
+// 			throw Error(`Cannot use substruct of an item as a reference`);
+// 		},
+// 	},
+// 	[$_CONTROLLER]: {
+// 		value: k_item[$_CONTROLLER],
+// 	},
+// 	[$_TUPLE]: {
+// 		value: k_item[$_TUPLE][i_field],
+// 	},
+// 	[$_LINKS]: {
+// 		value: {},
+// 	},
+// });
 
 function prototype_subfield(
 	z_datatype: SerField,

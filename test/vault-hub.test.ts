@@ -744,13 +744,18 @@ describe('fully loaded', () => {
 
 		'switches': {
 			'switch primitive (numeric)'({g_bazqux_1, g_bazqux_2, g_bazqux_3, g_read_bq1, g_read_bq2, g_read_bq3}) {
-				expectTypeOf(g_read_bq1.switch).toBeNumber(__UNDEFINED as never);
-				expect(g_read_bq1.switch).toEqual(g_bazqux_1.switch);
+				if(BazQuxesType.UNKNOWN === g_read_bq1.type) {
+					expectTypeOf(g_read_bq1.switch).toBeNumber();
+					expect(g_read_bq1.switch).toEqual(g_bazqux_1.switch);
+				}
+				else {
+					throw Error('Fix test case');
+				}
 			},
 
 			'switch tagged (tuple)'({g_bazqux_1, g_bazqux_2, g_bazqux_3, g_read_bq1, g_read_bq2, g_read_bq3}) {
 				if(BazQuxesType.BAZ === g_read_bq2.type && BazQuxesType.BAZ === g_bazqux_2.type) {
-					expectTypeOf(g_read_bq2.switch).toBeArray(__UNDEFINED as never);
+					expectTypeOf(g_read_bq2.switch as [any, any, any]).toBeArray();
 					expect(g_read_bq2.switch.slice(0, 2)).toEqual(g_bazqux_2.switch.slice(0, 2));
 				}
 				else {

@@ -1,8 +1,9 @@
 import type {ItemStruct} from '../src/item-proto';
 import type {Vault} from '../src/vault';
 
-import type {NaiveBase64} from '@blake.regalia/belt';
 import type {ItemCode} from 'src/types';
+
+import {odk, type NaiveBase64, text_to_base64} from '@blake.regalia/belt';
 
 import {ItemRef} from 'src/item-ref';
 
@@ -112,37 +113,37 @@ export const init_foobars = (k_client: Vault) => {
 			on: k.int<Toggle>(),
 
 			ref: k.ref(FooBars),
-			array_str: k.array(k1 => k1.str()),
-			// array_int: k.array.str(),
-			set_str: k.set(k1 => k1.str()),
-			tuple: k.tuple(k1 => [k1.array(k2 => k2.str()), k1.int()]),
-			struct: k.struct(k1 => ({
-				struct_int: k1.int(),
-				struct_str: k1.str(),
-			})),
-			registry: k.registry(k1 => ({
-				reg_int: k1.int(),
-				reg_str: k1.str(),
-			})),
-			dict_str: k.dict(k1 => k1.str()),
+			array_str: k.array.str(),
+			set_str: k.set.str(),
+			tuple: k.tuple([k.array.str(), k.int()]),
+			struct: k.struct({
+				struct_int: k.int(),
+				struct_str: k.str(),
+			}),
+			registry: k.registry({
+				reg_int: k.int(),
+				reg_str: k.str(),
+			}),
+			dict_str_str: k.dict.str(),
+			dict_base64_str: k.dict<NaiveBase64>().str(),
 			// dict_base64: k.dict('' as NaiveBase64, k1 => k1.str()),
 			switch: k.switch('type', xc_type, {
-				[BazQuxesType.UNKNOWN]: k1 => k1.int(),
-				[BazQuxesType.BAZ]: k1 => k1.tuple(k2 => [
-					k2.int(),
-					k2.str(),
-					k2.ref(FooBars),
+				[BazQuxesType.UNKNOWN]: k.int(),
+				[BazQuxesType.BAZ]: k.tuple([
+					k.int(),
+					k.str(),
+					k.ref(FooBars),
 				]),
-				[BazQuxesType.QUX]: k1 => k1.struct(k2 => ({
-					a: k2.str(),
-					b: k2.str(),
-					c: k2.str(),
-					v: k2.int<Toggle>(),
-					sub: k2.switch('v', 0 as Toggle, {
-						[Toggle.OFF]: k3 => k3.str(),
-						[Toggle.ON]: k3 => k3.int(),
+				[BazQuxesType.QUX]: k.struct({
+					a: k.str(),
+					b: k.str(),
+					c: k.str(),
+					v: k.int<Toggle>(),
+					sub: k.switch('v', 0 as Toggle, {
+						[Toggle.OFF]: k.str(),
+						[Toggle.ON]: k.int(),
 					}),
-				})),
+				}),
 			}),
 		}),
 
@@ -235,7 +236,8 @@ export const init_bazquxes = (
 			struct_str: '',
 		},
 		registry: {},
-		dict_str: {},
+		dict_str_str: {},
+		dict_base64_str: {},
 		switch: 9,
 	};
 
@@ -255,9 +257,12 @@ export const init_bazquxes = (
 		registry: {
 			reg_int: 1,
 		},
-		dict_str: {
+		dict_str_str: {
 			apple: 'red',
 			banana: 'yellow',
+		},
+		dict_base64_str: {
+			['A' as NaiveBase64]: '0',
 		},
 		switch: [
 			42,
@@ -283,10 +288,13 @@ export const init_bazquxes = (
 			reg_int: 2,
 			reg_str: 'hi',
 		},
-		dict_str: {
+		dict_str_str: {
 			red: 'apple',
 			yellow: 'banana',
 			blue: 'blueberry',
+		},
+		dict_base64_str: {
+			[text_to_base64('test')]: 'orange',
 		},
 		switch: {
 			a: 'apple',
@@ -297,6 +305,7 @@ export const init_bazquxes = (
 		},
 	};
 
+	// const a_keys = odk(g_bazqux_3.dict_base64_str);
 
 	return {
 		g_bazqux_1,

@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 import type {F} from 'ts-toolbelt';
 
+import type {GenericStructMatchCriteria, MatchCriteria} from './filter';
 import type {HubEffects, VaultHub} from './hub';
 import type {RuntimeItem} from './item-proto';
 
@@ -9,10 +10,10 @@ import type {DomainLabel, ItemCode, ItemIdent, ItemPath, SchemaCode, SerFieldStr
 import type {Vault} from './vault';
 import type {Dict, JsonArray, JsonObject} from '@blake.regalia/belt';
 
-import {F_IDENTITY, __UNDEFINED, escape_regex} from '@blake.regalia/belt';
+import {F_IDENTITY, __UNDEFINED, escape_regex, odk} from '@blake.regalia/belt';
 
 import {AppError} from './errors';
-import {apply_filter_struct, type GenericStructMatchCriteria, type MatchCriteria} from './filter';
+import {apply_filter_struct} from './filter';
 import {$_CODE, $_CONTROLLER, $_LINKS, $_TUPLE, is_runtime_item, item_prototype} from './item-proto';
 import {ItemRef} from './item-ref';
 import {interpret_schema} from './schema-impl';
@@ -144,10 +145,10 @@ export class ItemController<
 		this._k_vault.registerController(this._si_domain, k_generic);
 
 		// cache part length
-		this._nl_parts = Object.keys(a_schema[1]).length;
+		this._nl_parts = odk(a_schema[1]).length;
 
 		// cache field length
-		this._nl_fields = Object.keys(a_schema[2]).length;
+		this._nl_fields = odk(a_schema[2]).length;
 	}
 
 	get strategy(): DomainStorageStrategy {
@@ -186,7 +187,7 @@ export class ItemController<
 		const g_copy: JsonObject = {...g_criteria as object};
 
 		// construct item key
-		return [Object.keys(this._h_schema_parts).map((si_label) => {
+		return [odk(this._h_schema_parts).map((si_label) => {
 			// remove from copy
 			delete g_copy[si_label];
 
@@ -419,7 +420,7 @@ export class ItemController<
 		const a_parts: (string | null)[] = [];
 
 		// each key part
-		for(const si_part of Object.keys(this._h_schema_parts)) {
+		for(const si_part of odk(this._h_schema_parts)) {
 			// part is present in criteria and able to be embedded in regex
 			if(['number', 'bigint', 'string'].includes(typeof h_criteria[si_part])) {
 				// use value

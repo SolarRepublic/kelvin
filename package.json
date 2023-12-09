@@ -36,14 +36,14 @@
     "debug": "node --inspect-brk --loader ts-node/esm"
   },
   "devDependencies": {
-    "@blake.regalia/belt": "^0.26.1",
+    "@blake.regalia/belt": "^0.27.0",
     "@blake.regalia/eslint-config-elite": "^0.3.3",
     "@blake.regalia/tsconfig": "^0.2.0",
     "@solar-republic/types": "^0.1.4",
     "@types/chai": "^4.3.11",
-    "@types/node": "^20.10.3",
+    "@types/node": "^20.10.4",
     "@types/web": "^0.0.125",
-    "@typescript-eslint/parser": "^6.13.1",
+    "@typescript-eslint/parser": "^6.13.2",
     "chai": "^4.3.10",
     "chai-bites": "^0.1.2",
     "esformatter": "^0.11.3",
@@ -51,13 +51,13 @@
     "ts-toolbelt": "^9.6.0",
     "tsc-esm-fix": "^2.20.18",
     "tsconfig-paths": "^4.2.0",
-    "typescript": "^5.3.2",
-    "vite": "^5.0.4",
-    "vitest": "^0.34.6"
+    "typescript": "^5.3.3",
+    "vite": "^5.0.7",
+    "vitest": "^1.0.2"
   },
   "dependencies": {
-    "@blake.regalia/belt": "^0.26.1",
-    "@types/chrome": "^0.0.253"
+    "@blake.regalia/belt": "^0.27.0",
+    "@types/chrome": "^0.0.254"
   },
   "publishConfig": {
     "access": "public"

@@ -91,6 +91,12 @@ const g_read_bq2 = (await BazQuxes.get(g_bazqux_2))!;
 const g_read_bq3 = (await BazQuxes.get(g_bazqux_3))!;
 
 debugger;
+if(BazQuxesType.QUX === g_read_bq3.type) {
+	const g_study = {...g_read_bq3.switch};
+	debugger;
+}
+
+
 
 if(BazQuxesType.BAZ === g_read_bq2.type && BazQuxesType.BAZ === g_bazqux_2.type) {
 	const a_actual = g_read_bq2.switch.slice(0, 2);
