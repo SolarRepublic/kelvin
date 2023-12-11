@@ -85,4 +85,8 @@ export class ItemRef<
 			fk_resolve as ((value: g_runtime | undefined) => w_value | PromiseLike<w_value>) | null | undefined,
 			fe_reject);
 	}
+
+	get [Symbol.toStringTag](): string {
+		return `[object ItemRef{code:${this.code}; domain:${this.domain}}]`;
+	}
 }

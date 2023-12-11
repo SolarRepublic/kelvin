@@ -1,13 +1,14 @@
 import type {GenericItemController} from './controller';
 import type {ItemDefaulter, ItemDeserializer, ItemSerializer, RuntimeItem} from './item-proto';
 
+import type {Refish} from './item-ref';
 import type {FieldPath, ItemCode} from './types';
 
 import type {Dict, JsonValue} from '@blake.regalia/belt';
 
 import {__UNDEFINED, ode, odk} from '@blake.regalia/belt';
 
-import {ItemRef, refish_to_code, type Refish} from './item-ref';
+import {ItemRef, refish_to_code} from './item-ref';
 
 type BackingDict = Record<ItemCode, JsonValue>;
 

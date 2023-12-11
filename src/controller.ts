@@ -219,6 +219,10 @@ export class ItemController<
 		}
 
 		return {
+			[Symbol.toStringTag]: {
+				get: () => `[object RuntimeItem{code:${i_code}; domain:${this._si_domain as string}}; tuple:${JSON.stringify(a_tuple)}]`,
+			},
+
 			[$_CODE]: {
 				value: i_code,
 			},
