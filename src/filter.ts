@@ -1,7 +1,7 @@
 import type {GenericItemController} from './controller';
 
 import type {FieldTuple, KnownEsPrimitiveDatatypes, PrimitiveDatatypeToEsType, FieldStruct, KnownEsDatatypes} from './schema-types';
-import type {FieldLabel, SerField, SerFieldStruct, SerKeyStruct, SerTaggedDatatype} from './types';
+import type {FieldLabel, ItemCode, SerField, SerFieldStruct, SerKeyStruct, SerTaggedDatatype} from './types';
 
 import type {Dict, Arrayable, JsonObject} from '@blake.regalia/belt';
 
@@ -30,6 +30,8 @@ type GenericMatchCriteria = Settable<Arrayable<KnownEsPrimitiveDatatypes | ItemR
 export type GenericStructMatchCriteria = Dict<GenericMatchCriteria>;
 
 // TODO: refactor type errors into common class
+
+
 
 // apply an item reference filter
 const apply_filter_ref = (g_value: ItemRef, z_filter: unknown, sr_path: string): boolean => {

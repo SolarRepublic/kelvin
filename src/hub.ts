@@ -39,6 +39,7 @@ export class VaultHub {
 	protected _a_schemas = [] as unknown as SerVaultHub['schemas'];
 	protected _nb_bucket: SerVaultHub['bucket_length'] = NB_BUCKET_CONTENTS;
 	protected _h_links: SerVaultHub['links'] = {};
+	protected _a_prune: SerVaultHub['prune'] = [];
 
 	// caches
 	protected _h_domain_codes: Record<DomainLabel, DomainCode> = {};
@@ -95,6 +96,7 @@ export class VaultHub {
 			buckets_to_schemas: this._a_buckets_to_schemas,
 			schemas: this._a_schemas,
 			links: this._h_links,
+			prune: this._a_prune,
 		};
 
 		return g_hub;
@@ -119,6 +121,7 @@ export class VaultHub {
 			_a_buckets_to_schemas: g_hub.buckets_to_schemas,
 			_a_schemas: g_hub.schemas,
 			_h_links: g_hub.links,
+			_a_prune: g_hub.prune,
 		});
 
 		// create lookup from domain label to domain code
@@ -257,6 +260,13 @@ export class VaultHub {
 
 			// save schema code to controller
 			(k_controller as AnyItemController)._i_schema = i_schema;
+		}
+
+		// delete all buckets marked for pruning in they still exist
+		const {_a_prune} = this;
+		if(_a_prune.length) {
+			await this._k_vault.deleteBuckets(_a_prune, kw_content);
+			_a_prune.length = 0;
 		}
 	}
 
@@ -1169,17 +1179,18 @@ export class VaultHub {
 				await this._k_vault.writeBucket(g_bucket.key, g_bucket.contents, this._nb_bucket, kw_content);
 			}
 
+			// add old buckets to deletion queue
+			for(const si_bucket_delete of as_buckets_delete) {
+				this._as_buckets_prune.add(si_bucket_delete);
+			}
+
 			// next, update the hub
 			await this._write_hub(kw_content, {
 				buckets: a_buckets_mut,
 				locations: a_locations_mut,
 				links: h_links_mut,
+				prune: Array.from(new Set([...this._a_prune, ...this._as_buckets_prune])),
 			});
-
-			// add old buckets to deletion queue
-			for(const si_bucket_delete of as_buckets_delete) {
-				this._as_buckets_prune.add(si_bucket_delete);
-			}
 
 			// schedule a bucket rotation
 			this._schedule_rotation();

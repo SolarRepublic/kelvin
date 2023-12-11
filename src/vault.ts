@@ -1287,7 +1287,7 @@ export class Vault {
 	 * @param as_keys - the set of bucket keys to delete
 	 * @param kw_content 
 	 */
-	async deleteBuckets(as_keys: Set<BucketKey>, kw_content: KelvinKeyValueWriter) {
+	async deleteBuckets(as_keys: Iterable<BucketKey>, kw_content: KelvinKeyValueWriter) {
 		// copy set
 		const as_remaining = new Set(as_keys);
 

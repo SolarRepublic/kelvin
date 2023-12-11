@@ -1,7 +1,7 @@
-import type {L} from 'ts-toolbelt';
+import type {L, U} from 'ts-toolbelt';
 
-import type {SchemaSimulator, SchemaBuilder, PartableSchemaSpecifier, AcceptablePartTuples, StructuredSchema, PartableDatatype, Datatype} from './schema-types';
-import type {FieldCode, FieldLabel, SerField, SerFieldStruct, SerKeyStruct, SerSchema, SerTaggedDatatype} from './types';
+import type {SchemaSimulator, SchemaBuilder, PartableSchemaSpecifier, AcceptablePartTuples, StructuredSchema, PartableDatatype, Datatype, KnownEsTaggedDatatypes} from './schema-types';
+import type {DomainLabel, FieldCode, FieldLabel, KnownSerTaggedDatatype, SerField, SerFieldStruct, SerKeyStruct, SerSchema, SerTaggedDatatype} from './types';
 
 import type {Dict, DiscriminatedUnion} from '@blake.regalia/belt';
 
@@ -14,10 +14,14 @@ import {Bug, SchemaError} from './errors';
 import {PrimitiveDatatype, TaggedDatatype} from './schema-types';
 
 
-type SchemaSerializer = SchemaBuilder<ReturnType<typeof spec_for_ser>, symbol[], Dict<SchemaAnnotation>>;
+export type RootSchemaBuilder<a_parts extends AcceptablePartTuples> = SchemaBuilder<SchemaSimulator<1>, a_parts, Dict<SchemaAnnotation>>;
+
+type AnnotatedSchema = Dict<SchemaAnnotation>;
+
+type SchemaSerializer = SchemaBuilder<ReturnType<typeof spec_for_ser>, symbol[], AnnotatedSchema>;
 
 
-class SchemaAnnotation {
+export class SchemaAnnotation {
 	constructor(protected _z_field: SerField, protected _w_part?: any) {}
 
 	get serialized(): SerField {
@@ -47,6 +51,7 @@ const spec_for_ser: (
 	bytes: () => f_wrapper(PrimitiveDatatype.BYTES),
 	obj: () => f_wrapper(PrimitiveDatatype.OBJECT),
 	ref: g_item => f_wrapper([TaggedDatatype.REF, g_item.domain]),
+	refSelf: () => f_wrapper([TaggedDatatype.REF, '' as DomainLabel]),
 
 	get array() {
 		return spec_for_ser(w => annotation(f_wrapper([TaggedDatatype.ARRAY, w])));
@@ -69,6 +74,8 @@ const spec_for_ser: (
 	struct: (h_struct: Dict<SchemaAnnotation>) => annotation(f_wrapper([TaggedDatatype.STRUCT, fodemtv(h_struct, k => k.serialized)])),
 
 	registry: (h_reg: Dict<SchemaAnnotation>) => annotation(f_wrapper([TaggedDatatype.REGISTRY, fodemtv(h_reg, k => k.serialized)])),
+
+	mapRef: g_item => spec_for_ser(w => annotation(f_wrapper([TaggedDatatype.MAP_REF, g_item.domain, w]))),
 
 	switch: (si_dep, w_classifier, h_switch) => annotation(f_wrapper([TaggedDatatype.SWITCH, si_dep as FieldLabel, fodemtv(h_switch, k_option => k_option.serialized)])),
 });
@@ -127,17 +134,29 @@ function reshape_tagged_value([xc_type, w_info, w_extra]: SerTaggedDatatype, sr_
 			break;
 		}
 
+		// map-ref
+		case TaggedDatatype.MAP_REF: {
+			debugger;
+			throw Error('reshaping map ref not yet implemented');
+			// a_mids[0] = reshape_fields(sr_local, w_info).fields;
+			// break;
+		}
+
 		// switch
 		case TaggedDatatype.SWITCH: {
-			const h_options = w_extra as Dict<[number, SerTaggedDatatype]>;
+			const h_options = w_extra as Dict<SerField>;
 			a_mids = [w_info, fodemtv(h_options, (z_value, si_option) => {
 				// tuple shorthand
 				if(Array.isArray(z_value) && Array.isArray(z_value[0])) {
-					z_value = [1, [TaggedDatatype.TUPLE, z_value as SerField[]]];
+					// z_value = [1, [TaggedDatatype.TUPLE, z_value as SerField[]]];
+					z_value = [TaggedDatatype.TUPLE, z_value as SerField[]];
+					throw Error(`Tuple shorthands needs revision`);
 				}
 				// struct shorthand
 				else if(is_dict_es(z_value)) {
-					z_value = [1, [TaggedDatatype.STRUCT, z_value as SerFieldStruct]];
+					// z_value = [1, [TaggedDatatype.STRUCT, z_value as SerFieldStruct]];
+					z_value = [TaggedDatatype.STRUCT, z_value as SerFieldStruct];
+					throw Error(`Struct shorthands needs revision`);
 				}
 
 				return reshape_fields(sr_local+'['+si_option+']', [z_value]).fields['0' as FieldLabel];
@@ -153,10 +172,9 @@ function reshape_tagged_value([xc_type, w_info, w_extra]: SerTaggedDatatype, sr_
 	return [xc_type, ...a_mids] as SerTaggedDatatype;
 }
 
-
 function reshape_fields(
 	sr_path: string,
-	h_shape: ReturnType<SchemaSerializer>,
+	h_shape: Dict<SchemaAnnotation> | L.Tail<KnownSerTaggedDatatype>[0],
 	a_simulators?: symbol[]
 ): {
 		keys: SerKeyStruct;
@@ -170,7 +188,7 @@ function reshape_fields(
 	let i_last_part = -1;
 
 	// each entry in shape
-	const a_entries = ode(h_shape);
+	const a_entries = ode(h_shape as Dict<SchemaAnnotation>);
 	for(let i_field=0; i_field<a_entries.length; i_field++) {
 		const [si_key, z_type] = a_entries[i_field];
 
@@ -277,52 +295,52 @@ function reshape_fields(
 
 type SchemaQualifier = any;
 
-function struct_to_serfield(h_struct: Dict<SchemaQualifier>): SerFieldStruct {
-	return fodemtv(h_struct, (z_value) => {
-		// // destructure entry
-		// const [si_key, z_value] = a_entries[i_field];
+// function struct_to_serfield(h_struct: Dict<SchemaQualifier>): SerFieldStruct {
+// 	return fodemtv(h_struct, (z_value) => {
+// 		// // destructure entry
+// 		// const [si_key, z_value] = a_entries[i_field];
 
-		// annotation
-		if(z_value instanceof SchemaAnnotation) {
-			return z_value.serialized;
-		}
-		// tuple
-		else if(Array.isArray(z_value)) {
-			return [TaggedDatatype.TUPLE, z_value as SerField[]];
-		}
-		// reference
-		else if(z_value instanceof ItemController) {
-			return [TaggedDatatype.REF, z_value.domain];
-		}
-		// struct
-		else if(is_dict_es(z_value)) {
-			return [TaggedDatatype.STRUCT, struct_to_serfield(z_value as Dict<SchemaQualifier>)];
-		}
-		// string
-		else if('string' === typeof z_value) {
-			return [PrimitiveDatatype.STRING];
-		}
-		// number
-		else if('number' === typeof z_value) {
-			// integer
-			if(Number.isInteger(z_value)) {
-				return [PrimitiveDatatype.INT];
-			}
-			// double
-			else {
-				return [PrimitiveDatatype.DOUBLE];
-			}
-		}
-		// other
-		else {
-			throw TypeError(`Invalid field type for schema specifier: ${z_value}`);
-		}
-	});
-}
+// 		// annotation
+// 		if(z_value instanceof SchemaAnnotation) {
+// 			return z_value.serialized;
+// 		}
+// 		// tuple
+// 		else if(Array.isArray(z_value)) {
+// 			return [TaggedDatatype.TUPLE, z_value as SerField[]];
+// 		}
+// 		// reference
+// 		else if(z_value instanceof ItemController) {
+// 			return [TaggedDatatype.REF, z_value.domain];
+// 		}
+// 		// struct
+// 		else if(is_dict_es(z_value)) {
+// 			return [TaggedDatatype.STRUCT, struct_to_serfield(z_value as Dict<SchemaQualifier>)];
+// 		}
+// 		// string
+// 		else if('string' === typeof z_value) {
+// 			return [PrimitiveDatatype.STRING];
+// 		}
+// 		// number
+// 		else if('number' === typeof z_value) {
+// 			// integer
+// 			if(Number.isInteger(z_value)) {
+// 				return [PrimitiveDatatype.INT];
+// 			}
+// 			// double
+// 			else {
+// 				return [PrimitiveDatatype.DOUBLE];
+// 			}
+// 		}
+// 		// other
+// 		else {
+// 			throw TypeError(`Invalid field type for schema specifier: ${z_value}`);
+// 		}
+// 	});
+// }
 
 export function interpret_schema<a_parts extends AcceptablePartTuples>(
 	si_domain: string,
-	f_schema: SchemaBuilder<SchemaSimulator<1>, a_parts, Dict<SchemaAnnotation>>
+	f_schema: RootSchemaBuilder<a_parts>
 ): SerSchema {
 	// allow up to 8 part fields
 	const a_simulators: symbol[] = [];

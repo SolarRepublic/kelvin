@@ -2,9 +2,36 @@ import type {GenericItemController} from './controller';
 
 import type {RuntimeItem} from './item-proto';
 import type {DomainLabel, ItemCode, ItemIdent} from './types';
-import type {Dict} from '@blake.regalia/belt';
+
+import {is_dict_es, type Dict, __UNDEFINED} from '@blake.regalia/belt';
 
 import {$_CODE, $_CONTROLLER, is_runtime_item} from './item-proto';
+
+
+export type Refish<
+	g_item extends Dict<any>=Dict<any>,
+> = number | ItemRef<g_item> | RuntimeItem<g_item>;
+
+export const refish_to_code = (z_refish: Refish, g_controller?: GenericItemController): ItemCode | undefined => {
+	// other item
+	if(is_runtime_item(z_refish)) {
+		return z_refish[$_CODE];
+	}
+	// other ref
+	else if(z_refish instanceof ItemRef) {
+		return z_refish.code;
+	}
+	// key parts
+	else if(g_controller && is_dict_es(z_refish)) {
+		return g_controller.getItemCode(z_refish);
+	}
+	// item code
+	else if('number' === typeof z_refish) {
+		return z_refish as ItemCode;
+	}
+
+	return __UNDEFINED;
+};
 
 
 export class ItemRef<

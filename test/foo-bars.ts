@@ -1,6 +1,7 @@
 import type {ItemStruct} from '../src/item-proto';
 import type {Vault} from '../src/vault';
 
+import type {StructFromController} from 'src/schema-types';
 import type {ItemCode} from 'src/types';
 
 import {odk, type NaiveBase64, text_to_base64} from '@blake.regalia/belt';
@@ -41,31 +42,11 @@ export enum BazQuxesType {
 
 export type FooBarsController = ReturnType<typeof init_foobars>['FooBars'];
 
-export type FooBarsStruct = FooBarsController extends ItemController<
-	infer g_schema,
-	infer g_item,
-	infer g_proto,
-	infer g_runtime,
-	infer s_domain,
-	infer si_domain,
-	infer a_parts,
-	infer f_schema,
-	infer g_parts
->? g_item: never;
+export type FooBarsStruct = StructFromController<FooBarsController>;
 
 export type BazQuxesController = ReturnType<typeof init_foobars>['BazQuxes'];
 
-export type BazQuxesStruct = BazQuxesController extends ItemController<
-	infer g_schema,
-	infer g_item,
-	infer g_proto,
-	infer g_runtime,
-	infer s_domain,
-	infer si_domain,
-	infer a_parts,
-	infer f_schema,
-	infer g_parts
->? g_item: never;
+export type BazQuxesStruct = StructFromController<BazQuxesController>;
 
 
 export const init_foobars = (k_client: Vault) => {

@@ -1,4 +1,4 @@
-import type {A, L} from 'ts-toolbelt';
+import type {A, F, L} from 'ts-toolbelt';
 
 import type {PartableDatatype, PrimitiveDatatype, TaggedDatatype} from './schema-types';
 import type {Dict, IntStr, NaiveBase64, JsonObject, JsonValue, JsonArray, Subtype, NaiveBase93} from '@blake.regalia/belt';
@@ -191,6 +191,7 @@ export type SerTaggedDatatypeMap = {
 	[TaggedDatatype.TUPLE]: [SerField[]];
 	[TaggedDatatype.STRUCT]: [SerFieldStruct];
 	[TaggedDatatype.REGISTRY]: [SerFieldStruct];
+	[TaggedDatatype.MAP_REF]: [DomainLabel, SerField];
 	[TaggedDatatype.SWITCH]: [...SerFieldSwitch];
 };
 
@@ -201,6 +202,9 @@ export type SerTaggedDatatypeMap = {
 
 export type SerTaggedDatatype =
 	| [TaggedDatatype.UNKNOWN, ...unknown[]]
+	| KnownSerTaggedDatatype;
+
+export type KnownSerTaggedDatatype =
 	| [TaggedDatatype.REF, DomainLabel]
 	| [TaggedDatatype.ARRAY, SerField]
 	| [TaggedDatatype.SET, SerField]
@@ -208,6 +212,7 @@ export type SerTaggedDatatype =
 	| [TaggedDatatype.TUPLE, SerField[]]
 	| [TaggedDatatype.STRUCT, SerFieldStruct]
 	| [TaggedDatatype.REGISTRY, SerFieldStruct]
+	| [TaggedDatatype.MAP_REF, DomainLabel, SerField]
 	| [TaggedDatatype.SWITCH, ...SerFieldSwitch];
 
 
@@ -355,4 +360,9 @@ export type SerVaultHub = {
 	 * Schemas stored in sequence
 	 */
 	schemas: Sequence<Readonly<SerSchema> | 0, SchemaCode>;
+
+	/**
+	 * List of buckets that should be deleted if they still exist
+	 */
+	prune: BucketKey[];
 };

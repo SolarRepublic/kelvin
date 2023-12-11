@@ -5,8 +5,9 @@ import type {Key} from 'ts-toolbelt/out/Any/Key';
 import type {GenericItemController, ItemController} from './controller';
 import type {FieldArray} from './field-array';
 import type {RuntimeItem} from './item-proto';
-import type {ItemRef} from './item-ref';
+import type {ItemRef, Refish} from './item-ref';
 import type {AllValues, KvTuplesToObject, UnionToTuple, FilterDrop} from './meta';
+import type {ItemCode} from './types';
 import type {Dict, ES_TYPE, JsonObject, JsonPrimitive, NaiveBase64} from '@blake.regalia/belt';
 
 
@@ -35,7 +36,8 @@ export enum TaggedDatatype {
 	STRUCT=5,
 	DICT=6,
 	REGISTRY=7,
-	SWITCH=8,
+	MAP_REF=8,
+	SWITCH=9,
 }
 
 export type PrimitiveDatatypeToEsType<xc_type extends PrimitiveDatatype=PrimitiveDatatype> = {
@@ -82,6 +84,9 @@ export type FieldStruct = {
 	[si_key: string]: KnownEsDatatypes;
 };
 
+export type FieldMapRef = Map<ItemRef, KnownEsDatatypes>;
+
+
 export type TaggedDatatypeToEsTypeGetter<xc_type extends TaggedDatatype> = {
 	[TaggedDatatype.UNKNOWN]: unknown;
 	[TaggedDatatype.REF]: ItemRef | null;
@@ -91,6 +96,7 @@ export type TaggedDatatypeToEsTypeGetter<xc_type extends TaggedDatatype> = {
 	[TaggedDatatype.TUPLE]: FieldTuple;
 	[TaggedDatatype.STRUCT]: FieldStruct;
 	[TaggedDatatype.REGISTRY]: Partial<FieldStruct>;
+	[TaggedDatatype.MAP_REF]: FieldMapRef;
 	[TaggedDatatype.SWITCH]: any;
 }[xc_type];
 
@@ -103,6 +109,7 @@ export type TaggedDatatypeToEsTypeSetter<xc_type extends TaggedDatatype> = {
 	[TaggedDatatype.TUPLE]: any[];
 	[TaggedDatatype.STRUCT]: object;
 	[TaggedDatatype.REGISTRY]: object;
+	[TaggedDatatype.MAP_REF]: Map<Refish, KnownEsDatatypes> | FieldMapRef;
 	[TaggedDatatype.SWITCH]: any;
 }[xc_type];
 
@@ -157,6 +164,7 @@ export type CoreDatatype =
 	| DatatypeDict<{[si_key: string]: Datatype}>
 	| DatatypeStruct
 	| DatatypeRegistry
+	| DatatypeMapRef<Map<ItemRef, CoreDatatype>>
 	// | SchemaSwitch<string, Classifier, Datatype, SchemaBuilderSwitchMap<Classifier, Datatype>>;
 	| SchemaSwitch<string, Classifier>;
 
@@ -176,8 +184,8 @@ export type StructuredSchema = {
  * @param b_setter - value of `1` indicates that target type is intended for setters
  */
 export type ReduceSchema<z_test, b_setter extends 0|1=0> =
-	z_test extends DatatypeRef<infer g_ref>? g_ref | null | (
-		b_setter extends 1
+	z_test extends null | DatatypeRef<infer g_ref>
+		? g_ref | null | (b_setter extends 1
 			? g_ref extends ItemRef<infer g_dst, infer g_runtime>
 				? g_runtime
 				: never
@@ -259,6 +267,12 @@ export type DatatypeStruct<
 export type DatatypeRegistry<
 	w_subtype extends StructuredSchema=StructuredSchema,
 > = SchemaSubtype<Partial<w_subtype>, 'registry'>;
+
+export type DatatypeMapRef<
+	w_subtype extends Map<ItemRef, Datatype>,
+	// g_ref extends ItemRef=ItemRef,
+	// w_values extends Datatype=Datatype,
+> = SchemaSubtype<w_subtype, 'map-ref'>;
 
 export type DatatypeDict<
 	w_subtype extends Record<string, Datatype>,
@@ -364,14 +378,14 @@ export type SchemaSimulator<
 	w_return=any,
 > = ({
 	0: {
-		int(w_part?: number): w_return;
-		bigint(w_part?: bigint): w_return;
-		str(w_part?: string): w_return;
-	};
-	1: {
 		int(): w_return;
 		bigint(): w_return;
 		str(): w_return;
+	};
+	1: {
+		int(w_part?: number): w_return;
+		bigint(w_part?: bigint): w_return;
+		str(w_part?: string): w_return;
 	};
 }[b_partable]) & {
 	/* eslint-disable @typescript-eslint/member-ordering */
@@ -380,6 +394,7 @@ export type SchemaSimulator<
 	bytes(): w_return;
 	obj(): w_return;
 	ref(g_controller: GenericItemController): w_return;
+	refSelf(): w_return;
 	array: SchemaSimulator<0, w_return>;
 	set: SchemaSimulator<0, w_return>;
 	dict: SchemaSimulator<0, w_return>
@@ -388,6 +403,7 @@ export type SchemaSimulator<
 	tuple(a_tuple: w_return[]): w_return;
 	struct(h_subschema: Dict<w_return>): w_return;
 	registry(h_subschema: Dict<w_return>): w_return;
+	mapRef(g_controller: GenericItemController): SchemaSimulator<0, w_return>;
 	switch(
 		si_dep: string,
 		w_classifier: Classifier,
@@ -432,21 +448,21 @@ export type ImplementsSchemaTypes<g_impl extends SchemaSimulator> = g_impl;
 // 		: never;
 // };
 
-type ChainedArray = {
+type ChainedArray = ImplementsSchemaTypes<{
 	[si_method in keyof SchemaSpecifier]: SchemaSpecifier[si_method] extends (...a_args: infer a_args) => infer w_return
 		? w_return extends Datatype
 			? (...a_args: a_args) => DatatypeArray<w_return[]>
 			: never
 		: SchemaSpecifier[si_method];
-};
+}>;
 
-type ChainedSet = {
+type ChainedSet = ImplementsSchemaTypes<{
 	[si_method in keyof SchemaSpecifier]: SchemaSpecifier[si_method] extends (...a_args: infer a_args) => infer w_return
 		? w_return extends Datatype
 			? (...a_args: a_args) => DatatypeSet<Set<w_return>>
 			: never
 		: SchemaSpecifier[si_method];
-};
+}>;
 
 type ChainedDict<as_keys extends string=string> = {
 	[si_method in keyof SchemaSpecifier]: SchemaSpecifier[si_method] extends (...a_args: infer a_args) => infer w_return
@@ -456,6 +472,13 @@ type ChainedDict<as_keys extends string=string> = {
 		: SchemaSpecifier[si_method];
 };
 
+type ChainedMapRef<g_thing extends Dict<any>> = {
+	[si_method in keyof SchemaSpecifier]: SchemaSpecifier[si_method] extends (...a_args: infer a_args) => infer w_return
+		? w_return extends Datatype
+			? (...a_args: a_args) => DatatypeMapRef<Map<ItemRef<g_thing>, w_return>>
+			: never
+		: SchemaSpecifier[si_method];
+};
 
 /**
  * Represents a dummy type assigned to the callback parameter of a `schema` function declaration.
@@ -480,6 +503,8 @@ export type SchemaSpecifier = ImplementsSchemaTypes<{
 	>(g_controller: dc_controller): dc_controller extends GenericItemController<infer g_thing>
 		? DatatypeRef<ItemRef<g_thing>>
 		: never;
+
+	refSelf(): DatatypeRef<ItemRef>;
 
 	array: ChainedArray;
 
@@ -507,6 +532,12 @@ export type SchemaSpecifier = ImplementsSchemaTypes<{
 	>(
 		h_subschema: h_subschema,
 	): DatatypeRegistry<h_subschema>;
+
+	mapRef<
+		dc_controller extends GenericItemController,
+	>(g_controller: dc_controller): dc_controller extends GenericItemController<infer g_thing>
+		? ChainedMapRef<g_thing>
+		: never;
 
 	switch<
 		si_dep extends string,
@@ -549,6 +580,21 @@ export type SubschemaBuilder<
 export type SubschemaStructBuilder<
 	w_return,
 > = (k: SchemaSpecifier) => Dict<w_return>;
+
+
+export type StructFromController<
+	k_controller,
+> = k_controller extends ItemController<
+	infer g_schema,
+	infer g_item,
+	infer g_proto,
+	infer g_runtime,
+	infer s_domain,
+	infer si_domain,
+	infer a_parts,
+	infer f_schema,
+	infer g_parts
+>? g_item: never;
 
 
 /* Tests */

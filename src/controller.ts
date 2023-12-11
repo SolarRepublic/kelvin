@@ -5,7 +5,7 @@ import type {GenericStructMatchCriteria, MatchCriteria} from './filter';
 import type {HubEffects, VaultHub} from './hub';
 import type {RuntimeItem} from './item-proto';
 
-import type {SchemaToItemShape, StructuredSchema, PartableSchemaSpecifier, AcceptablePartTuples, SchemaBuilder, PartFields, PartableEsType, FieldStruct} from './schema-types';
+import type {SchemaToItemShape, StructuredSchema, PartableSchemaSpecifier, AcceptablePartTuples, SchemaBuilder, PartFields, PartableEsType, FieldStruct, SchemaSimulator} from './schema-types';
 import type {DomainLabel, ItemCode, ItemIdent, ItemPath, SchemaCode, SerFieldStruct, SerItem, SerKeyStruct, SerSchema} from './types';
 import type {Vault} from './vault';
 import type {Dict, JsonArray, JsonObject} from '@blake.regalia/belt';
@@ -16,7 +16,7 @@ import {AppError} from './errors';
 import {apply_filter_struct} from './filter';
 import {$_CODE, $_CONTROLLER, $_LINKS, $_TUPLE, is_runtime_item, item_prototype} from './item-proto';
 import {ItemRef} from './item-ref';
-import {interpret_schema} from './schema-impl';
+import {SchemaAnnotation, interpret_schema, type RootSchemaBuilder} from './schema-impl';
 import {DomainStorageStrategy} from './types';
 
 
@@ -65,6 +65,7 @@ export class ItemController<
 	si_domain extends s_domain & DomainLabel,
 	a_parts extends AcceptablePartTuples,
 	f_schema extends SchemaBuilder<PartableSchemaSpecifier, a_parts, g_schema>,
+	// f_schema extends RootSchemaBuilder<a_parts>,
 	g_parts extends PartFields<g_schema>,
 > implements
 	GenericItemController<g_item, g_runtime, g_schema, a_parts, g_parts>
@@ -124,7 +125,7 @@ export class ItemController<
 		this._xc_strategy = xc_strategy;
 
 		// interpret schema
-		const a_schema = this._a_schema = interpret_schema(si_domain, f_builder);
+		const a_schema = this._a_schema = interpret_schema(si_domain, f_builder as unknown as RootSchemaBuilder<a_parts>);
 
 		// cast to generic (shouldn't have to tho...)
 		const k_generic = this as GenericItemController;
