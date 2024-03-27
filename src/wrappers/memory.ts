@@ -1,8 +1,6 @@
-import type {C} from 'ts-toolbelt';
-
 import type {JsonValue, Dict, JsonObject} from '@blake.regalia/belt';
 
-import {__UNDEFINED, fold, ode} from '@blake.regalia/belt';
+import {__UNDEFINED, fold, entries} from '@blake.regalia/belt';
 import {SingleThreadedLockManager} from 'src/locks';
 
 import {KelvinKeyValueStore, type StorageChanges, CompliantChange, KelvinKeyValueWriter, type CompatibleWriterClass} from 'src/store';
@@ -20,7 +18,7 @@ class MemoryWriter extends KelvinKeyValueWriter<MemoryWrapper> {
 		const h_changes: StorageChanges = {};
 
 		// each entry
-		for(const [si_key, w_value] of ode(h_set)) {
+		for(const [si_key, w_value] of entries(h_set)) {
 			// ref old value
 			const w_old = _h_store[si_key] as w_type;
 
@@ -111,7 +109,7 @@ export class MemoryWrapper<
 	protected _get_many_sync<w_out>(a_keys: string[]): Promise<w_out> {
 		return Promise.resolve(fold(a_keys, si_key => ({
 			[si_key]: this._get_sync(si_key),
-		})) as w_out);
+		})));
 	}
 
 	/**

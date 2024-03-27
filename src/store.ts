@@ -4,7 +4,7 @@ import type {SimpleLockManager} from './locks';
 
 import type {Promisable, Dict, JsonValue, NaiveBase93} from '@blake.regalia/belt';
 
-import {fodemtv, base93_to_buffer, buffer_to_base93, __UNDEFINED, buffer_to_json} from '@blake.regalia/belt';
+import {fodemtv, base93_to_bytes, bytes_to_base93, __UNDEFINED, bytes_to_json} from '@blake.regalia/belt';
 
 import {VaultDamagedError} from './errors';
 
@@ -45,23 +45,23 @@ export class StringBasedChange<w_nil extends null | undefined=null> extends Comp
 	}
 
 	override asBytes(): Uint8Array | undefined {
-		return this._w_value? base93_to_buffer(this._w_value as string): __UNDEFINED;
+		return this._w_value? base93_to_bytes(this._w_value as string): __UNDEFINED;
 	}
 }
 
 export class JsonBasedChange<w_nil extends null | undefined=null> extends CompliantChange<w_nil> {
 	override asBytes(): Uint8Array | undefined {
-		return this._w_value? base93_to_buffer(this._w_value as string): __UNDEFINED;
+		return this._w_value? base93_to_bytes(this._w_value as string): __UNDEFINED;
 	}
 }
 
 export class BytesBasedChange<w_nil extends null | undefined=null> extends CompliantChange<w_nil> {
 	override asString(): string | undefined {
-		return this._w_value? buffer_to_base93(this._w_value as Uint8Array): __UNDEFINED;
+		return this._w_value? bytes_to_base93(this._w_value as Uint8Array): __UNDEFINED;
 	}
 
 	override asJson<w_value extends JsonValue=JsonValue>(): w_value | undefined {
-		return this._w_value? buffer_to_json(this._w_value as Uint8Array) as w_value: __UNDEFINED;
+		return this._w_value? bytes_to_json(this._w_value as Uint8Array) as w_value: __UNDEFINED;
 	}
 }
 
@@ -118,7 +118,7 @@ export abstract class KelvinKeyValueWriter<
 	}
 
 	setBytesMany(h_set: Dict<Uint8Array>): Promise<void> {
-		return this.setStringMany(fodemtv(h_set, atu8_value => buffer_to_base93(atu8_value)));
+		return this.setStringMany(fodemtv(h_set, atu8_value => bytes_to_base93(atu8_value)));
 	}
 
 	remove(si_key: string): Promise<void> {
@@ -248,7 +248,7 @@ export abstract class KelvinKeyValueStore<
 	>(a_keys: string[]): Promise<w_out> {
 		return fodemtv(await this.getStringMany(a_keys), (sb93_data, si_key) => {
 			try {
-				return base93_to_buffer(sb93_data as NaiveBase93);
+				return base93_to_bytes(sb93_data as NaiveBase93);
 			}
 			catch(e_decode) {
 				throw new VaultDamagedError(`could not decode bytes for key "${si_key}" within implementor ${Object.getPrototypeOf(this)}`);

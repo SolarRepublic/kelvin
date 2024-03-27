@@ -2,7 +2,7 @@
 /* eslint-disable quote-props */
 import type {TestContext, TestFunction} from 'vitest';
 
-import {__UNDEFINED, fold, ode, timeout} from '@blake.regalia/belt';
+import {__UNDEFINED, fold, is_array, entries, timeout} from '@blake.regalia/belt';
 
 import {XT_ROTATION_DEBOUNCE} from 'src/constants';
 import {$_CODE} from 'src/item-proto';
@@ -23,10 +23,10 @@ type TestFunctionTree = Tree<TestFunction<{}>>;
 
 const entries_to_values = (a_entries: [any, any][]) => a_entries.map(([, w_value]) => w_value);
 
-const f_arrayify = (z: unknown) => Array.isArray(z)? [...z]: z;
+const f_arrayify = (z: unknown) => is_array(z)? [...z]: z;
 
 const tests = (h_tests: TestFunctionTree) => {
-	for(const [si_key, z_value] of ode(h_tests)) {
+	for(const [si_key, z_value] of entries(h_tests)) {
 		if('object' === typeof z_value) {
 			describe(si_key, () => {
 				tests(z_value);

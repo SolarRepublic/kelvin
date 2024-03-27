@@ -1,7 +1,7 @@
 import type {StorageChanges} from '../store';
 import type {JsonValue, Dict} from '@blake.regalia/belt';
 
-import {__UNDEFINED, ode} from '@blake.regalia/belt';
+import {entries} from '@blake.regalia/belt';
 
 import {KelvinKeyValueStore, KelvinKeyValueWriter, StringBasedChange} from '../store';
 
@@ -34,7 +34,7 @@ export class LocalStorageWriter extends KelvinKeyValueWriter<LocalStorageWrapper
 		const {_d_storage} = this._k_reader;
 
 		// each item; set synchronously
-		for(const [si_key, w_value] of ode(h_set)) {
+		for(const [si_key, w_value] of entries(h_set)) {
 			_d_storage.setItem(si_key, JSON.stringify(w_value));
 		}
 

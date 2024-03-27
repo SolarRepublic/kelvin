@@ -1,13 +1,12 @@
 import type {SerVaultHashParams} from './types';
 
-import {ATU8_NIL, base93_to_buffer, buffer, buffer_to_base93, concat2, text_to_buffer, zero_out} from '@blake.regalia/belt';
+import {base93_to_bytes, bytes_to_base93, import_key, zero_out} from '@blake.regalia/belt';
 
 import {ATU8_SHA256_STARSHELL, SensitiveBytes, aes_gcm_decrypt, aes_gcm_encrypt} from '@solar-republic/crypto';
 import {argon2id_hash} from '@solar-republic/crypto/argon2';
 
-import {sha256_sync} from '@solar-republic/crypto/sha256';
 
-import {GC_DERIVE_ROOT_CIPHER, GC_DERIVE_ROOT_SIGNING, GC_HKDF_COMMON, G_DEFAULT_HASHING_PARAMS, NB_ARGON2_MEMORY, N_ARGON2_ITERATIONS, XG_UINT64_MAX} from './constants';
+import {GC_DERIVE_ROOT_CIPHER, GC_DERIVE_ROOT_SIGNING, GC_HKDF_COMMON, G_DEFAULT_HASHING_PARAMS, XG_UINT64_MAX} from './constants';
 import {IntegrityCheckError} from './errors';
 
 
@@ -23,22 +22,6 @@ export interface RootKeysData {
 	new: RootKeyStruct;
 	export: SensitiveBytes | null;
 }
-
-
-/**
- * Import a crypto key from raw bytes
- * @param atu8_data - the key's raw bytes
- * @param w_algorithm - algorithm argument passed to `importKey()`
- * @param a_usages - intended usages
- * @param b_extractable - if `true`, the key will be extractable
- * @returns the imported key
- */
-export const import_key = async(
-	atu8_data: Uint8Array,
-	w_algorithm: AlgorithmIdentifier | RsaHashedImportParams | EcKeyImportParams | HmacImportParams | AesKeyAlgorithm,
-	a_usages: KeyUsage[],
-	b_extractable=false
-): Promise<CryptoKey> => crypto.subtle.importKey('raw', atu8_data, w_algorithm, b_extractable, a_usages);
 
 
 /**
@@ -307,8 +290,8 @@ export async function test_encryption_integrity(
 ): Promise<void> {
 	try {
 		const atu8_encrypted = await aes_gcm_encrypt(atu8_data, dk_cipher, atu8_nonce, atu8_verify);
-		const s_encrypted = buffer_to_base93(atu8_encrypted);
-		const atu8_encrypted_b = base93_to_buffer(s_encrypted);
+		const s_encrypted = bytes_to_base93(atu8_encrypted);
+		const atu8_encrypted_b = base93_to_bytes(s_encrypted);
 		const atu8_decrypted = await aes_gcm_decrypt(atu8_encrypted_b, dk_cipher, atu8_nonce, atu8_verify);
 
 		if(atu8_data.byteLength !== atu8_decrypted.byteLength) {

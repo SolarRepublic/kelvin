@@ -60,7 +60,7 @@ export const FieldStruct = {
 					const [, , f_default] = h_serdefs[z_property as FieldLabel];
 
 					// reset
-					a_members[i_field] = f_default();
+					a_members[i_field] = f_default(a_path, g_runtime);
 
 					// property never gets deleted
 					return false;

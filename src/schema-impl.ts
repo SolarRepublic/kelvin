@@ -1,16 +1,15 @@
-import type {L, U} from 'ts-toolbelt';
+import type {L} from 'ts-toolbelt';
 
-import type {SchemaSimulator, SchemaBuilder, PartableSchemaSpecifier, AcceptablePartTuples, StructuredSchema, PartableDatatype, Datatype, KnownEsTaggedDatatypes} from './schema-types';
-import type {DomainLabel, FieldCode, FieldLabel, KnownSerTaggedDatatype, SerField, SerFieldStruct, SerKeyStruct, SerSchema, SerTaggedDatatype} from './types';
+import type {SchemaSimulator, SchemaBuilder, AcceptablePartTuples, PartableDatatype} from './schema-types';
+import type {DomainLabel, FieldLabel, KnownSerTaggedDatatype, SerField, SerFieldStruct, SerKeyStruct, SerSchema, SerTaggedDatatype} from './types';
 
-import type {Dict, DiscriminatedUnion} from '@blake.regalia/belt';
+import type {Dict} from '@blake.regalia/belt';
 
-import {F_IDENTITY, __UNDEFINED, fodemtv, is_dict_es, ode} from '@blake.regalia/belt';
+import {__UNDEFINED, transform_values, is_array, is_dict_es, entries} from '@blake.regalia/belt';
 
 import {NL_MAX_PART_FIELDS} from './constants';
 
-import {ItemController} from './controller';
-import {Bug, SchemaError} from './errors';
+import {SchemaError} from './errors';
 import {PrimitiveDatatype, TaggedDatatype} from './schema-types';
 
 
@@ -71,13 +70,13 @@ const spec_for_ser: (
 
 	tuple: (a_tuple: SchemaAnnotation[]) => annotation(f_wrapper([TaggedDatatype.TUPLE, a_tuple.map(k => k.serialized)])),
 
-	struct: (h_struct: Dict<SchemaAnnotation>) => annotation(f_wrapper([TaggedDatatype.STRUCT, fodemtv(h_struct, k => k.serialized)])),
+	struct: (h_struct: Dict<SchemaAnnotation>) => annotation(f_wrapper([TaggedDatatype.STRUCT, transform_values(h_struct, k => k.serialized)])),
 
-	registry: (h_reg: Dict<SchemaAnnotation>) => annotation(f_wrapper([TaggedDatatype.REGISTRY, fodemtv(h_reg, k => k.serialized)])),
+	registry: (h_reg: Dict<SchemaAnnotation>) => annotation(f_wrapper([TaggedDatatype.REGISTRY, transform_values(h_reg, k => k.serialized)])),
 
 	mapRef: g_item => spec_for_ser(w => annotation(f_wrapper([TaggedDatatype.MAP_REF, g_item.domain, w]))),
 
-	switch: (si_dep, w_classifier, h_switch) => annotation(f_wrapper([TaggedDatatype.SWITCH, si_dep as FieldLabel, fodemtv(h_switch, k_option => k_option.serialized)])),
+	switch: (si_dep, w_classifier, h_switch) => annotation(f_wrapper([TaggedDatatype.SWITCH, si_dep as FieldLabel, transform_values(h_switch, k_option => k_option.serialized)])),
 });
 
 function reshape_tagged_value([xc_type, w_info, w_extra]: SerTaggedDatatype, sr_local: string): SerTaggedDatatype {
@@ -145,9 +144,9 @@ function reshape_tagged_value([xc_type, w_info, w_extra]: SerTaggedDatatype, sr_
 		// switch
 		case TaggedDatatype.SWITCH: {
 			const h_options = w_extra as Dict<SerField>;
-			a_mids = [w_info, fodemtv(h_options, (z_value, si_option) => {
+			a_mids = [w_info, transform_values(h_options, (z_value, si_option) => {
 				// tuple shorthand
-				if(Array.isArray(z_value) && Array.isArray(z_value[0])) {
+				if(is_array(z_value) && is_array(z_value[0])) {
 					// z_value = [1, [TaggedDatatype.TUPLE, z_value as SerField[]]];
 					z_value = [TaggedDatatype.TUPLE, z_value as SerField[]];
 					throw Error(`Tuple shorthands needs revision`);
@@ -188,7 +187,7 @@ function reshape_fields(
 	let i_last_part = -1;
 
 	// each entry in shape
-	const a_entries = ode(h_shape as Dict<SchemaAnnotation>);
+	const a_entries = entries(h_shape as Dict<SchemaAnnotation>);
 	for(let i_field=0; i_field<a_entries.length; i_field++) {
 		const [si_key, z_type] = a_entries[i_field];
 
@@ -232,7 +231,7 @@ function reshape_fields(
 			let w_ser: SerField;
 
 			// tagged type
-			if(Array.isArray(w_type)) {
+			if(is_array(w_type)) {
 				w_ser = reshape_tagged_value(w_type, sr_local);
 
 				// // create per-serialized schema value

@@ -6,15 +6,16 @@ import type {KelvinKeyValueStore, KelvinKeyValueWriter} from './store';
 import type {SerVaultHub, SerVaultBase, SerVaultHashParams, BucketKey, SerBucket, DomainLabel} from './types';
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
+import type {NaiveBase64, NaiveBase93, Dict, Promisable} from '@blake.regalia/belt';
 import type {AesGcmDecryptionError, SensitiveBytes} from '@solar-republic/crypto';
 
-import {base64_to_buffer, buffer_to_base64, buffer_to_json, F_NOOP, is_dict_es, ode, type NaiveBase64, type NaiveBase93, text_to_buffer, defer, json_to_buffer, ATU8_NIL, concat2, __UNDEFINED, type Dict, type Promisable, buffer} from '@blake.regalia/belt';
+import {base64_to_bytes, bytes_to_base64, bytes_to_json, F_NOOP, is_dict_es, entries, text_to_bytes, defer, json_to_bytes, ATU8_NIL, concat2, __UNDEFINED, bytes, is_array, import_key} from '@blake.regalia/belt';
 
 import {aes_gcm_decrypt, aes_gcm_encrypt, random_bytes} from '@solar-republic/crypto';
 import {sha256_sync} from '@solar-republic/crypto/sha256';
 
 
-import {derive_cipher_key, derive_tandem_root_keys, generate_root_signature, import_key, verify_root_key, type RootKeyStruct, derive_cipher_nonce, test_encryption_integrity} from './auth';
+import {derive_cipher_key, derive_tandem_root_keys, generate_root_signature, verify_root_key, type RootKeyStruct, derive_cipher_nonce, test_encryption_integrity} from './auth';
 import {ATU8_DUMMY_PHRASE, B_VERBOSE, G_DEFAULT_HASHING_PARAMS, NB_CACHE_LIMIT_DEFAULT, NB_HUB_GROWTH, NB_HUB_MINIMUM, NB_RECRYPTION_THRESHOLD, NB_SHA256_SALT, N_SYSTEM_VERSION, XB_CHAR_PAD, XB_NONCE_PREFIX_VERSION, XT_CONFIRMATION_TIMEOUT} from './constants';
 import {Bug, InvalidPassphraseError, InvalidSessionError, RecoverableVaultError, RefuseDestructiveActionError, StorageError, VaultClosedError, VaultCorruptedError} from './errors';
 import {VaultHub} from './hub';
@@ -142,8 +143,8 @@ async function _test_integrity(
 ) {
 	// prepare nonces
 	const [atu8_nonce_old, atu8_nonce_new] = await Promise.all([
-		derive_cipher_nonce(atu8_vector_old, sha256_sync(text_to_buffer('dummy')), 96),
-		derive_cipher_nonce(atu8_vector_new, sha256_sync(text_to_buffer('dummy')), 96),
+		derive_cipher_nonce(atu8_vector_old, sha256_sync(text_to_bytes('dummy')), 96),
+		derive_cipher_nonce(atu8_vector_new, sha256_sync(text_to_bytes('dummy')), 96),
 	]);
 
 	// derive temporary old cipher key capable of encrypting, scoped to this block only
@@ -161,7 +162,7 @@ function _create_cipher_nonce(
 	atu8_vector: Uint8Array
 ): Promise<Uint8Array> {
 	// create salt
-	const atu8_salt = sha256_sync(concat2(text_to_buffer(si_key), atu8_ent));
+	const atu8_salt = sha256_sync(concat2(text_to_bytes(si_key), atu8_ent));
 
 	// derive nonce for aes
 	return derive_cipher_nonce(atu8_vector, atu8_salt, 96);
@@ -369,7 +370,7 @@ export class Vault {
 	protected _load_base(g_base: SerVaultBase): void {
 		// attempt to decode entropy
 		try {
-			this._atu8_entropy = base64_to_buffer(g_base.entropy);
+			this._atu8_entropy = base64_to_bytes(g_base.entropy);
 		}
 		catch(e_decode) {
 			throw new VaultCorruptedError('unable to decode entropy');
@@ -385,7 +386,7 @@ export class Vault {
 
 		// attempt to decode signature
 		try {
-			this._atu8_signature = base64_to_buffer(g_base.signature);
+			this._atu8_signature = base64_to_bytes(g_base.signature);
 		}
 		catch(e_decode) {
 			throw new VaultCorruptedError('unable to decode signature');
@@ -393,7 +394,7 @@ export class Vault {
 
 		// attempt to decode salt
 		try {
-			this._atu8_salt = base64_to_buffer(g_base.salt);
+			this._atu8_salt = base64_to_bytes(g_base.salt);
 		}
 		catch(e_decode) {
 			throw new VaultCorruptedError('unable to decode salt');
@@ -415,7 +416,7 @@ export class Vault {
 		if(!a_root_key) return;
 
 		// invalid root key
-		if(!Array.isArray(a_root_key)) {
+		if(!is_array(a_root_key)) {
 			throw new InvalidSessionError('root key not an array');
 		}
 
@@ -456,7 +457,7 @@ export class Vault {
 		// attempt to decode
 		let g_hub: SerVaultHub;
 		try {
-			g_hub = buffer_to_json(atu8_hub_plain) as unknown as SerVaultHub;
+			g_hub = bytes_to_json(atu8_hub_plain) as unknown as SerVaultHub;
 		}
 		// corrupted hub
 		catch(e_) {
@@ -562,7 +563,7 @@ export class Vault {
 		const h_entries = await k_reader.getBytesMany(a_keys);
 
 		// each entry
-		for(const [si_key, atu8_value] of ode(h_entries)) {
+		for(const [si_key, atu8_value] of entries(h_entries)) {
 			// prepare old and new nonces
 			const [[atu8_nonce_old, atu8_cipher], [atu8_nonce_new]] = await Promise.all([
 				_read_nonce_for_entry(si_key, atu8_value, atu8_vector_old),
@@ -768,9 +769,9 @@ export class Vault {
 
 			// save to session storage
 			await this._k_session.lockAll(kw_session => kw_session.setStringMany({
-				[this._fixed_storage_key(SI_KEY_SESSION_ROOT)]: buffer_to_base64(kn_root.data),
-				[this._fixed_storage_key(SI_KEY_SESSION_VECTOR)]: buffer_to_base64(atu8_vector),
-				[this._fixed_storage_key(SI_KEY_SESSION_AUTH)]: buffer_to_base64(atu8_auth),
+				[this._fixed_storage_key(SI_KEY_SESSION_ROOT)]: bytes_to_base64(kn_root.data),
+				[this._fixed_storage_key(SI_KEY_SESSION_VECTOR)]: bytes_to_base64(atu8_vector),
+				[this._fixed_storage_key(SI_KEY_SESSION_AUTH)]: bytes_to_base64(atu8_auth),
 			}));
 		}
 
@@ -786,10 +787,10 @@ export class Vault {
 		// serialize the new base
 		const g_base: SerVaultBase = {
 			version: N_SYSTEM_VERSION,
-			entropy: buffer_to_base64(atu8_entropy),
+			entropy: bytes_to_base64(atu8_entropy),
 			nonce: `${xg_nonce_new}`,
-			signature: buffer_to_base64(atu8_signature),
-			salt: buffer_to_base64(atu8_salt),
+			signature: bytes_to_base64(atu8_signature),
+			salt: bytes_to_base64(atu8_salt),
 			params: G_DEFAULT_HASHING_PARAMS,
 		};
 
@@ -1111,7 +1112,7 @@ export class Vault {
 		// attempt to encode
 		let atu8_hub_plain: Uint8Array;
 		try {
-			atu8_hub_plain = text_to_buffer(JSON.stringify(g_hub));
+			atu8_hub_plain = text_to_bytes(JSON.stringify(g_hub));
 		}
 		// bug in hub json?
 		catch(e_encode) {
@@ -1121,7 +1122,7 @@ export class Vault {
 		// pad with spaces
 		let nb_out = NB_HUB_MINIMUM;
 		for(; nb_out<atu8_hub_plain.length; nb_out+=NB_HUB_GROWTH);
-		const atu8_hub_padded = buffer(nb_out);
+		const atu8_hub_padded = bytes(nb_out);
 		atu8_hub_padded.fill(XB_CHAR_PAD, atu8_hub_plain.length);
 		atu8_hub_padded.set(atu8_hub_plain, 0);
 
@@ -1186,7 +1187,7 @@ export class Vault {
 		// attempt to decode
 		let w_contents: SerBucket;
 		try {
-			w_contents = buffer_to_json(atu8_bucket_plain) as SerBucket;
+			w_contents = bytes_to_json(atu8_bucket_plain) as SerBucket;
 		}
 		// corrupted hub
 		catch(e_decode) {
@@ -1196,7 +1197,7 @@ export class Vault {
 		// reached cache limit
 		if((this._nb_cache += nb_bucket_plain) >= _nb_cache_limit) {
 			// drop oldest entries from cache
-			for(const [si_entry, [, nb_plain]] of ode(_h_bucket_cache)) {
+			for(const [si_entry, [, nb_plain]] of entries(_h_bucket_cache)) {
 				// drop entry
 				delete _h_bucket_cache[si_entry];
 
@@ -1227,7 +1228,7 @@ export class Vault {
 		// attempt to encode bucket contents
 		let atu8_bucket_plain: Uint8Array;
 		try {
-			atu8_bucket_plain = json_to_buffer(w_contents);
+			atu8_bucket_plain = json_to_bytes(w_contents);
 		}
 		catch(e_encode) {
 			throw new Bug('unable to encode plaintext bucket contents while writing');
@@ -1235,7 +1236,7 @@ export class Vault {
 
 		// pad with spaces
 		const nb_out = Math.max(atu8_bucket_plain.length, nb_bucket_target);
-		const atu8_bucket_padded = buffer(nb_out);
+		const atu8_bucket_padded = bytes(nb_out);
 		atu8_bucket_padded.fill(XB_CHAR_PAD, atu8_bucket_plain.length);
 		atu8_bucket_padded.set(atu8_bucket_plain, 0);
 

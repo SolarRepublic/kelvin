@@ -1,4 +1,4 @@
-import type {A, Any, O} from 'ts-toolbelt';
+import type {A} from 'ts-toolbelt';
 
 import type {Key} from 'ts-toolbelt/out/Any/Key';
 
@@ -7,8 +7,7 @@ import type {FieldArray} from './field-array';
 import type {RuntimeItem} from './item-proto';
 import type {ItemRef, Refish} from './item-ref';
 import type {AllValues, KvTuplesToObject, UnionToTuple, FilterDrop} from './meta';
-import type {ItemCode} from './types';
-import type {Dict, ES_TYPE, JsonObject, JsonPrimitive, NaiveBase64} from '@blake.regalia/belt';
+import type {Dict, JsonObject, JsonPrimitive, NaiveBase64} from '@blake.regalia/belt';
 
 
 /**
@@ -238,7 +237,7 @@ export type DatatypeString<
 
 export type DatatypeBytes<
 	w_subtype extends Uint8Array=Uint8Array,
-> = SchemaSubtype<w_subtype, 'str'>;
+> = SchemaSubtype<w_subtype, 'bytes'>;
 
 export type DatatypeObject<
 	w_subtype extends JsonObject=JsonObject,
@@ -396,6 +395,8 @@ export type SchemaSimulator<
 	ref(g_controller: GenericItemController): w_return;
 	refSelf(): w_return;
 	array: SchemaSimulator<0, w_return>;
+		// // eslint-disable-next-line @typescript-eslint/indent
+		// & ((w_type: w_return[]) => w_return);
 	set: SchemaSimulator<0, w_return>;
 	dict: SchemaSimulator<0, w_return>
 		// eslint-disable-next-line @typescript-eslint/indent
@@ -448,44 +449,8 @@ export type ImplementsSchemaTypes<g_impl extends SchemaSimulator> = g_impl;
 // 		: never;
 // };
 
-type ChainedArray = ImplementsSchemaTypes<{
-	[si_method in keyof SchemaSpecifier]: SchemaSpecifier[si_method] extends (...a_args: infer a_args) => infer w_return
-		? w_return extends Datatype
-			? (...a_args: a_args) => DatatypeArray<w_return[]>
-			: never
-		: SchemaSpecifier[si_method];
-}>;
 
-type ChainedSet = ImplementsSchemaTypes<{
-	[si_method in keyof SchemaSpecifier]: SchemaSpecifier[si_method] extends (...a_args: infer a_args) => infer w_return
-		? w_return extends Datatype
-			? (...a_args: a_args) => DatatypeSet<Set<w_return>>
-			: never
-		: SchemaSpecifier[si_method];
-}>;
-
-type ChainedDict<as_keys extends string=string> = {
-	[si_method in keyof SchemaSpecifier]: SchemaSpecifier[si_method] extends (...a_args: infer a_args) => infer w_return
-		? w_return extends Datatype
-			? (...a_args: a_args) => DatatypeDict<Record<as_keys, w_return>>
-			: never
-		: SchemaSpecifier[si_method];
-};
-
-type ChainedMapRef<g_thing extends Dict<any>> = {
-	[si_method in keyof SchemaSpecifier]: SchemaSpecifier[si_method] extends (...a_args: infer a_args) => infer w_return
-		? w_return extends Datatype
-			? (...a_args: a_args) => DatatypeMapRef<Map<ItemRef<g_thing>, w_return>>
-			: never
-		: SchemaSpecifier[si_method];
-};
-
-/**
- * Represents a dummy type assigned to the callback parameter of a `schema` function declaration.
- */
-export type SchemaSpecifier = ImplementsSchemaTypes<{
-	/* eslint-disable @typescript-eslint/member-ordering */
-
+type PrimitiveSpecifier = {
 	int<w_subtype extends number=number>(): DatatypeInt<w_subtype, 0>;
 
 	bigint<w_subtype extends bigint=bigint>(): DatatypeBigint<w_subtype, 0>;
@@ -497,7 +462,13 @@ export type SchemaSpecifier = ImplementsSchemaTypes<{
 	bytes<w_subtype extends Uint8Array=Uint8Array>(): DatatypeBytes<w_subtype>;
 
 	obj<w_subtype extends JsonObject=JsonObject>(): DatatypeObject<w_subtype>;
+};
 
+type ImplementsPrimitiveSpecifier<g_spec extends {
+	[si_key in keyof PrimitiveSpecifier]: () => Datatype;
+}> = g_spec;
+
+type TaggedSpecifier = {
 	ref<
 		dc_controller extends GenericItemController,
 	>(g_controller: dc_controller): dc_controller extends GenericItemController<infer g_thing>
@@ -551,11 +522,79 @@ export type SchemaSpecifier = ImplementsSchemaTypes<{
 		w_classifier: w_classifier,
 		h_switch: h_switch,
 	): SchemaSwitch<si_dep, w_classifier, h_switch>;
+};
 
-	// optional: OptionalDatatype<SchemaSpecifier>;
-
-	/* eslint-enable */
+export type ChainedArray = ImplementsSchemaTypes<ImplementsPrimitiveSpecifier<{
+	int<w_subtype extends number=number>(): DatatypeArray<DatatypeInt<w_subtype, 0>[]>;
+	bigint<w_subtype extends bigint=bigint>(): DatatypeArray<DatatypeBigint<w_subtype, 0>[]>;
+	double<w_subtype extends number=number>(): DatatypeArray<DatatypeDouble<w_subtype>[]>;
+	str<w_subtype extends string=string>(): DatatypeArray<DatatypeString<w_subtype, 0>[]>;
+	bytes<w_subtype extends Uint8Array=Uint8Array>(): DatatypeArray<DatatypeBytes<w_subtype & Uint8Array>[]>;
+	obj<w_subtype extends JsonObject=JsonObject>(): DatatypeArray<DatatypeObject<w_subtype>[]>;
+}> & {
+	[si_method in keyof TaggedSpecifier]: TaggedSpecifier[si_method] extends (...a_args: infer a_args) => infer w_return
+		? w_return extends Datatype
+			? (...a_args: a_args) => DatatypeArray<w_return[]>
+			: never
+		: SchemaSpecifier[si_method];
 }>;
+
+type ChainedSet = ImplementsSchemaTypes<ImplementsPrimitiveSpecifier<{
+	int<w_subtype extends number=number>(): DatatypeSet<Set<DatatypeInt<w_subtype, 0>>>;
+	bigint<w_subtype extends bigint=bigint>(): DatatypeSet<Set<DatatypeBigint<w_subtype, 0>>>;
+	double<w_subtype extends number=number>(): DatatypeSet<Set<DatatypeDouble<w_subtype>>>;
+	str<w_subtype extends string=string>(): DatatypeSet<Set<DatatypeString<w_subtype, 0>>>;
+	bytes<w_subtype extends Uint8Array=Uint8Array>(): DatatypeSet<Set<DatatypeBytes<w_subtype & Uint8Array>>>;
+	obj<w_subtype extends JsonObject=JsonObject>(): DatatypeSet<Set<DatatypeObject<w_subtype>>>;
+}> & {
+	[si_method in keyof TaggedSpecifier]: TaggedSpecifier[si_method] extends (...a_args: infer a_args) => infer w_return
+		? w_return extends Datatype
+			? (...a_args: a_args) => DatatypeSet<Set<w_return>>
+			: never
+		: SchemaSpecifier[si_method];
+}>;
+
+type ChainedDict<as_keys extends string=string> = ImplementsPrimitiveSpecifier<{
+	int<w_subtype extends number=number>(): DatatypeDict<Record<as_keys, DatatypeInt<w_subtype, 0>>>;
+	bigint<w_subtype extends bigint=bigint>(): DatatypeDict<Record<as_keys, DatatypeBigint<w_subtype, 0>>>;
+	double<w_subtype extends number=number>(): DatatypeDict<Record<as_keys, DatatypeDouble<w_subtype>>>;
+	str<w_subtype extends string=string>(): DatatypeDict<Record<as_keys, DatatypeString<w_subtype, 0>>>;
+	bytes<w_subtype extends Uint8Array=Uint8Array>(): DatatypeDict<Record<as_keys, DatatypeBytes<w_subtype & Uint8Array>>>;
+	obj<w_subtype extends JsonObject=JsonObject>(): DatatypeDict<Record<as_keys, DatatypeObject<w_subtype>>>;
+}> & {
+	[si_method in keyof TaggedSpecifier]: TaggedSpecifier[si_method] extends (...a_args: infer a_args) => infer w_return
+		? w_return extends Datatype
+			? (...a_args: a_args) => DatatypeDict<Record<as_keys, w_return>>
+			: never
+		: SchemaSpecifier[si_method];
+};
+
+type ChainedMapRef<g_thing extends Dict<any>> = ImplementsPrimitiveSpecifier<{
+	int<w_subtype extends number=number>(): DatatypeMapRef<Map<ItemRef<g_thing>, DatatypeInt<w_subtype, 0>>>;
+	bigint<w_subtype extends bigint=bigint>(): DatatypeMapRef<Map<ItemRef<g_thing>, DatatypeBigint<w_subtype, 0>>>;
+	double<w_subtype extends number=number>(): DatatypeMapRef<Map<ItemRef<g_thing>, DatatypeDouble<w_subtype>>>;
+	str<w_subtype extends string=string>(): DatatypeMapRef<Map<ItemRef<g_thing>, DatatypeString<w_subtype, 0>>>;
+	bytes<w_subtype extends Uint8Array=Uint8Array>(): DatatypeMapRef<Map<ItemRef<g_thing>, DatatypeBytes<w_subtype & Uint8Array>>>;
+	obj<w_subtype extends JsonObject=JsonObject>(): DatatypeMapRef<Map<ItemRef<g_thing>, DatatypeObject<w_subtype>>>;
+}> & {
+	[si_method in keyof TaggedSpecifier]: TaggedSpecifier[si_method] extends (...a_args: infer a_args) => infer w_return
+		? w_return extends Datatype
+			? (...a_args: a_args) => DatatypeMapRef<Map<ItemRef<g_thing>, w_return>>
+			: never
+		: SchemaSpecifier[si_method];
+};
+
+/**
+ * Represents a dummy type assigned to the callback parameter of a `schema` function declaration.
+ */
+export type SchemaSpecifier = ImplementsSchemaTypes<PrimitiveSpecifier & TaggedSpecifier>;
+
+// {
+// 	/* eslint-disable @typescript-eslint/member-ordering */
+// 	// optional: OptionalDatatype<SchemaSpecifier>;
+
+// 	/* eslint-enable */
+// }>;
 
 
 /**
@@ -581,9 +620,12 @@ export type SubschemaStructBuilder<
 	w_return,
 > = (k: SchemaSpecifier) => Dict<w_return>;
 
-
+/**
+ * Extracts the item struct from a controller type
+ */
 export type StructFromController<
 	k_controller,
+	w_else=never,
 > = k_controller extends ItemController<
 	infer g_schema,
 	infer g_item,
@@ -594,7 +636,7 @@ export type StructFromController<
 	infer a_parts,
 	infer f_schema,
 	infer g_parts
->? g_item: never;
+>? g_item: w_else;
 
 
 /* Tests */

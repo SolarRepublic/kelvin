@@ -6,7 +6,7 @@ import type {FieldPath, ItemCode} from './types';
 
 import type {Dict, JsonValue} from '@blake.regalia/belt';
 
-import {__UNDEFINED, ode, odk} from '@blake.regalia/belt';
+import {__UNDEFINED, entries, keys} from '@blake.regalia/belt';
 
 import {ItemRef, refish_to_code} from './item-ref';
 
@@ -134,7 +134,7 @@ export class FieldMapRef<
 	override* keys(): IterableIterator<Refish<g_item>> {
 		const _k_controller = this.#k_controller;
 
-		for(const si_code of odk(this.#h_backing)) {
+		for(const si_code of keys(this.#h_backing)) {
 			yield new ItemRef(_k_controller, +si_code as ItemCode);
 		}
 	}
@@ -144,7 +144,7 @@ export class FieldMapRef<
 		const _g_runtime = this.#g_runtime;
 		const _a_path = this.#a_path;
 
-		for(const [si_code, w_value] of ode(this.#h_backing)) {
+		for(const [si_code, w_value] of entries(this.#h_backing)) {
 			yield _f_deserializer(w_value, [..._a_path, +si_code as ItemCode], _g_runtime);
 		}
 	}
@@ -155,7 +155,7 @@ export class FieldMapRef<
 		const _g_runtime = this.#g_runtime;
 		const _a_path = this.#a_path;
 
-		for(const [si_code, w_value] of ode(this.#h_backing)) {
+		for(const [si_code, w_value] of entries(this.#h_backing)) {
 			yield [new ItemRef(_k_controller, +si_code as ItemCode), _f_deserializer(w_value, [..._a_path, +si_code as ItemCode], _g_runtime)];
 		}
 	}

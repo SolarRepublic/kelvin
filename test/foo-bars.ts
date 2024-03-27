@@ -1,10 +1,9 @@
-import type {ItemStruct} from '../src/item-proto';
 import type {Vault} from '../src/vault';
 
 import type {StructFromController} from 'src/schema-types';
 import type {ItemCode} from 'src/types';
 
-import {odk, type NaiveBase64, text_to_base64} from '@blake.regalia/belt';
+import {type NaiveBase64, text_to_base64} from '@blake.regalia/belt';
 
 import {ItemRef} from 'src/item-ref';
 
@@ -126,6 +125,7 @@ export const init_foobars = (k_client: Vault) => {
 					}),
 				}),
 			}),
+			cap: k.array.str(),
 		}),
 
 		proto: cast => ({

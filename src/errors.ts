@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/naming-convention */
 
 const BasicError = (s_prepend: string) => class extends Error {
 	constructor(s_msg: string, e_original?: unknown) {

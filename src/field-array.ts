@@ -5,7 +5,9 @@ import type {Key} from 'ts-toolbelt/out/Any/Key';
 import type {ItemDefaulter, ItemDeserializer, ItemSerializer, RuntimeItem} from './item-proto';
 import type {FieldPath} from './types';
 
-import {ode, type JsonArray, type JsonValue, __UNDEFINED} from '@blake.regalia/belt';
+import type {JsonArray, JsonValue} from '@blake.regalia/belt';
+
+import {__UNDEFINED} from '@blake.regalia/belt';
 
 const F_CMP_DEFAULT = (w_a: any, w_b: any): -1 | 0 | 1 => {
 	const s_a = w_a+'';

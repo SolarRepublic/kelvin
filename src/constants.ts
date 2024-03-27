@@ -1,6 +1,6 @@
 import type {SerVaultHashParams} from './types';
 
-import {text_to_buffer} from '@blake.regalia/belt';
+import {text_to_bytes} from '@blake.regalia/belt';
 import {ATU8_SHA256_STARSHELL, random_bytes} from '@solar-republic/crypto';
 
 export const B_VERBOSE = true || import.meta.env?.DEV;
@@ -74,7 +74,7 @@ const NI_DERIVED_AES_KEY = 256;
 export const NB_RECRYPTION_THRESHOLD = 32 * 1024;  // 64 KiB
 
 // cache dummy values to estimate time to completion
-export const ATU8_DUMMY_PHRASE = text_to_buffer('32-character-long-dummy-password');
+export const ATU8_DUMMY_PHRASE = text_to_bytes('32-character-long-dummy-password');
 export const ATU8_DUMMY_VECTOR = random_bytes(16);
 
 // algorithm options for deriving root signing key

@@ -5,7 +5,7 @@ import type {FieldLabel, ItemCode, SerField, SerFieldStruct, SerKeyStruct, SerTa
 
 import type {Dict, Arrayable, JsonObject} from '@blake.regalia/belt';
 
-import {__UNDEFINED, is_dict_es, ode, buffer_to_base64} from '@blake.regalia/belt';
+import {__UNDEFINED, is_dict_es, entries, bytes_to_base64, is_array} from '@blake.regalia/belt';
 
 import {SchemaError} from './errors';
 import {FieldArray} from './field-array';
@@ -59,7 +59,7 @@ const apply_filter_ref = (g_value: ItemRef, z_filter: unknown, sr_path: string):
 // apply a tuple filter
 const apply_filter_tuple = (a_tuple: FieldTuple, z_filter: unknown, sr_path: string, _a_schema_fields: SerField[]): boolean => {
 	// array
-	if(Array.isArray(z_filter)) {
+	if(is_array(z_filter)) {
 		// lengths differ
 		if(z_filter.length !== a_tuple.length) return false;
 
@@ -80,7 +80,7 @@ const apply_filter_tuple = (a_tuple: FieldTuple, z_filter: unknown, sr_path: str
 // apply an array filter
 const apply_filter_array = (a_array: FieldArray, z_filter: unknown, sr_path: string, z_datatype: SerField): boolean => {
 	// array
-	if(Array.isArray(z_filter)) {
+	if(is_array(z_filter)) {
 		// compare each item
 		for(let i_item=0; i_item<a_array.length; i_item++) {
 			// filter doesn't pass; reject match
@@ -102,7 +102,7 @@ const apply_filter_bytes = (z_value: Uint8Array, z_match: unknown, sr_path: stri
 	}
 
 	// compare stringified base64
-	return buffer_to_base64(z_match) === buffer_to_base64(z_value);
+	return bytes_to_base64(z_match) === bytes_to_base64(z_value);
 };
 
 const apply_filter_object = (z_value: JsonObject, z_match: unknown, sr_path: string): boolean => {
@@ -112,7 +112,7 @@ const apply_filter_object = (z_value: JsonObject, z_match: unknown, sr_path: str
 	}
 
 	// each key
-	for(const [si_key, z_arg] of ode(z_match)) {
+	for(const [si_key, z_arg] of entries(z_match)) {
 		// skip undefined
 		if(__UNDEFINED === z_arg) continue;
 
@@ -156,7 +156,7 @@ export function apply_filter_struct(
 	_h_schema_parts: SerKeyStruct={}
 ): boolean {
 	// check ách specified field
-	for(const [si_field, z_match] of ode(h_fields)) {
+	for(const [si_field, z_match] of entries(h_fields)) {
 		// build local path
 		const sr_path = s_path+'.'+si_field;
 
@@ -295,7 +295,7 @@ function apply_filter_any(z_value: KnownEsDatatypes, z_datatype: SerField, z_mat
 			// tuple
 			case TaggedDatatype.TUPLE: {
 				// value is not an tuple
-				if(!Array.isArray(z_value)) {
+				if(!is_array(z_value)) {
 					throw new SchemaError(`Expected field value for '${sr_path}' to be a tuple (array) but instead found: ${typeof z_value}`);
 				}
 

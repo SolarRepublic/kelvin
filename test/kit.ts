@@ -3,7 +3,7 @@ import type {VaultHub} from '../src/hub';
 import type {RuntimeItem} from 'src/item-proto';
 import type {TestContext} from 'vitest';
 
-import {text_to_buffer} from '@blake.regalia/belt';
+import {text_to_bytes} from '@blake.regalia/belt';
 
 import {init_foobars} from './foo-bars';
 import {Vault} from '../src/vault';
@@ -35,7 +35,7 @@ declare module 'vitest' {
 
 export const SI_DATABASE = 'test';
 
-export const phrase = (): Uint8Array => text_to_buffer('passphrase');
+export const phrase = (): Uint8Array => text_to_bytes('passphrase');
 
 export enum Stage {
 	INIT=0,

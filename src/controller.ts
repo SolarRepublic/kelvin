@@ -10,7 +10,7 @@ import type {DomainLabel, ItemCode, ItemIdent, ItemPath, SchemaCode, SerFieldStr
 import type {Vault} from './vault';
 import type {Dict, JsonArray, JsonObject} from '@blake.regalia/belt';
 
-import {F_IDENTITY, __UNDEFINED, escape_regex, odk} from '@blake.regalia/belt';
+import {F_IDENTITY, __UNDEFINED, escape_regex, keys} from '@blake.regalia/belt';
 
 import {AppError} from './errors';
 import {apply_filter_struct} from './filter';
@@ -134,7 +134,8 @@ export class ItemController<
 		const g_descriptor_schema = this._g_descriptor_schema = item_prototype(a_schema, k_generic, false);
 
 		// get descriptor from proto
-		const g_descriptor_proto = this._g_descriptor_proto = f_proto? Object.getOwnPropertyDescriptors(f_proto(F_IDENTITY)): {};
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+		const g_descriptor_proto = this._g_descriptor_proto = f_proto? Object.getOwnPropertyDescriptors(f_proto(F_IDENTITY as any)): {};
 
 		// merge and create prototype
 		this._g_prototype = Object.create({}, Object.assign({}, g_descriptor_proto, g_descriptor_schema));
@@ -146,10 +147,10 @@ export class ItemController<
 		this._k_vault.registerController(this._si_domain, k_generic);
 
 		// cache part length
-		this._nl_parts = odk(a_schema[1]).length;
+		this._nl_parts = keys(a_schema[1]).length;
 
 		// cache field length
-		this._nl_fields = odk(a_schema[2]).length;
+		this._nl_fields = keys(a_schema[2]).length;
 	}
 
 	get strategy(): DomainStorageStrategy {
@@ -188,7 +189,7 @@ export class ItemController<
 		const g_copy: JsonObject = {...g_criteria as object};
 
 		// construct item key
-		return [odk(this._h_schema_parts).map((si_label) => {
+		return [keys(this._h_schema_parts).map((si_label) => {
 			// remove from copy
 			delete g_copy[si_label];
 
@@ -425,7 +426,7 @@ export class ItemController<
 		const a_parts: (string | null)[] = [];
 
 		// each key part
-		for(const si_part of odk(this._h_schema_parts)) {
+		for(const si_part of keys(this._h_schema_parts)) {
 			// part is present in criteria and able to be embedded in regex
 			if(['number', 'bigint', 'string'].includes(typeof h_criteria[si_part])) {
 				// use value

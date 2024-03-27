@@ -1,12 +1,12 @@
-import type {AnyItemController, GenericItemController, ItemController} from './controller';
+import type {AnyItemController, GenericItemController} from './controller';
 import type {$_LINKS, RuntimeItem} from './item-proto';
 import type {KelvinKeyValueWriter} from './store';
-import type {DomainCode, DomainLabel, ItemIdent, ItemCode, ItemPath, SerVaultHub, IndexLabel, IndexValue, IndexPosition, BucketKey, BucketCode, SchemaCode, SerSchema, SerItem, SerBucketMetadata, SerBucket, SerDomainLinks, FieldPathCode, FieldPath, SerFieldPath, SerLinksTuple} from './types';
+import type {DomainCode, DomainLabel, ItemIdent, ItemCode, ItemPath, SerVaultHub, IndexLabel, IndexValue, IndexPosition, BucketKey, BucketCode, SchemaCode, SerSchema, SerItem, SerBucketMetadata, SerBucket, FieldPathCode, SerFieldPath, SerLinksTuple} from './types';
 import type {Migration, Vault} from './vault';
 
 import type {Nilable} from '@blake.regalia/belt';
 
-import {buffer_to_base93, fodemtv, fold, ode, odem, odv, ofe, text_to_buffer} from '@blake.regalia/belt';
+import {bytes_to_base93, transform_values, fold, is_array, entries, map_entries, values, from_entries, text_to_bytes} from '@blake.regalia/belt';
 
 import {random_bytes} from '@solar-republic/crypto';
 
@@ -14,7 +14,6 @@ import {NB_BUCKET_CONTAINER, NB_BUCKET_CONTENTS, NB_BUCKET_LABEL, XT_ROTATION_DE
 import {index_to_b92} from './data';
 import {Bug, ClientBehindError, MigrationError, MissingMigrationError, MissingMigrationRouterError, SchemaError, SchemaWarning} from './errors';
 import {DomainStorageStrategy} from './types';
-import {WorkingSequence} from './working-sequence';
 
 
 
@@ -25,7 +24,7 @@ export type HubEffects = {
 };
 
 // creates a new random bucket key
-const new_bucket_key = () => '_'+buffer_to_base93(random_bytes(NB_BUCKET_LABEL)) as BucketKey;
+const new_bucket_key = () => '_'+bytes_to_base93(random_bytes(NB_BUCKET_LABEL)) as BucketKey;
 
 export class VaultHub {
 	// decrypted and unmarshalled hub
@@ -125,10 +124,10 @@ export class VaultHub {
 		});
 
 		// create lookup from domain label to domain code
-		this._h_domain_codes = fodemtv(this._h_domains, (w_metadata, si_domain, i_domain) => index_to_b92(i_domain) as DomainCode);
+		this._h_domain_codes = transform_values(this._h_domains, (w_metadata, si_domain, i_domain) => index_to_b92(i_domain) as DomainCode);
 
 		// create lookup from domain code to domain label
-		this._h_domain_labels = ofe(odem(this._h_domains, ([si_domain], i_domain) => [index_to_b92(i_domain), si_domain]));
+		this._h_domain_labels = from_entries(map_entries(this._h_domains, ([si_domain], i_domain) => [index_to_b92(i_domain), si_domain]));
 
 		// record non-zero index of first gap if it exists (zero means no gap)
 		let i_next_item = 0;
@@ -196,7 +195,7 @@ export class VaultHub {
 		const {_h_domains, _h_domain_codes, _h_domain_labels, _a_buckets_to_schemas, _a_schemas} = this;
 
 		// each registered domain/controller pair
-		for(const [si_domain, k_controller] of ode(this._h_controllers)) {
+		for(const [si_domain, k_controller] of entries(this._h_controllers)) {
 			// serialize latest schema
 			const sx_schema_new = JSON.stringify(k_controller.schema);
 
@@ -537,7 +536,7 @@ export class VaultHub {
 		}
 
 		// transform group by mapping domain codes to labels
-		return ofe(odem(h_groups, ([sb92_domain, a_items]) => [
+		return from_entries(map_entries(h_groups, ([sb92_domain, a_items]) => [
 			_h_domain_labels[sb92_domain],
 			a_items,
 		]));
@@ -958,7 +957,7 @@ export class VaultHub {
 				const [i_item, b_exists] = this.addItemKey(si_domain, sr_item);
 
 				// serialize item to calculate its length
-				const nb_item = text_to_buffer(`"${i_item}":${JSON.stringify(w_item)}`).length;
+				const nb_item = text_to_bytes(`"${i_item}":${JSON.stringify(w_item)}`).length;
 
 				// item is larger than capacity
 				if(nb_item + NB_BUCKET_CONTAINER > this._nb_bucket) {
@@ -1000,7 +999,7 @@ export class VaultHub {
 					}
 
 					// calculate size of existing item
-					const nb_item_exist = text_to_buffer(JSON.stringify(h_bucket_exist[i_item])).length;
+					const nb_item_exist = text_to_bytes(JSON.stringify(h_bucket_exist[i_item])).length;
 
 					// new item will fit (adding 1 for comma)
 					if(nb_item + 1 <= nb_item_exist || (nb_bucket_exist - nb_item_exist + nb_item + 1) <= this._nb_bucket) {
@@ -1070,7 +1069,7 @@ export class VaultHub {
 					const sb92_domain_source = this.encodeDomain(si_domain)!;
 
 					// each affected domain
-					for(const [sb92_domain_target, g_links] of ode(g_effects.links)) {
+					for(const [sb92_domain_target, g_links] of entries(g_effects.links)) {
 						// nothing to do; skip
 						if(!Object.keys(g_links.remove).length && !Object.keys(g_links.insert).length) continue;
 
@@ -1092,7 +1091,7 @@ export class VaultHub {
 						const h_refs_mut = {...h_items[i_item]};
 
 						// each removal
-						for(const [sr_path_remove, w_remove] of ode(g_links.remove)) {
+						for(const [sr_path_remove, w_remove] of entries(g_links.remove)) {
 							// path not found
 							if(!h_paths[sr_path_remove]) {
 								throw Error(`Cannot remove old item reference since field path (${sr_path_remove}) could not be encoded in ${this.decodeDomain(sb92_domain_target)}`);
@@ -1103,7 +1102,7 @@ export class VaultHub {
 
 							// confirm value being removed
 							const z_value = h_refs_mut[i_path];
-							if(Array.isArray(z_value)) {
+							if(is_array(z_value)) {
 								if(JSON.stringify(w_remove) !== JSON.stringify(z_value)) {
 									throw Error(`Mismatch link removal; expected ${JSON.stringify(w_remove)} but found ${JSON.stringify(z_value)}`);
 								}
@@ -1118,18 +1117,18 @@ export class VaultHub {
 							// decrement ref counter; no more usages
 							if(0 === (h_paths_mut[sr_path_remove] -= 1)) {
 								// convert object to entries to preserve order
-								const a_entries = ode(h_paths_mut);
+								const a_entries = entries(h_paths_mut);
 
 								// nullify entry
 								a_entries[i_path] = ['' as SerFieldPath, 0];
 
 								// write serialized entries back to object
-								h_paths_mut = ofe(a_entries);
+								h_paths_mut = from_entries(a_entries);
 							}
 						}
 
 						// each insertion
-						for(const [sr_path_insert, w_insert] of ode(g_links.insert)) {
+						for(const [sr_path_insert, w_insert] of entries(g_links.insert)) {
 							// prep path code
 							let i_path: FieldPathCode;
 
@@ -1175,7 +1174,7 @@ export class VaultHub {
 			}
 
 			// first, write the new buckets
-			for(const g_bucket of odv(h_buckets_new)) {
+			for(const g_bucket of values(h_buckets_new)) {
 				await this._k_vault.writeBucket(g_bucket.key, g_bucket.contents, this._nb_bucket, kw_content);
 			}
 
@@ -1231,7 +1230,7 @@ export class VaultHub {
 			const h_bucket = await _k_vault.readBucket(si_bucket);
 
 			// each item
-			for(const [sn_item, a_tuple] of ode(h_bucket)) {
+			for(const [sn_item, a_tuple] of entries(h_bucket)) {
 				// item path
 				const sr_item = this._a_items[+sn_item];
 

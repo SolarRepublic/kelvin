@@ -1,11 +1,11 @@
 
-import type {GenericItemController, ItemController} from './controller';
+import type {GenericItemController} from './controller';
 import type {KnownEsDatatypes, PartableDatatype, PrimitiveDatatypeToEsType, TaggedDatatypeToEsTypeGetter, TaggedDatatypeToEsTypeSetter} from './schema-types';
-import type {DomainCode, FieldPath, SerFieldPath, ItemCode, SerField, SerSchema, SerTaggedDatatype, SerTaggedDatatypeMap, SerFieldSwitch, FieldLabel, FieldCode, DomainLabel, SerFieldStruct} from './types';
+import type {DomainCode, FieldPath, SerFieldPath, ItemCode, SerField, SerSchema, SerTaggedDatatype, SerTaggedDatatypeMap, SerFieldSwitch, FieldLabel, DomainLabel, SerFieldStruct} from './types';
 
-import type {JsonValue, JsonObject, JsonArray, Dict} from '@blake.regalia/belt';
+import type {JsonValue, JsonObject, JsonArray} from '@blake.regalia/belt';
 
-import {ode, base93_to_buffer, buffer_to_base93, F_IDENTITY, fodemtv, __UNDEFINED, fold} from '@blake.regalia/belt';
+import {entries, base93_to_bytes, bytes_to_base93, F_IDENTITY, transform_values, __UNDEFINED, is_array, collapse} from '@blake.regalia/belt';
 
 import {Bug, SchemaError, SchemaWarning, TypeFieldNotWritableError, UnparseableSchemaError} from './errors';
 import {FieldArray} from './field-array';
@@ -26,31 +26,6 @@ export type TaggedDeserializer<xc_type extends TaggedDatatype> = (w_value: JsonV
 export type TaggedDefaulter<xc_type extends TaggedDatatype> = (a_path: FieldPath, k_this: RuntimeItem) => TaggedDatatypeToEsTypeGetter<xc_type>;
 
 type PrimitiveOrTaggedDatatype = PrimitiveDatatype | TaggedDatatype;
-
-// export type ItemSerializer<
-// 	xc_type extends PrimitiveOrTaggedDatatype=PrimitiveOrTaggedDatatype,
-// > = (w_value: xc_type extends PrimitiveDatatype
-// 	? PrimitiveDatatypeToEsType<xc_type>
-// 	: xc_type extends TaggedDatatype
-// 		? TaggedDatatypeToEsTypeSetter<xc_type>
-// 		: never,
-// 	a_path: FieldPath, k_this: RuntimeItem) => JsonValue;
-
-// export type ItemDeserializer<
-// 	xc_type extends PrimitiveOrTaggedDatatype=PrimitiveOrTaggedDatatype,
-// > = (w_value: JsonValue, a_path: FieldPath, k_this: RuntimeItem) => xc_type extends PrimitiveDatatype
-// 	? PrimitiveDatatypeToEsType<xc_type>
-// 	: xc_type extends TaggedDatatype
-// 		? TaggedDatatypeToEsTypeGetter<xc_type>
-// 		: never;
-
-// export type ItemDefaulter<
-// 	xc_type extends PrimitiveOrTaggedDatatype=PrimitiveOrTaggedDatatype,
-// > = () => xc_type extends PrimitiveDatatype
-// 	? PrimitiveDatatypeToEsType<xc_type>
-// 	: xc_type extends TaggedDatatype
-// 		? TaggedDatatypeToEsTypeGetter<xc_type>
-// 		: never;
 
 export type ItemSerializer<
 	w_backing extends JsonValue=JsonValue,
@@ -82,25 +57,10 @@ export type RuntimeItem<g_item extends object=GenericItem> = {
 	}>;
 } & g_item;
 
-export type ItemStruct<g_controller=GenericItemController> = g_controller extends ItemController<
-	infer g_schema,
-	infer g_item,
-	infer g_proto,
-	infer g_runtime,
-	infer s_domain,
-	infer si_domain,
-	infer a_parts,
-	infer f_schema,
-	infer g_parts
->
-	? g_item
-	: GenericItem;
-
 export const is_runtime_item = (z_item: unknown): z_item is RuntimeItem => !!(z_item as RuntimeItem)[$_TUPLE];
 
-
 const is_primitive_datatype = (z_field: SerTaggedDatatype[1]): z_field is PrimitiveDatatype => 'number' === typeof z_field;
-const is_tagged_datatype = (z_field: SerTaggedDatatype[1]): z_field is SerTaggedDatatype => Array.isArray(z_field);
+const is_tagged_datatype = (z_field: SerTaggedDatatype[1]): z_field is SerTaggedDatatype => is_array(z_field);
 
 type Router<
 	w_primitive=any,
@@ -134,7 +94,7 @@ const H_SERIALIZERS_PRIMITIVE: {
 	[PrimitiveDatatype.BIGINT]: (xg_value: bigint) => xg_value+'',
 	[PrimitiveDatatype.DOUBLE]: F_IDENTITY,
 	[PrimitiveDatatype.STRING]: F_IDENTITY,
-	[PrimitiveDatatype.BYTES]: (atu8_value: Uint8Array) => buffer_to_base93(atu8_value),
+	[PrimitiveDatatype.BYTES]: (atu8_value: Uint8Array) => bytes_to_base93(atu8_value),
 	[PrimitiveDatatype.OBJECT]: F_IDENTITY,
 };
 
@@ -146,7 +106,7 @@ const H_DESERIALIZERS_PRIMITIVE: {
 	[PrimitiveDatatype.BIGINT]: (sg_value: JsonValue) => BigInt(sg_value as string),
 	[PrimitiveDatatype.DOUBLE]: F_IDENTITY,
 	[PrimitiveDatatype.STRING]: F_IDENTITY,
-	[PrimitiveDatatype.BYTES]: (sb93_value: JsonValue) => base93_to_buffer(sb93_value as string),
+	[PrimitiveDatatype.BYTES]: (sb93_value: JsonValue) => base93_to_bytes(sb93_value as string),
 	[PrimitiveDatatype.OBJECT]: F_IDENTITY,
 };
 
@@ -166,8 +126,7 @@ const H_DEFAULTS_PRIMITIVE: {
 };
 
 
-// TODO make this compatible with primitive datatype versions
-export type SerdefaultsTuple2<
+export type SerdefaultsTuple<
 	xc_type extends PrimitiveOrTaggedDatatype=PrimitiveOrTaggedDatatype,
 	w_backing extends JsonValue=xc_type extends PrimitiveDatatype
 		? PrimitiveDatatypeToEsType<xc_type>
@@ -185,17 +144,6 @@ export type SerdefaultsTuple2<
 	ItemDefaulter<w_backing>,
 ];
 
-
-// TODO make this compatible with primitive datatype versions
-export type SerdefaultsTuple<
-	xc_tag extends TaggedDatatype=TaggedDatatype,
-> = [
-	TaggedSerializer<xc_tag>,
-	TaggedDeserializer<xc_tag>,
-	TaggedDefaulter<xc_tag>,
-];
-
-type insp = SerdefaultsTuple2<TaggedDatatype.REF>;
 
 type SubjectTree<w_leaf> = {
 	[z_key: string | number]: SubjectTree<w_leaf> | w_leaf;
@@ -231,7 +179,7 @@ const tagged_serdefaults = <
 >(
 	a_datatype: [xc_tag, ...SerTaggedDatatypeMap[xc_tag]],
 	k_item: GenericItemController
-): SerdefaultsTuple2<xc_tag, JsonValue, any> => {
+): SerdefaultsTuple<xc_tag, JsonValue, any> => {
 	const [xc_tag, w_info, ...a_tail] = a_datatype;
 
 	switch(xc_tag) {
@@ -357,7 +305,6 @@ const tagged_serdefaults = <
 				(a_items, a_path, g_runtime) => FieldSet.create(a_items as JsonArray, f_ser, f_deser, f_def, a_path, g_runtime),
 
 				// default
-				// (a_path, g_runtime) => FieldSet.create([], f_ser, f_deser, f_def, a_path, g_runtime),
 				(a_path, g_runtime) => [],
 			];
 		}
@@ -377,7 +324,7 @@ const tagged_serdefaults = <
 				(a_items, a_path, g_runtime) => a_serdefaults.map((a_serdef, i_field) => a_serdef[1](
 					(a_items as JsonArray)[i_field], [...a_path, i_field], g_runtime)),
 
-				// defaults
+				// default
 				(a_path, g_runtime) => a_serdefaults.map(a_serdef => a_serdef[2](a_path, g_runtime)),
 			];
 		}
@@ -385,45 +332,39 @@ const tagged_serdefaults = <
 		// struct
 		case TaggedDatatype.STRUCT: {
 			// transform each struct member's datatype into a serdef
-			const h_serdefs = fodemtv(w_info as SerFieldStruct, z_field => unwrap_datatype(z_field, k_item));
+			const h_serdefs = transform_values(w_info as SerFieldStruct, z_field => unwrap_datatype(z_field, k_item));
 
 			// return joint serdef
 			return [
 				// serializer
-				(h_items, a_path, g_runtime) => Object.values(fodemtv(h_serdefs, ([f_ser,, f_def], si_field) => si_field in h_items
+				(h_items, a_path, g_runtime) => Object.values(transform_values(h_serdefs, ([f_ser,, f_def], si_field) => si_field in h_items
 					? f_ser(h_items[si_field], [...a_path, si_field], g_runtime): f_def(a_path, g_runtime))),
 
-				// // deserializer
-				// (a_items, a_path, g_runtime) => fodemtv(h_serdefs, ([, f_deser, f_def], si_field, i_field) => {
-				// 	const z_item = (a_items as JsonValue[])[i_field];
-
-				// 	return f_deser(z_item, [...a_path, si_field], g_runtime);
-				// }),
-
+				// deserializer
 				(a_items, a_path, g_runtime) => FieldStruct.create(h_serdefs, a_items as JsonArray, a_path, g_runtime),
 
 				// default
-				(a_path, g_runtime) => fodemtv(h_serdefs, ([,, f_def]) => f_def(a_path, g_runtime)),
+				(a_path, g_runtime) => transform_values(h_serdefs, ([,, f_def]) => f_def(a_path, g_runtime)),
 			];
 		}
 
 		// registry
 		case TaggedDatatype.REGISTRY: {
 			// transform each struct member's datatype into a serdef
-			const h_serdefs = fodemtv(w_info as SerFieldStruct, z_field => unwrap_datatype(z_field, k_item));
+			const h_serdefs = transform_values(w_info as SerFieldStruct, z_field => unwrap_datatype(z_field, k_item));
 
 			// return joint serdef
 			return [
 				// serializer
-				(h_items, a_path, g_runtime) => fodemtv(h_serdefs, ([f_ser,, f_def], si_field) => si_field in h_items
+				(h_items, a_path, g_runtime) => transform_values(h_serdefs, ([f_ser,, f_def], si_field) => si_field in h_items
 					? f_ser(h_items[si_field], [...a_path, si_field], g_runtime): f_def(a_path, g_runtime)),
 
 				// deserializer
-				(h_items, a_path, g_runtime) => fodemtv(h_serdefs, ([, f_deser], si_field) => si_field in (h_items as JsonObject)
+				(h_items, a_path, g_runtime) => transform_values(h_serdefs, ([, f_deser], si_field) => si_field in (h_items as JsonObject)
 					? f_deser((h_items as JsonObject)[si_field], [...a_path, si_field], g_runtime): __UNDEFINED),
 
 				// default
-				(a_path, g_runtime) => fodemtv(h_serdefs, ([,, f_def]) => f_def(a_path, g_runtime)),
+				(a_path, g_runtime) => transform_values(h_serdefs, ([,, f_def]) => f_def(a_path, g_runtime)),
 			];
 		}
 
@@ -441,7 +382,7 @@ const tagged_serdefaults = <
 					}
 
 					// transform into serialized form
-					fold(hm_items.entries(), ([z_key, w_value]) => {
+					collapse(hm_items.entries(), ([z_key, w_value]) => {
 						const i_code = refish_to_code(z_key);
 
 						if(!i_code) {
@@ -449,9 +390,7 @@ const tagged_serdefaults = <
 							throw Error(`Attempted to set map entry having key that refers to non-existent item: ${z_key}`);
 						}
 
-						return {
-							[i_code]: f_ser(w_value, [...a_path, i_code], g_runtime),
-						};
+						return [i_code, f_ser(w_value, [...a_path, i_code], g_runtime)];
 					});
 				},
 
@@ -476,61 +415,7 @@ const tagged_serdefaults = <
 
 				// default
 				(a_path, g_runtime) => ({}),
-					// // lookup controller for target domain
-					// const k_controller = g_runtime[$_CONTROLLER].hub.vault.controllerFor(w_info as DomainLabel);
-					// if(!k_controller) {
-					// 	throw Error(`Failed to find item controller while attempting to deserialize MapRef for domain "${w_info}"`);
-					// }
-
-					// return FieldMapRef.create(k_controller, {}, f_ser, f_deser, f_def, a_path, g_runtime);
-				// },
 			];
-
-			// return primitive_or_tagged(w_info, {
-			// 	// primitive item type
-			// 	primitive: xc_type => [
-			// 		// serializer
-			// 		hm_items => hm_items instanceof FieldMapRef
-			// 			? FieldMapRef.serialize(hm_items)
-			// 			: FieldMapRef.create()
-			// 			//  [...hm_items.entries()].map(([z_key, w_value]) => {
-			// 			// 	H_SERIALIZERS_PRIMITIVE[xc_type](w_value as never);
-			// 			// }),
-
-			// 		// deserializer
-			// 		a_items => FieldMapRef.create(
-			// 			a_items as JsonArray,
-			// 			H_SERIALIZERS_PRIMITIVE[xc_type],
-			// 			H_DESERIALIZERS_PRIMITIVE[xc_type],
-			// 			H_DEFAULTS_PRIMITIVE[xc_type]
-			// 		),
-
-			// 		// default
-			// 		() => [],
-			// 	],
-
-			// 	// tagged item type
-			// 	tagged(...a_ser) {
-			// 		// get serdefaults
-			// 		const [f_serializer, f_deserializer, f_default] = tagged_serdefaults(a_ser, k_item);
-
-			// 		// structure
-			// 		return [
-			// 			// serializer
-			// 			(as_items, a_path, g_runtime) => Array.from(as_items as Set<any>).map((w_item, i_item) => f_serializer(w_item, [...a_path, i_item], g_runtime)),
-
-			// 			// deserializer
-			// 			(a_items, a_path, g_runtime) => {
-			// 				debugger;
-			// 				throw Error(`MapRefs of members having complex datatypes not yet implemented`);
-			// 				// (a_items as JsonArray).map((w_item, i_item) => f_deserializer(w_item, [...a_path, i_item], g_runtime)),
-			// 			},
-
-			// 			// default
-			// 			() => [],
-			// 		];
-			// 	},
-			// });
 		}
 
 		// dict
@@ -542,7 +427,7 @@ const tagged_serdefaults = <
 				// serializer; serialize if already of correct type
 				(h_items, a_path, g_runtime) => FieldDict.serialize(h_items as {})
 					// otherwise, transform into serialized form
-					|| fodemtv(h_items as {}, (w_value, si_member) => f_ser(w_value, [...a_path, si_member], g_runtime)),
+					|| transform_values(h_items as {}, (w_value, si_member) => f_ser(w_value, [...a_path, si_member], g_runtime)),
 
 					// deserializer
 				(h_items, a_path, g_runtime) => FieldDict.create(
@@ -557,49 +442,12 @@ const tagged_serdefaults = <
 					// default
 				() => ({}),
 			];
-
-			// return primitive_or_tagged(w_info, {
-			// 	// primitive item type
-			// 	primitive: xc_type => [
-			// 		// serializer
-			// 		h_items => fodemtv(h_items, w_value => H_SERIALIZERS_PRIMITIVE[xc_type](w_value as never)),
-
-			// 		// deserializer
-			// 		h_items => FieldDict.create(
-			// 			h_items as JsonObject,
-			// 			H_SERIALIZERS_PRIMITIVE[xc_type],
-			// 			H_DESERIALIZERS_PRIMITIVE[xc_type],
-			// 			H_DEFAULTS_PRIMITIVE[xc_type]
-			// 		),
-
-			// 		// default
-			// 		() => [],
-			// 	],
-
-			// 	// tagged item type
-			// 	tagged(...a_ser) {
-			// 		// get serdefaults
-			// 		const [f_serializer, f_deserializer, f_default] = tagged_serdefaults(a_ser, k_item);
-
-			// 		// structure
-			// 		return [
-			// 			// serializer
-			// 			(h_items, a_path, g_runtime) => fodemtv(h_items as Dict<any>, (w_item, si_key) => f_serializer(w_item, [...a_path, si_key], g_runtime)),
-
-			// 			// deserializer
-			// 			(h_items, a_path, g_runtime) => fodemtv(h_items as JsonObject, (w_item, si_key) => f_deserializer(w_item, [...a_path, si_key], g_runtime)),
-
-			// 			// default
-			// 			() => [],
-			// 		];
-			// 	},
-			// });
 		}
 
 		// switch
 		case TaggedDatatype.SWITCH: {
 			// transform each switch option's datatype into a serdef
-			const h_options = fodemtv(a_tail[0] as SerFieldSwitch[1], z_field => unwrap_datatype(z_field, k_item));
+			const h_options = transform_values(a_tail[0] as SerFieldSwitch[1], z_field => unwrap_datatype(z_field, k_item));
 
 			// return joint serdef
 			return [
@@ -819,11 +667,11 @@ const H_DESCRIPTORS_FIELDS_PRIMITIVE: {
 
 	[PrimitiveDatatype.BYTES]: i_field => ({
 		get() {
-			return base93_to_buffer(this[$_TUPLE][i_field] as string);
+			return base93_to_bytes(this[$_TUPLE][i_field] as string);
 		},
 
 		set(atu8_value) {
-			this[$_TUPLE][i_field] = buffer_to_base93(atu8_value);
+			this[$_TUPLE][i_field] = bytes_to_base93(atu8_value);
 		},
 	}),
 
@@ -856,7 +704,7 @@ const tagged_descriptor = <
 
 	return {
 		get() {
-			return f_deserializer(this[$_TUPLE][i_field] as JsonValue, a_path, this);
+			return f_deserializer(this[$_TUPLE][i_field], a_path, this);
 		},
 
 		// special handling for switch
@@ -879,27 +727,6 @@ const tagged_descriptor = <
 	};
 };
 
-// const runtime_subitem = (
-// 	k_item: RuntimeItem,
-// 	i_field: number,
-// 	z_value: any
-// ): RuntimeItem => Object.assign(z_value, {
-// 	[$_CODE]: {
-// 		get() {
-// 			throw Error(`Cannot use substruct of an item as a reference`);
-// 		},
-// 	},
-// 	[$_CONTROLLER]: {
-// 		value: k_item[$_CONTROLLER],
-// 	},
-// 	[$_TUPLE]: {
-// 		value: k_item[$_TUPLE][i_field],
-// 	},
-// 	[$_LINKS]: {
-// 		value: {},
-// 	},
-// });
-
 function prototype_subfield(
 	z_datatype: SerField,
 	k_item: GenericItemController,
@@ -921,7 +748,7 @@ function prototype_subfield(
 		h_props[a_path.at(-1)!] = f_descriptor(i_field, a_path);
 	}
 	// tagged; build descriptor
-	else if(Array.isArray(z_datatype)) {
+	else if(is_array(z_datatype)) {
 		h_props[a_path.at(-1)!] = tagged_descriptor(i_field, a_path, z_datatype, k_item);
 	}
 	// unrecognized
@@ -943,7 +770,7 @@ export function item_prototype(a_schema: SerSchema, k_item: GenericItemControlle
 	let i_field = 0;
 
 	// each part key
-	for(const [si_key, z_datatype] of ode(h_keys)) {
+	for(const [si_key, z_datatype] of entries(h_keys)) {
 		// lookup descriptor
 		const f_descriptor = H_DESCRIPTORS_PARTS[z_datatype](b_writable);
 
@@ -957,7 +784,7 @@ export function item_prototype(a_schema: SerSchema, k_item: GenericItemControlle
 	}
 
 	// each field
-	for(const [si_key, z_datatype] of ode(h_fields)) {
+	for(const [si_key, z_datatype] of entries(h_fields)) {
 		// increment counter
 		i_field += 1;
 
