@@ -134,8 +134,7 @@ export class ItemController<
 		const g_descriptor_schema = this._g_descriptor_schema = item_prototype(a_schema, k_generic, false);
 
 		// get descriptor from proto
-		// eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-		const g_descriptor_proto = this._g_descriptor_proto = f_proto? Object.getOwnPropertyDescriptors(f_proto(F_IDENTITY as any)): {};
+		const g_descriptor_proto = this._g_descriptor_proto = f_proto? Object.getOwnPropertyDescriptors(f_proto(F_IDENTITY)): {};
 
 		// merge and create prototype
 		this._g_prototype = Object.create({}, Object.assign({}, g_descriptor_proto, g_descriptor_schema));

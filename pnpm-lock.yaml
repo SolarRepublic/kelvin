@@ -6,8 +6,8 @@ settings:
 
 dependencies:
   '@blake.regalia/belt':
-    specifier: ^0.35.0
-    version: 0.35.0
+    specifier: ^0.35.1
+    version: 0.35.1
 
 devDependencies:
   '@blake.regalia/eslint-config-elite':
@@ -84,8 +84,8 @@ packages:
     resolution: {integrity: sha512-VuL8sfhn+lYGAow5xht5jjV75k0CfudZpWI0IWdgc2uj20X6UfdLdq4BuA6CAnVEkyWb/NVhU6cs1o5TWtzS0A==}
     dev: true
 
-  /@blake.regalia/belt@0.35.0:
-    resolution: {integrity: sha512-nxLBfoCfjlEEmN6pqdAucFejS/pi3QRQEWsWkiXNsoDW6vUBYQv1c59M20LycT71E8rl2u+Vduu6hk3t7+1A7w==}
+  /@blake.regalia/belt@0.35.1:
+    resolution: {integrity: sha512-2xY3ewXeG7h2NSTrAuJhCz+vCkfSd8K273I2akX4mNLTZY3gJqXGZBjx5IiatKdpPbmWsbjZRKKfkH2n37MWhQ==}
     dev: false
 
   /@blake.regalia/eslint-config-elite@0.4.4(@typescript-eslint/parser@7.4.0)(eslint@8.57.0)(typescript@5.4.3):
