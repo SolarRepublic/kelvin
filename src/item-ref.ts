@@ -89,4 +89,8 @@ export class ItemRef<
 	get [Symbol.toStringTag](): string {
 		return `[object ItemRef{code:${this.code}; domain:${this.domain}}]`;
 	}
+
+	[Symbol.toPrimitive](s_hint?: string): number {
+		return 'string' === s_hint? this.code: this.code;
+	}
 }

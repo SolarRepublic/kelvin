@@ -1,5 +1,5 @@
 
-import {ode} from '@blake.regalia/belt';
+import {ode, timeout} from '@blake.regalia/belt';
 
 import {ItemRef} from 'src/item-ref';
 import {expect} from 'vitest';
@@ -84,11 +84,25 @@ const {g_bazqux_1, g_bazqux_2, g_bazqux_3} = g_init_bazquxes;
 
 // console.log(g_ref_round);
 
+debugger;
 await BazQuxes.put(g_bazqux_2);
 await BazQuxes.put(g_bazqux_3);
 
+debugger;
 const g_read_bq2 = (await BazQuxes.get(g_bazqux_2))!;
 const g_read_bq3 = (await BazQuxes.get(g_bazqux_3))!;
+
+// resolve ref part
+debugger;
+g_read_bq2.array_str;
+const g_part = g_read_bq2.ref_part;
+debugger;
+g_part?.then((g_x) => {
+	debugger;
+	return g_x;
+});
+
+await timeout(60e16);
 
 debugger;
 if(BazQuxesType.QUX === g_read_bq3.type) {

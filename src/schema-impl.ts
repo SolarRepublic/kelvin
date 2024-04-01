@@ -5,13 +5,12 @@ import type {DomainLabel, FieldLabel, KnownSerTaggedDatatype, SerField, SerField
 
 import type {Dict} from '@blake.regalia/belt';
 
-import {__UNDEFINED, transform_values, is_array, is_dict_es, entries} from '@blake.regalia/belt';
+import {__UNDEFINED, transform_values, is_array, is_dict_es, entries, is_number, is_symbol} from '@blake.regalia/belt';
 
 import {NL_MAX_PART_FIELDS} from './constants';
 
 import {SchemaError} from './errors';
 import {PrimitiveDatatype, TaggedDatatype} from './schema-types';
-
 
 export type RootSchemaBuilder<a_parts extends AcceptablePartTuples> = SchemaBuilder<SchemaSimulator<1>, a_parts, Dict<SchemaAnnotation>>;
 
@@ -49,7 +48,7 @@ const spec_for_ser: (
 	str: (w_part?: any) => f_wrapper(PrimitiveDatatype.STRING, w_part),
 	bytes: () => f_wrapper(PrimitiveDatatype.BYTES),
 	obj: () => f_wrapper(PrimitiveDatatype.OBJECT),
-	ref: g_item => f_wrapper([TaggedDatatype.REF, g_item.domain]),
+	ref: (g_item: any, i_part?: any) => f_wrapper([TaggedDatatype.REF, g_item.domain], i_part),
 	refSelf: () => f_wrapper([TaggedDatatype.REF, '' as DomainLabel]),
 
 	get array() {
@@ -196,7 +195,7 @@ function reshape_fields(
 		const sr_local = sr_path+'.'+si_key;
 
 		// part key
-		if('symbol' === typeof z_symbol) {
+		if(is_symbol(z_symbol)) {
 			// not allowed here
 			if(!a_simulators) {
 				throw new SchemaError(`part keys not allowed in nested fields; violation at ${sr_local}`);
@@ -216,8 +215,18 @@ function reshape_fields(
 			}
 
 			// not primitive
-			if('number' !== typeof w_type) {
-				throw new SchemaError(`cannot use complex type part key; violation found at ${sr_local} field`);
+			if(!is_number(w_type)) {
+				// TODO: consider
+
+				// tagged ref type; replace with int
+				if(is_array(w_type) && TaggedDatatype.REF === w_type[0]) {
+					// w_type = PrimitiveDatatype.INT;
+					// permit
+					console.log('permitted');
+				}
+				else {
+					throw new SchemaError(`cannot use complex type ${typeof w_type} (${JSON.stringify(w_type)}) part key; violation found at ${sr_local} field`);
+				}
 			}
 
 			// update last part

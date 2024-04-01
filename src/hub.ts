@@ -10,7 +10,7 @@ import {bytes_to_base93, transform_values, fold, is_array, entries, map_entries,
 
 import {random_bytes} from '@solar-republic/crypto';
 
-import {NB_BUCKET_CONTAINER, NB_BUCKET_CONTENTS, NB_BUCKET_LABEL, XT_ROTATION_DEBOUNCE, XT_ROTATION_WAIT_MAX} from './constants';
+import {NB_BUCKET_CONTAINER, NB_BUCKET_CONTENTS, NB_BUCKET_LABEL, SX_KEY_PART_DELIMITER, XT_ROTATION_DEBOUNCE, XT_ROTATION_WAIT_MAX} from './constants';
 import {index_to_b92} from './data';
 import {Bug, ClientBehindError, MigrationError, MissingMigrationError, MissingMigrationRouterError, SchemaError, SchemaWarning} from './errors';
 import {DomainStorageStrategy} from './types';
@@ -383,7 +383,7 @@ export class VaultHub {
 	 */
 	itemIdent(si_domain: DomainLabel, sr_item: ItemPath): ItemIdent {
 		// encode domain and build item ident
-		return this._h_domain_codes[si_domain]+':'+sr_item as ItemIdent;
+		return this._h_domain_codes[si_domain]+SX_KEY_PART_DELIMITER+sr_item as ItemIdent;
 	}
 
 	/**
@@ -425,7 +425,7 @@ export class VaultHub {
 		}
 
 		// build item ident
-		const si_item = sb92_domain+':'+sr_item as ItemIdent;
+		const si_item = sb92_domain+SX_KEY_PART_DELIMITER+sr_item as ItemIdent;
 
 		// prep to locate or create code of item
 		let i_code = this._h_items[si_item];
@@ -490,7 +490,7 @@ export class VaultHub {
 			if(r_filter && !r_filter.test(si_item)) continue;
 
 			// split item ident into domain code and item path
-			const i_split = si_item.indexOf(':');
+			const i_split = si_item.indexOf(SX_KEY_PART_DELIMITER);
 
 			// extract domain code
 			const sb92_domain = si_item.slice(0, i_split) as DomainCode;

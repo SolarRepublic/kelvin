@@ -65,19 +65,19 @@ export const controllers = (k_client: Vault) => {
 		client: k_client,
 		domain: 'chains',
 
-		schema: (k0, xc_ns: ChainNamespace, si_ref: string) => ({
-			ns: k0.int(xc_ns),
-			ref: k0.str(si_ref),
-			data: k0.str(),
+		schema: (k, xc_ns: ChainNamespace, si_ref: string) => ({
+			ns: k.int(xc_ns),
+			ref: k.str(si_ref),
+			data: k.str(),
 
-			switch0: k0.switch('ns', xc_ns, {
-				[ChainNamespace.UNKNOWN]: k1 => k1.int(),
-				[ChainNamespace.COSMOS]: k1 => k1.str(),
+			switch0: k.switch('ns', xc_ns, {
+				[ChainNamespace.UNKNOWN]: k.int(),
+				[ChainNamespace.COSMOS]: k.str(),
 			}),
 
-			switch1: k0.switch('ns', xc_ns, {
-				[ChainNamespace.UNKNOWN]: k1 => k1.int(),
-				[ChainNamespace.COSMOS]: k1 => k1.str(),
+			switch1: k.switch('ns', xc_ns, {
+				[ChainNamespace.UNKNOWN]: k.int(),
+				[ChainNamespace.COSMOS]: k.str(),
 			}),
 		}),
 

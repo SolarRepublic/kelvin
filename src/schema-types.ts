@@ -7,6 +7,7 @@ import type {FieldArray} from './field-array';
 import type {RuntimeItem} from './item-proto';
 import type {ItemRef, Refish} from './item-ref';
 import type {AllValues, KvTuplesToObject, UnionToTuple, FilterDrop} from './meta';
+import type {DomainLabel, ItemCode, KnownSerTaggedDatatype} from './types';
 import type {Dict, JsonObject, JsonPrimitive, NaiveBase64} from '@blake.regalia/belt';
 
 
@@ -385,6 +386,7 @@ export type SchemaSimulator<
 		int(w_part?: number): w_return;
 		bigint(w_part?: bigint): w_return;
 		str(w_part?: string): w_return;
+		ref(g_controller: GenericItemController, i_part: ItemCode): w_return;
 	};
 }[b_partable]) & {
 	/* eslint-disable @typescript-eslint/member-ordering */
@@ -481,6 +483,9 @@ type TaggedSpecifier = {
 
 	set: ChainedSet;
 
+	/**
+	 * Creates a dictionary schema, where arbitray keys can be used but all values must be of the given type.
+	 */
 	dict: ChainedDict
 		& (<
 			s_keys extends string,
@@ -498,6 +503,23 @@ type TaggedSpecifier = {
 		h_subschema: h_subschema,
 	): DatatypeStruct<h_subschema>;
 
+	/**
+	 * Creates a registry of named items, where only the given keys are allowed to be used and whose values
+	 * must be of the specified datatype, but entries are allowed to be omitted.
+	 * 
+	 * Useful for schemas where a known set of optional attributes is used to describe an object.
+	 * 
+	 * Example:
+	 * ```ts
+	 * (k) => k.registry({
+	 * 	color: k.str(),
+	 * 	icon: k.str<HttpsUrl>(),
+	 * 	aliases: k.dict.str(),
+	 * })
+	 * ```
+	 * 
+	 * @param h_subschema - the subchema specifying the appropriate types for each key
+	 */
 	registry<
 		h_subschema extends StructuredSchema,
 	>(
@@ -604,6 +626,11 @@ export type PartableSchemaSpecifier = SchemaSpecifier & {
 	int<w_subtype extends number>(n_part: w_subtype): DatatypeInt<w_subtype, 1>;
 	bigint<w_subtype extends bigint>(xg_part: w_subtype): DatatypeBigint<w_subtype, 1>;
 	str<w_subtype extends string=string>(si_part: w_subtype): DatatypeString<w_subtype, 1>;
+	ref<
+		dc_controller extends GenericItemController,
+	>(g_controller: dc_controller, i_part: ItemCode): dc_controller extends GenericItemController<infer g_thing>
+		? DatatypeRef<ItemRef<g_thing>>
+		: never;
 };
 
 /**
@@ -637,6 +664,25 @@ export type StructFromController<
 	infer f_schema,
 	infer g_parts
 >? g_item: w_else;
+
+
+/**
+ * Extracts the runtime item from a controller type
+ */
+export type RuntimeItemFromController<
+	k_controller,
+	w_else=never,
+> = k_controller extends ItemController<
+	infer g_schema,
+	infer g_item,
+	infer g_proto,
+	infer g_runtime,
+	infer s_domain,
+	infer si_domain,
+	infer a_parts,
+	infer f_schema,
+	infer g_parts
+>? g_runtime: w_else;
 
 
 /* Tests */

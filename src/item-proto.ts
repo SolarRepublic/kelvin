@@ -7,6 +7,7 @@ import type {JsonValue, JsonObject, JsonArray} from '@blake.regalia/belt';
 
 import {entries, base93_to_bytes, bytes_to_base93, F_IDENTITY, transform_values, __UNDEFINED, is_array, collapse} from '@blake.regalia/belt';
 
+import {SX_KEY_PART_DELIMITER} from './constants';
 import {Bug, SchemaError, SchemaWarning, TypeFieldNotWritableError, UnparseableSchemaError} from './errors';
 import {FieldArray} from './field-array';
 import {FieldDict} from './field-dict';
@@ -57,9 +58,19 @@ export type RuntimeItem<g_item extends object=GenericItem> = {
 	}>;
 } & g_item;
 
+/**
+ * Tests whether the given value is a {@link RuntimeItem} and narrows its type
+ */
 export const is_runtime_item = (z_item: unknown): z_item is RuntimeItem => !!(z_item as RuntimeItem)[$_TUPLE];
 
+/**
+ * Tests whether the given field is a primitive datatype and narrows its type
+ */
 const is_primitive_datatype = (z_field: SerTaggedDatatype[1]): z_field is PrimitiveDatatype => 'number' === typeof z_field;
+
+/**
+ * Tests whether the given field is a tagged datatype and narrows its type
+ */
 const is_tagged_datatype = (z_field: SerTaggedDatatype[1]): z_field is SerTaggedDatatype => is_array(z_field);
 
 type Router<
@@ -174,6 +185,78 @@ const unwrap_datatype = (z_datatype: SerTaggedDatatype[1], k_item: GenericItemCo
 }) as SerdefaultsTuple;
 
 
+/**
+ * Serializes an item ref into its code, while updating links
+ */
+const serialize_ref = (
+	k_ref: RuntimeItem | ItemRef | null,
+	a_path: FieldPath,
+	w_info: DomainLabel | '',
+	g_runtime: RuntimeItem
+) => {
+	// prep referenced item's code
+	let i_code = 0 as ItemCode;
+
+	// not intentional null
+	if(null !== k_ref) {
+		// resolve item code
+		i_code = (k_ref as RuntimeItem)[$_CODE] || (k_ref as ItemRef).code;
+
+		// no code
+		if(!i_code) {
+			throw Error(`Cannot assign to ${a_path.join('.')} property a reference item that has not yet been saved to vault`);
+		}
+
+		// normalize to controller
+		const k_controller = (k_ref as RuntimeItem)[$_CONTROLLER] || (k_ref as ItemRef).controller;
+
+		// resolve domain
+		const si_domain_ref = k_controller.domain;
+
+		// wrong domain
+		if(w_info && w_info !== si_domain_ref) {
+			throw Error(`Cannot assign to ${a_path.join('.')} property a reference item in the "${si_domain_ref}" domain; must be in the "${w_info}" domain`);
+		}
+	}
+
+	// actual ref domain (empty string signifies self)
+	const si_domain_actual = w_info as DomainLabel || g_runtime[$_CONTROLLER].domain;
+
+	// lookup code
+	const sb92_domain = g_runtime[$_CONTROLLER].hub.encodeDomain(si_domain_actual);
+
+	// could not encode domain
+	if(!sb92_domain) {
+		throw Error(`Failed to encode domain "${si_domain_actual}" while attempting to assign item reference to ${a_path.join('.')}`);
+	}
+
+	// lookup/create links staging struct
+	const g_links = g_runtime[$_LINKS][sb92_domain] ??= {
+		remove: {},
+		insert: {},
+	};
+
+	// path ident
+	const sr_path = a_path.slice(1).join('.') as SerFieldPath;
+
+	// previous item ref might exist
+	if(g_runtime[$_CODE]) {
+		// removing/replacing previous
+		const g_prev = access_path<KnownEsDatatypes>(g_runtime, a_path.slice(1));
+		if(g_prev instanceof ItemRef) {
+			// only remove the stored item code
+			g_links.remove[sr_path] ??= g_prev.code;
+		}
+	}
+
+	// ref is present; only store the latest write
+	if(i_code) g_links.insert[sr_path] = i_code;
+
+	// return item code (encoding 0 for null)
+	return i_code;
+};
+
+
 const tagged_serdefaults = <
 	xc_tag extends TaggedDatatype,
 >(
@@ -188,68 +271,7 @@ const tagged_serdefaults = <
 		// ref
 		case TaggedDatatype.REF: return [
 			// ref serializer
-			(k_ref: RuntimeItem | ItemRef, a_path, g_runtime) => {
-				// prep referenced item's code
-				let i_code = 0 as ItemCode;
-
-				// not intentional null
-				if(null !== k_ref) {
-					// resolve item code
-					i_code = (k_ref as RuntimeItem)[$_CODE] || (k_ref as ItemRef).code;
-
-					// no code
-					if(!i_code) {
-						throw Error(`Cannot assign to ${a_path.join('.')} property a reference item that has not yet been saved to vault`);
-					}
-
-					// normalize to controller
-					const k_controller = (k_ref as RuntimeItem)[$_CONTROLLER] || (k_ref as ItemRef).controller;
-
-					// resolve domain
-					const si_domain_ref = k_controller.domain;
-
-					// wrong domain
-					if(w_info && w_info !== si_domain_ref) {
-						throw Error(`Cannot assign to ${a_path.join('.')} property a reference item in the "${si_domain_ref}" domain; must be in the "${w_info}" domain`);
-					}
-				}
-
-				// actual ref domain (empty string signifies self)
-				const si_domain_actual = w_info as DomainLabel || g_runtime[$_CONTROLLER].domain;
-
-				// lookup code
-				const sb92_domain = g_runtime[$_CONTROLLER].hub.encodeDomain(si_domain_actual);
-
-				// could not encode domain
-				if(!sb92_domain) {
-					throw Error(`Failed to encode domain "${si_domain_actual}" while attempting to assign item reference to ${a_path.join('.')}`);
-				}
-
-				// lookup/create links staging struct
-				const g_links = g_runtime[$_LINKS][sb92_domain] ??= {
-					remove: {},
-					insert: {},
-				};
-
-				// path ident
-				const sr_path = a_path.slice(1).join('.') as SerFieldPath;
-
-				// previous item ref might exist
-				if(g_runtime[$_CODE]) {
-					// removing/replacing previous
-					const g_prev = access_path<KnownEsDatatypes>(g_runtime, a_path.slice(1));
-					if(g_prev instanceof ItemRef) {
-						// only remove the stored item code
-						g_links.remove[sr_path] ??= g_prev.code;
-					}
-				}
-
-				// ref is present; only store the latest write
-				if(i_code) g_links.insert[sr_path] = i_code;
-
-				// return item code (encoding 0 for null)
-				return i_code;
-			},
+			(k_ref: RuntimeItem | ItemRef, a_path, g_runtime) => serialize_ref(k_ref, a_path, w_info as DomainLabel, g_runtime),
 
 			// ref deserializer
 			(i_code, a_path, g_runtime) => i_code? new ItemRef(w_info? k_item.hub.vault.controllerFor(w_info as DomainLabel)!: g_runtime[$_CONTROLLER], i_code as ItemCode): null,
@@ -582,15 +604,15 @@ const H_DESCRIPTORS_PARTS: {
 					// stringify
 					const s_value = w_value+'';
 
-					// value contains reserved colon
-					if(s_value.includes(':')) {
+					// value contains reserved delimiter
+					if(s_value.includes(SX_KEY_PART_DELIMITER)) {
 						// OK in last part, just issue warning
 						if(i_field === this[$_CONTROLLER].partLength) {
-							console.warn(new SchemaWarning(`Colon character (":") noticed in value passed to ${a_path.join('.')}, which is a key part. Tolerated since it occurs at last position but could lead to critical issues if schema changes`));
+							console.warn(new SchemaWarning(`Reserved delimiter character ("${SX_KEY_PART_DELIMITER}") noticed in value passed to ${a_path.join('.')}, which is a key part. Tolerated since it occurs at last position but could lead to critical issues if schema changes`));
 						}
 						// forbidden elsewhere
 						else {
-							throw new SchemaError(`Colon character (":") noticed in value passed to ${a_path.join('.')}. Not allowed here`);
+							throw new SchemaError(`Reserved delimiter character ("${SX_KEY_PART_DELIMITER}") noticed in value passed to ${a_path.join('.')}. Not allowed here`);
 						}
 					}
 
@@ -603,6 +625,37 @@ const H_DESCRIPTORS_PARTS: {
 					throw new TypeFieldNotWritableError(a_path.join('.'));
 				},
 			},
+	}),
+};
+
+
+// descriptors for part keys
+const H_DESCRIPTORS_TAGGED_PARTS: {
+	[xc_type in TaggedDatatype | TaggedDatatype.UNKNOWN]: (b_writable: boolean, ...a_args: unknown[]) => (i_field: number, a_path: FieldPath) => {
+		get(this: RuntimeItem): TaggedDatatypeToEsTypeGetter<xc_type>;
+		set(this: RuntimeItem, w_value: never): void;
+	};
+} = {
+	[TaggedDatatype.REF]: (b_writable, si_domain: DomainLabel) => (i_field: number, a_path: FieldPath) => ({
+		get() {
+			// ref item code
+			const i_code = this[$_TUPLE][i_field] as ItemCode;
+
+			// lookup controller
+			const k_controller = this[$_CONTROLLER].hub.vault.controllerFor(si_domain);
+
+			// controller not found
+			if(!k_controller) {
+				throw Error(`Failed to resolve reference to item in '${si_domain}' domain at ${a_path.join(SX_KEY_PART_DELIMITER)}`);
+			}
+
+			// return
+			return i_code? new ItemRef(k_controller, i_code): null;
+		},
+
+		set(w_value: RuntimeItem | ItemRef | null) {
+			this[$_TUPLE][i_field] = serialize_ref(w_value, a_path, si_domain, this);
+		},
 	}),
 };
 
@@ -772,7 +825,9 @@ export function item_prototype(a_schema: SerSchema, k_item: GenericItemControlle
 	// each part key
 	for(const [si_key, z_datatype] of entries(h_keys)) {
 		// lookup descriptor
-		const f_descriptor = H_DESCRIPTORS_PARTS[z_datatype](b_writable);
+		const f_descriptor = is_array(z_datatype)
+			? H_DESCRIPTORS_TAGGED_PARTS[z_datatype[0] as TaggedDatatype](b_writable, ...z_datatype.slice(1))
+			: H_DESCRIPTORS_PARTS[z_datatype](b_writable);
 
 		// not found
 		if(!f_descriptor) {

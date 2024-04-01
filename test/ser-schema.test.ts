@@ -1,8 +1,9 @@
-import type {SchemaBuilder, PartableSchemaSpecifier} from 'src/schema-types';
+import type {SchemaBuilder, PartableSchemaSpecifier} from '../src/schema-types';
 
-import {interpret_schema} from 'src/schema-impl';
-import {PrimitiveDatatype, TaggedDatatype} from 'src/schema-types';
 import {describe, expect, it} from 'vitest';
+
+import {interpret_schema} from '../src/schema-impl';
+import {PrimitiveDatatype, TaggedDatatype} from '../src/schema-types';
 
 enum Category {
 	UNKNOWN=0,

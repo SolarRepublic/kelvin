@@ -17,6 +17,9 @@ export const NL_MAX_PART_FIELDS = 8;
 // pad character byte
 export const XB_CHAR_PAD = ' '.charCodeAt(0);
 
+// delimiter used for item key parts
+export const SX_KEY_PART_DELIMITER = '`';
+
 // maximum value of an unsigned 64-bit integer
 export const XG_UINT64_MAX = (2n ** 64n) - 1n;
 

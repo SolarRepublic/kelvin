@@ -10,8 +10,9 @@ import type {DomainLabel, ItemCode, ItemIdent, ItemPath, SchemaCode, SerFieldStr
 import type {Vault} from './vault';
 import type {Dict, JsonArray, JsonObject} from '@blake.regalia/belt';
 
-import {F_IDENTITY, __UNDEFINED, escape_regex, keys} from '@blake.regalia/belt';
+import {F_IDENTITY, __UNDEFINED, escape_regex, is_object, keys} from '@blake.regalia/belt';
 
+import {SX_KEY_PART_DELIMITER} from './constants';
 import {AppError} from './errors';
 import {apply_filter_struct} from './filter';
 import {$_CODE, $_CONTROLLER, $_LINKS, $_TUPLE, is_runtime_item, item_prototype} from './item-proto';
@@ -67,10 +68,7 @@ export class ItemController<
 	f_schema extends SchemaBuilder<PartableSchemaSpecifier, a_parts, g_schema>,
 	// f_schema extends RootSchemaBuilder<a_parts>,
 	g_parts extends PartFields<g_schema>,
-> implements
-	GenericItemController<g_item, g_runtime, g_schema, a_parts, g_parts>
-	// GenericItemController
-{
+> implements GenericItemController<g_item, g_runtime, g_schema, a_parts, g_parts> {
 	protected _k_vault: Vault;
 	protected _si_domain!: si_domain;
 	protected _xc_strategy: DomainStorageStrategy;
@@ -192,15 +190,18 @@ export class ItemController<
 			// remove from copy
 			delete g_copy[si_label];
 
+			// resolve value
+			const w_value = (g_criteria as Dict)[si_label as unknown as string];
+
 			// add to key parts
-			return (g_criteria as Dict)[si_label as unknown as string];
+			return is_object(w_value)? (w_value as unknown as ItemRef)[Symbol.toPrimitive](): w_value;
 		}) as unknown as Readonly<a_parts>, g_copy];
 	}
 
 	protected _item_path(g_criteria: g_parts): [ItemPath, JsonObject] {
 		const [a_parts, g_copy] = this._path_parts(g_criteria);
 
-		return [a_parts.join(':') as ItemPath, g_copy];
+		return [a_parts.join(SX_KEY_PART_DELIMITER) as ItemPath, g_copy];
 	}
 
 	protected _backing(a_parts: PartableEsType[]=[], a_fields: JsonArray=[], i_code=0 as ItemCode): PropertyDescriptorMap {
@@ -240,19 +241,25 @@ export class ItemController<
 
 	protected _create_item_filter = (a_parts: (string | null)[]): RegExp => {
 		// encode domain and escape regex
-		const sx_domain = escape_regex(this._k_hub.encodeDomain(this._si_domain)!)+':';
+		const sx_domain = escape_regex(this._k_hub.encodeDomain(this._si_domain)!)+SX_KEY_PART_DELIMITER;
 
 		// no value specified; use wildcard; otherwise use escaped regex
-		const a_patterns = a_parts.map(w_part => null === w_part? '[^:]*': escape_regex(w_part+''));
+		const a_patterns = a_parts.map(w_part => null === w_part? `[^${SX_KEY_PART_DELIMITER}]*`: escape_regex(w_part+''));
 
 		// construct regex
-		return new RegExp(`^${sx_domain}${a_patterns.join(':')}$`);
+		return new RegExp(`^${sx_domain}${a_patterns.join(SX_KEY_PART_DELIMITER)}$`);
 	};
 
+	/**
+	 * Returns this controller's domain key
+	 */
 	get domain(): si_domain {
 		return this._si_domain;
 	}
 
+	/**
+	 * Access the parent hub
+	 */
 	get hub(): VaultHub {
 		return this._k_hub;
 	}
@@ -261,15 +268,21 @@ export class ItemController<
 		const {_k_hub} = this;
 
 		// joining parts implicitly stringifies them
-		return _k_hub.itemCode(_k_hub.itemIdent(this._si_domain, a_parts.join(':') as ItemPath));
+		return _k_hub.itemCode(_k_hub.itemIdent(this._si_domain, a_parts.join(SX_KEY_PART_DELIMITER) as ItemPath));
 	}
 
+	/**
+	 * Get the item code of an instance identified by its named parts, scoped by its domain
+	 */
 	getItemCode(g_parts: g_parts): ItemCode | undefined {
 		const a_parts = this._path_parts(g_parts)[0];
 
 		return this._encode_item(a_parts);
 	}
 
+	/**
+	 * Get an absolute {@link ItemRef} to an item identified by its named parts
+	 */
 	getItemRef(g_parts: g_parts): ItemRef<g_item, g_runtime> | null {
 		const i_item = this.getItemCode(g_parts);
 
@@ -288,6 +301,9 @@ export class ItemController<
 		return !!this._encode_item(a_parts);
 	}
 
+	/**
+	 * Gets an item by its named parts
+	 */
 	get(g_parts: g_parts): Promise<g_runtime | undefined> {
 		// 
 		const a_parts = this._path_parts(g_parts)[0];
@@ -295,23 +311,34 @@ export class ItemController<
 		return this.getAt(a_parts);
 	}
 
-	_instantiate(si_item: ItemIdent, a_tuple: SerItem, i_item: ItemCode): g_runtime {
+	_enpart_ident(si_item: ItemIdent): a_parts {
 		// split ident by reserved delimiter
-		const a_split = si_item.split(':');
+		const a_split = si_item.split(SX_KEY_PART_DELIMITER);
 
 		// construct parts safely
-		const a_parts = [...a_split.slice(1, this._nl_parts), a_split.slice(this._nl_parts).join(':')] as a_parts;
-
-		// create instance
-		return Object.create(this._g_prototype, this._backing(a_parts, a_tuple, i_item));
+		return [...a_split.slice(1, this._nl_parts), a_split.slice(this._nl_parts).join(SX_KEY_PART_DELIMITER)] as a_parts;
 	}
 
+	_instantiate(si_item: ItemIdent, a_tuple: SerItem, i_item: ItemCode): g_runtime {
+		// create instance
+		return Object.create(this._g_prototype, this._backing(this._enpart_ident(si_item), a_tuple, i_item));
+	}
+
+	/**
+	 * Resolves an item code to an instance
+	 */
 	async getByCode(i_code: ItemCode | undefined, a_parts?: a_parts): Promise<g_runtime | undefined> {
 		// item not found
 		if(!i_code) return Promise.resolve(__UNDEFINED);
 
 		// get item content
 		const a_tuple = await this._k_hub.getItemContent(i_code);
+
+		// parts were not provided
+		if(!a_parts) {
+			// enpart decoded item ident
+			a_parts = this._enpart_ident(this._k_hub.decodeItem(i_code)!);
+		}
 
 		// create instance and set its local properties
 		const g_item = Object.create(this._g_prototype, this._backing(a_parts, a_tuple, i_code));
@@ -347,7 +374,7 @@ export class ItemController<
 
 		// return serialized item
 		return [
-			g_runtime[$_TUPLE].slice(1, i_break).join(':') as ItemPath,
+			g_runtime[$_TUPLE].slice(1, i_break).join(SX_KEY_PART_DELIMITER) as ItemPath,
 			g_runtime[$_TUPLE].slice(i_break),
 			{
 				links: g_runtime[$_LINKS],
@@ -355,6 +382,9 @@ export class ItemController<
 		];
 	}
 
+	/**
+	 * Gets an item by its discrete identifying parts
+	 */
 	async getAt<a_local extends Readonly<a_parts>>(
 		a_parts: a_local
 	): Promise<g_runtime | undefined> {

@@ -87,9 +87,10 @@ export const init_foobars = (k_client: Vault) => {
 		client: k_client,
 		domain: 'baz-quxes',
 
-		schema: (k, xc_type: BazQuxesType, s_id: string) => ({
+		schema: (k, xc_type: BazQuxesType, s_id: string, i_code: ItemCode) => ({
 			type: k.int(xc_type),
 			id: k.str(s_id),
+			ref_part: k.ref(FooBars, i_code),
 			on: k.int<Toggle>(),
 
 			ref: k.ref(FooBars),
@@ -206,6 +207,7 @@ export const init_bazquxes = (
 	const g_bazqux_1: BazQuxesStruct = {
 		type: BazQuxesType.UNKNOWN,
 		id: 'nil',
+		ref_part: FooBars.getItemRef(g_foobar_1),
 		on: Toggle.ON,
 
 		ref: null,
@@ -220,11 +222,13 @@ export const init_bazquxes = (
 		dict_str_str: {},
 		dict_base64_str: {},
 		switch: 9,
+		cap: [],
 	};
 
 	const g_bazqux_2: BazQuxesStruct = {
 		type: BazQuxesType.BAZ,
 		id: 'baz',
+		ref_part: FooBars.getItemRef(g_foobar_1),
 		on: Toggle.ON,
 
 		ref: FooBars.getItemRef(g_foobar_1)!,
@@ -250,11 +254,13 @@ export const init_bazquxes = (
 			'color',
 			FooBars.getItemRef(g_foobar_3),
 		],
+		cap: [],
 	};
 
 	const g_bazqux_3: BazQuxesStruct = {
 		type: BazQuxesType.QUX,
 		id: 'qux',
+		ref_part: FooBars.getItemRef(g_foobar_2),
 		on: Toggle.ON,
 
 		ref: FooBars.getItemRef(g_foobar_2)!,
@@ -284,6 +290,7 @@ export const init_bazquxes = (
 			v: Toggle.ON,
 			sub: 3,
 		},
+		cap: [],
 	};
 
 	// const a_keys = odk(g_bazqux_3.dict_base64_str);
