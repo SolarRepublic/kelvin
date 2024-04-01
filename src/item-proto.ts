@@ -631,11 +631,13 @@ const H_DESCRIPTORS_PARTS: {
 
 // descriptors for part keys
 const H_DESCRIPTORS_TAGGED_PARTS: {
-	[xc_type in TaggedDatatype | TaggedDatatype.UNKNOWN]: (b_writable: boolean, ...a_args: unknown[]) => (i_field: number, a_path: FieldPath) => {
+	[xc_type in TaggedDatatype.REF | TaggedDatatype.UNKNOWN]: (b_writable: boolean, ...a_args: any[]) => (i_field: number, a_path: FieldPath) => {
 		get(this: RuntimeItem): TaggedDatatypeToEsTypeGetter<xc_type>;
 		set(this: RuntimeItem, w_value: never): void;
 	};
 } = {
+	[TaggedDatatype.UNKNOWN]: H_DESCRIPTORS_PARTS[PrimitiveDatatype.UNKNOWN],
+
 	[TaggedDatatype.REF]: (b_writable, si_domain: DomainLabel) => (i_field: number, a_path: FieldPath) => ({
 		get() {
 			// ref item code
@@ -653,9 +655,17 @@ const H_DESCRIPTORS_TAGGED_PARTS: {
 			return i_code? new ItemRef(k_controller, i_code): null;
 		},
 
-		set(w_value: RuntimeItem | ItemRef | null) {
-			this[$_TUPLE][i_field] = serialize_ref(w_value, a_path, si_domain, this);
-		},
+		...b_writable
+			? {
+				set(w_value: RuntimeItem | ItemRef | null) {
+					this[$_TUPLE][i_field] = serialize_ref(w_value, a_path, si_domain, this);
+				},
+			}
+			: {
+				set() {
+					throw new TypeFieldNotWritableError(a_path.join('.'));
+				},
+			},
 	}),
 };
 
@@ -826,7 +836,7 @@ export function item_prototype(a_schema: SerSchema, k_item: GenericItemControlle
 	for(const [si_key, z_datatype] of entries(h_keys)) {
 		// lookup descriptor
 		const f_descriptor = is_array(z_datatype)
-			? H_DESCRIPTORS_TAGGED_PARTS[z_datatype[0] as TaggedDatatype](b_writable, ...z_datatype.slice(1))
+			? H_DESCRIPTORS_TAGGED_PARTS[z_datatype[0] as TaggedDatatype.REF](b_writable, ...z_datatype.slice(1))
 			: H_DESCRIPTORS_PARTS[z_datatype](b_writable);
 
 		// not found
