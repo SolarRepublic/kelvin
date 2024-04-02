@@ -471,32 +471,96 @@ type ImplementsPrimitiveSpecifier<g_spec extends {
 }> = g_spec;
 
 type TaggedSpecifier = {
+	/**
+	 * Creates a reference to other items belonging to *different* controllers.
+	 * 
+	 * For referencing the same controller, use `.refSelf()`
+	 * 
+	 * @param g_controller - the controller for the referenced item
+	 */
 	ref<
 		dc_controller extends GenericItemController,
 	>(g_controller: dc_controller): dc_controller extends GenericItemController<infer g_thing>
 		? DatatypeRef<ItemRef<g_thing>>
 		: never;
 
+	/**
+	 * Creates a reference to other items belonging to the same controller
+	 */
 	refSelf(): DatatypeRef<ItemRef>;
 
+	/**
+	 * Creates an {@link Array} schema containing items of an arbitrary type.
+	 * 
+	 * Example:
+	 * ```ts
+	 * // equivalent of Array<string>
+	 * (k) => k.array.str()
+	 * ```
+	 */
 	array: ChainedArray;
 
+	/**
+	 * Creates a {@link Set} schema containing items of an arbitrary type.
+	 * 
+	 * Example:
+	 * ```ts
+	 * // equivalent of Set<string>
+	 * (k) => k.set.str()
+	 * ```
+	 */
 	set: ChainedSet;
 
 	/**
 	 * Creates a dictionary schema, where arbitray keys can be used but all values must be of the given type.
+	 * 
+	 * Example:
+	 * ```ts
+	 * // equivalent of Record<string, number>
+	 * (k) => k.dict.int()
+	 * 
+	 * // equivalent of Record<`${bigint}`, string>
+	 * (k) => k.dict<`${bigint}`>().str()
+	 * ```
+	 * 
+	 * @param s_keys - optional value typed by subset of string to pass onto type inference
 	 */
 	dict: ChainedDict
 		& (<
 			s_keys extends string,
 		>(s_keys?: s_keys) => ChainedDict<s_keys>);
 
+	/**
+	 * Creates a tuple schema, composed of ordered members of arbitrary types.
+	 * 
+	 * Example:
+	 * ```ts
+	 * (k) => k.tuple([k.int(), k.str()])
+	 * ```
+	 * 
+	 * @param a_tuple - the ordered datatypes
+	 */
 	tuple<
 		const a_tuple extends Readonly<CoreDatatype[]>,
 	>(
 		a_tuple: a_tuple,
 	): DatatypeTuple<a_tuple>;
 
+	/**
+	 * Creates a nested struct schema containing named, _required_ items of arbitrary datatypes.
+	 * 
+	 * For a similar type, but with optional items, see `.registry`
+	 * 
+	 * Example:
+	 * ```ts
+	 * (k) => k.struct({
+	 * 	enabled: k.int<0 | 1>(),
+	 * 	name: k.str(),
+	 * })
+	 * ```
+	 * 
+	 * @param h_subschema - the subschema specifying the appropriate types for each item
+	 */
 	struct<
 		h_subschema extends StructuredSchema,
 	>(
@@ -505,7 +569,7 @@ type TaggedSpecifier = {
 
 	/**
 	 * Creates a registry of named items, where only the given keys are allowed to be used and whose values
-	 * must be of the specified datatype, but entries are allowed to be omitted.
+	 * must be of the specified arbitrary datatypes, but entries are allowed to be omitted.
 	 * 
 	 * Useful for schemas where a known set of optional attributes is used to describe an object.
 	 * 
@@ -526,6 +590,11 @@ type TaggedSpecifier = {
 		h_subschema: h_subschema,
 	): DatatypeRegistry<h_subschema>;
 
+	/**
+	 * Creates a mapping where items can be used as keys.
+	 * 
+	 * @param g_controller - the controller for the referenced item
+	 */
 	mapRef<
 		dc_controller extends GenericItemController,
 	>(g_controller: dc_controller): dc_controller extends GenericItemController<infer g_thing>

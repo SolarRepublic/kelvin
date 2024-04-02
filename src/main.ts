@@ -9,3 +9,5 @@ export {WebExtWrapper} from './wrappers/web-ext';
 export type * from './schema-types';
 export type * from './controller';
 export type * from './item-ref';
+
+export type {ItemCode} from './types';

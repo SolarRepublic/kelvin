@@ -41,7 +41,7 @@
     "@solar-republic/types": "^0.2.9",
     "@types/chai": "^4.3.14",
     "@types/chrome": "^0.0.263",
-    "@types/node": "^20.11.30",
+    "@types/node": "^20.12.2",
     "@types/web": "^0.0.142",
     "@typescript-eslint/parser": "^7.4.0",
     "chai": "^5.1.0",
@@ -53,11 +53,11 @@
     "tsc-esm-fix": "^2.20.26",
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.4.3",
-    "vite": "^5.2.6",
+    "vite": "^5.2.7",
     "vitest": "^1.4.0"
   },
   "dependencies": {
-    "@blake.regalia/belt": "^0.35.1"
+    "@blake.regalia/belt": "^0.35.3"
   },
   "publishConfig": {
     "access": "public"

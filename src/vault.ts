@@ -1373,4 +1373,33 @@ export class Vault {
 	>(si_domain: DomainLabel): GenericItemController<g_item, g_runtime, g_schema, a_parts, g_parts> | undefined {
 		return this._h_controllers[si_domain] as unknown as GenericItemController<g_item, g_runtime, g_schema, a_parts, g_parts>;
 	}
+
+
+	/**
+	 * Encrypts an arbitrary byte sequence
+	 * @param si_key - a key to associate with this piece of data
+	 * @param atu8_plain - the plaintext data
+	 * @returns ciphertext
+	 */
+	async encryptBytes(
+		si_key: string,
+		atu8_plain: Uint8Array
+	): Promise<Uint8Array> {
+		// encrypt entry
+		return await this._encrypt_entry('#'+si_key, atu8_plain);
+	}
+
+	/**
+	 * Decrypts an arbitrary byte sequence
+	 * @param si_key - the key associated with this piece of data
+	 * @param atu8_cipher - the ciphertext data
+	 * @returns plaintext
+	 */
+	async decryptBytes(
+		si_key: string,
+		atu8_value: Uint8Array
+	): Promise<Uint8Array> {
+		// decrypt entry
+		return await this._decrypt_entry('#'+si_key, atu8_value);
+	}
 }

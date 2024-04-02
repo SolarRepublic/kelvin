@@ -6,7 +6,7 @@ import type {FieldPath, ItemCode} from './types';
 
 import type {Dict, JsonValue} from '@blake.regalia/belt';
 
-import {__UNDEFINED, entries, keys} from '@blake.regalia/belt';
+import {__UNDEFINED, assign, entries, from_entries, keys} from '@blake.regalia/belt';
 
 import {ItemRef, refish_to_code} from './item-ref';
 
@@ -99,6 +99,72 @@ export class FieldMapRef<
 
 		// chainable
 		return this;
+	}
+
+	/**
+	 * Inserts the given key-value pair into the specified position in the map
+	 * @param z_key 
+	 * @param w_value 
+	 * @param i_pos - if negative value is given, `i_pos + map.length` is used
+	 * @returns 
+	 */
+	insert(z_key: Refish<g_item>, w_value: w_member, i_pos: number): this {
+		// get item code
+		const i_code = refish_to_code(z_key);
+
+		// no item
+		if(!i_code) throw TypeError('No item exists for map-ref key');
+
+		// ref backing
+		const _h_backing = this.#h_backing;
+
+		// delete if exists
+		delete _h_backing[i_code];
+
+		// rebuild map
+		const a_entries_post: [`${number}`, w_backing][] = [];
+
+		// count position while iterating
+		let i_index = 0;
+
+		// negative position; relative to end of list
+		if(i_pos < 0) i_pos += keys(_h_backing).length;
+
+		// each entry
+		for(const a_entry of entries(_h_backing)) {
+			// reached target position
+			if(i_index++ >= i_pos) {
+				// start deleting everything after
+				delete _h_backing[+a_entry[0] as ItemCode];
+
+				// add to entry list
+				a_entries_post.push(a_entry);
+			}
+		}
+
+		// insert new entry
+		_h_backing[i_code] = this.#f_serializer(w_value, [...this.#a_path, i_code], this.#g_runtime);
+
+		// re-add deleted entries
+		assign(_h_backing, from_entries(a_entries_post));
+
+		// chainable
+		return this;
+	}
+
+	setMany(z_values: Map<Refish<g_item>, w_member> | [Refish<g_item>, w_member][]): this {
+		// add each entry
+		for(const [k_ref, w_value] of z_values instanceof Map? z_values.entries(): z_values) {
+			this.set(k_ref, w_value);
+		}
+
+		// chainable
+		return this;
+	}
+
+	replace(z_values: Map<Refish<g_item>, w_member> | [Refish<g_item>, w_member][]): this {
+		this.clear();
+		return this.setMany(z_values);
 	}
 
 	override clear(): void {
