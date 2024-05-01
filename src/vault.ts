@@ -715,7 +715,7 @@ export class Vault {
 
 
 	/**
-	 * Check if the vault is already unlocked
+	 * Check if the vault is already unlocked, i.e., if it is ready to be opened.
 	 * @returns `true` if it is unlocked, `false` otherwise
 	 */
 	isUnlocked(): boolean {

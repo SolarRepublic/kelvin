@@ -7,7 +7,7 @@ import type {FieldArray} from './field-array';
 import type {RuntimeItem} from './item-proto';
 import type {ItemRef, Refish} from './item-ref';
 import type {AllValues, KvTuplesToObject, UnionToTuple, FilterDrop} from './meta';
-import type {DomainLabel, ItemCode, KnownSerTaggedDatatype} from './types';
+import type {ItemCode} from './types';
 import type {Dict, JsonObject, JsonPrimitive, NaiveBase64} from '@blake.regalia/belt';
 
 
@@ -197,18 +197,20 @@ export type ReduceSchema<z_test, b_setter extends 0|1=0> =
 		// : z_test extends {[ES_TYPE]: any}? z_test
 		// : z_test extends {[ES_TYPE]: infer w_es}? w_es
 			: z_test extends Set<infer w_thing>? Set<ReduceSchema<w_thing>>
-				: z_test extends Uint8Array? z_test
-					: z_test extends JsonPrimitive? z_test
-						: JsonObject extends z_test
-							? string extends keyof z_test? JsonObject
-								: {
-									[si_each in keyof z_test]: ReduceSchema<z_test[si_each], b_setter>;
-								}
-							: z_test extends Array<infer w_type>
-								? ReduceSchema<w_type, b_setter>[]
-								: {
-									[si_each in keyof z_test]: ReduceSchema<z_test[si_each], b_setter>;
-								};
+				: z_test extends Map<infer w_key, infer w_value>? Map<w_key, ReduceSchema<w_value>>
+					: z_test extends Uint8Array? z_test
+						: z_test extends JsonPrimitive? z_test
+							: z_test extends FieldMapRef? z_test
+								: JsonObject extends z_test
+									? string extends keyof z_test? JsonObject
+										: {
+											[si_each in keyof z_test]: ReduceSchema<z_test[si_each], b_setter>;
+										}
+									: z_test extends Array<infer w_type>
+										? ReduceSchema<w_type, b_setter>[]
+										: {
+											[si_each in keyof z_test]: ReduceSchema<z_test[si_each], b_setter>;
+										};
 
 
 export type DatatypeInt<

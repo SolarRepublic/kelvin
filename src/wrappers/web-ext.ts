@@ -1,9 +1,9 @@
+import type {StorageChanges} from '../store';
 import type {Dict, JsonValue} from '@blake.regalia/belt';
-import type {StorageChanges} from 'src/store';
 
 import {__UNDEFINED, fodemtv} from '@blake.regalia/belt';
 
-import {KelvinKeyValueStore, JsonBasedChange, KelvinKeyValueWriter} from 'src/store';
+import {KelvinKeyValueStore, JsonBasedChange, KelvinKeyValueWriter} from '../store';
 
 export class WebExtWriter extends KelvinKeyValueWriter<WebExtWrapper> {
 	override setStringMany(h_set: Dict): Promise<void> {

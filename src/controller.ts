@@ -1,10 +1,11 @@
 /* eslint-disable @typescript-eslint/naming-convention */
-import type {F} from 'ts-toolbelt';
+import type {F, O} from 'ts-toolbelt';
 
 import type {GenericStructMatchCriteria, MatchCriteria} from './filter';
 import type {HubEffects, VaultHub} from './hub';
 import type {RuntimeItem} from './item-proto';
 
+import type {RootSchemaBuilder} from './schema-impl';
 import type {SchemaToItemShape, StructuredSchema, PartableSchemaSpecifier, AcceptablePartTuples, SchemaBuilder, PartFields, PartableEsType, FieldStruct, SchemaSimulator} from './schema-types';
 import type {DomainLabel, ItemCode, ItemIdent, ItemPath, SchemaCode, SerFieldStruct, SerItem, SerKeyStruct, SerSchema} from './types';
 import type {Vault} from './vault';
@@ -17,7 +18,7 @@ import {AppError} from './errors';
 import {apply_filter_struct} from './filter';
 import {$_CODE, $_CONTROLLER, $_LINKS, $_TUPLE, is_runtime_item, item_prototype} from './item-proto';
 import {ItemRef} from './item-ref';
-import {SchemaAnnotation, interpret_schema, type RootSchemaBuilder} from './schema-impl';
+import {interpret_schema} from './schema-impl';
 import {DomainStorageStrategy} from './types';
 
 
@@ -34,6 +35,8 @@ export interface GenericItemController<
 	domain: DomainLabel;
 	hub: VaultHub;
 
+	isEmpty(): Promise<boolean>;
+
 	getItemCode(g_parts: g_parts): ItemCode | undefined;
 
 	getItemRef(g_parts: g_parts): ItemRef<g_item, g_runtime> | null;
@@ -46,13 +49,19 @@ export interface GenericItemController<
 
 	getAt(a_parts: Readonly<AcceptablePartTuples>): Promise<g_runtime | undefined>;
 
-	put(g_item: SchemaToItemShape<g_schema, 1>): Promise<[ItemPath, SerItem]>;
+	put(g_item: SchemaToItemShape<g_schema, 1>): Promise<[ItemCode, ItemRef<g_item, g_runtime>]>;
 
 	putMany(a_items: SchemaToItemShape<g_schema, 1>[]): Promise<[ItemPath, SerItem][]>;
 
-	entries(): AsyncIterableIterator<[ItemIdent, g_item]>;
+	entries(): AsyncIterableIterator<[ItemIdent, g_runtime]>;
 
-	filter(h_criteria: MatchCriteria<g_item>, n_limit?: number): AsyncIterableIterator<g_item>;
+	filter(h_criteria: MatchCriteria<g_item>, n_limit?: number): AsyncIterableIterator<g_runtime>;
+	// filter<
+	// 	h_critera extends MatchCriteria<g_item>,
+	// 	h_safe_criteria extends O.Select<h_critera, number | string>,
+	// >(h_criteria: h_critera, n_limit?: number): AsyncIterableIterator<
+	// 	Omit<g_runtime, keyof h_safe_criteria> & h_safe_criteria
+	// >;
 }
 
 
@@ -272,6 +281,17 @@ export class ItemController<
 	}
 
 	/**
+	 * Determine whether or not the table is empty
+	 */
+	async isEmpty(): Promise<boolean> {
+		for await(const a_ignore of this.entries()) {
+			return false;
+		}
+
+		return true;
+	}
+
+	/**
 	 * Get the item code of an instance identified by its named parts, scoped by its domain
 	 */
 	getItemCode(g_parts: g_parts): ItemCode | undefined {
@@ -392,7 +412,7 @@ export class ItemController<
 		return this.getByCode(this._encode_item(a_parts), a_parts);
 	}
 
-	async put(g_item: SchemaToItemShape<g_schema, 1>): Promise<[ItemPath, SerItem]> {
+	async put(g_item: SchemaToItemShape<g_schema, 1>): Promise<[ItemCode, ItemRef<g_item, g_runtime>]> {
 		const {_k_hub} = this;
 
 		// serialize item
@@ -401,8 +421,17 @@ export class ItemController<
 		// write item to storage
 		await _k_hub.putItems(this._si_domain, this._i_schema, [a_ser]);
 
-		// 
-		return a_ser.slice(0, 2) as [ItemPath, SerItem];
+		// detuple ser
+		const [sr_item, a_data] = a_ser;
+
+		// encode item
+		const i_item = _k_hub.itemCode(_k_hub.itemIdent(this._si_domain, sr_item))!;
+
+		// entuple
+		return [
+			i_item,
+			new ItemRef<g_item, g_runtime>(this as GenericItemController<g_item, g_runtime>, i_item),
+		];
 	}
 
 	async putMany(a_items: SchemaToItemShape<g_schema, 1>[]): Promise<[ItemPath, SerItem][]> {
@@ -424,7 +453,7 @@ export class ItemController<
 	 * If db is modified during iteration, deleted items will not cause error but new items
 	 * _might_ not be yielded.
 	 */
-	async* entries(): AsyncIterableIterator<[ItemIdent, g_item]> {
+	async* entries(): AsyncIterableIterator<[ItemIdent, g_runtime]> {
 		// each item entry from hub
 		for await(const [i_item, si_item, a_tuple] of this._k_hub.itemEntries(this._si_domain)) {
 			// create item
@@ -444,7 +473,13 @@ export class ItemController<
 	 * @param h_criteria 
 	 * @param n_limit 
 	 */
-	async* filter(h_criteria: MatchCriteria<g_item>, n_limit=Infinity): AsyncIterableIterator<g_item> {
+	// async* filter<
+	// 	h_critera extends MatchCriteria<g_item>,
+	// 	h_safe_criteria extends O.Select<h_critera, number | string>,
+	// >(h_criteria: h_critera, n_limit=Infinity): AsyncIterableIterator<
+	// 	Omit<g_runtime, keyof h_safe_criteria> & h_safe_criteria
+	// > {
+	async* filter(h_criteria: MatchCriteria<g_item>, n_limit=Infinity): AsyncIterableIterator<g_runtime> {
 		// destructure fields
 		const {_h_schema_fields, _h_schema_parts, _k_hub} = this;
 
@@ -505,7 +540,7 @@ export class ItemController<
 			if(!apply_filter_struct(g_item as FieldStruct, h_fields as GenericStructMatchCriteria, '', _h_schema_fields, _h_schema_parts)) continue;
 
 			// passed filter; yield
-			yield g_item;
+			yield g_item as any;
 
 			// reached limit; search no more
 			if(c_yielded >= n_limit) break;

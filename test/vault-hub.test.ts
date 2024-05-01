@@ -4,14 +4,14 @@ import type {TestContext, TestFunction} from 'vitest';
 
 import {__UNDEFINED, fold, is_array, entries, timeout} from '@blake.regalia/belt';
 
-import {XT_ROTATION_DEBOUNCE} from 'src/constants';
-import {$_CODE} from 'src/item-proto';
-import {ItemRef} from 'src/item-ref';
 import {beforeEach, describe, expect, expectTypeOf, it, vi} from 'vitest';
 
 import {BazQuxesType, FooBarNamespace, init_bazquxes, init_foobars} from './foo-bars';
 import {SI_DATABASE, client, Stage, init, phrase, init_destruct, spread_async} from './kit';
+import {XT_ROTATION_DEBOUNCE} from '../src/constants';
 import {VaultHub} from '../src/hub';
+import {$_CODE} from '../src/item-proto';
+import {ItemRef} from '../src/item-ref';
 import {Vault} from '../src/vault';
 
 
@@ -569,11 +569,11 @@ describe('baz-quxes', () => {
 
 			const g_ref_round = g_read_bq1.ref;
 
-			expect(g_ref_round!.code).toEqual(g_ref_1.code);
-			expect(g_ref_round!.ident).toEqual(g_ref_1.ident);
-			expect(g_ref_round!.controller).toEqual(g_ref_1.controller);
+			expect(g_ref_round.code).toEqual(g_ref_1.code);
+			expect(g_ref_round.ident).toEqual(g_ref_1.ident);
+			expect(g_ref_round.controller).toEqual(g_ref_1.controller);
 
-			await expect(g_ref_round).resolves.toMatchObject(g_runtime_1);
+			await expect(g_ref_round.item).resolves.toMatchObject(g_runtime_1);
 		},
 
 		async 'put/get ref via struct'({FooBars, g_foobar_1, BazQuxes, g_bazqux_1, g_bazqux_2}) {
@@ -590,11 +590,11 @@ describe('baz-quxes', () => {
 
 			const g_ref_1 = ItemRef.fromItem(g_runtime_1);
 
-			expect(g_ref_round!.code).toEqual(g_ref_1.code);
-			expect(g_ref_round!.ident).toEqual(g_ref_1.ident);
-			expect(g_ref_round!.controller).toEqual(g_ref_1.controller);
+			expect(g_ref_round.code).toEqual(g_ref_1.code);
+			expect(g_ref_round.ident).toEqual(g_ref_1.ident);
+			expect(g_ref_round.controller).toEqual(g_ref_1.controller);
 
-			await expect(g_ref_round).resolves.toMatchObject(g_runtime_1);
+			await expect(g_ref_round.item).resolves.toMatchObject(g_runtime_1);
 		},
 
 		async 'put/get ref via setter'({FooBars, g_foobar_1, BazQuxes, g_bazqux_1, g_bazqux_2}) {
@@ -617,11 +617,11 @@ describe('baz-quxes', () => {
 
 			const g_ref_1 = ItemRef.fromItem(g_runtime_1);
 
-			expect(g_ref_round!.code).toEqual(g_ref_1.code);
-			expect(g_ref_round!.ident).toEqual(g_ref_1.ident);
-			expect(g_ref_round!.controller).toEqual(g_ref_1.controller);
+			expect(g_ref_round.code).toEqual(g_ref_1.code);
+			expect(g_ref_round.ident).toEqual(g_ref_1.ident);
+			expect(g_ref_round.controller).toEqual(g_ref_1.controller);
 
-			await expect(g_ref_round).resolves.toMatchObject(g_runtime_1);
+			await expect(g_ref_round.item).resolves.toMatchObject(g_runtime_1);
 		},
 
 		// console.warn(`##### FINDME ####\n${g_ref_round?.controller.domain} : ${g_ref_1.controller.domain}`);

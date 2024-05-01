@@ -134,10 +134,9 @@ function reshape_tagged_value([xc_type, w_info, w_extra]: SerTaggedDatatype, sr_
 
 		// map-ref
 		case TaggedDatatype.MAP_REF: {
-			debugger;
-			throw Error('reshaping map ref not yet implemented');
-			// a_mids[0] = reshape_fields(sr_local, w_info).fields;
-			// break;
+			const sr_inner = sr_local+'<>';
+			a_mids = [w_info, reshape_fields(sr_inner, [w_extra]).fields['0' as FieldLabel]];
+			break;
 		}
 
 		// switch

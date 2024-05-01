@@ -1,13 +1,13 @@
-import type {Vault} from '../src/vault';
 
-import type {StructFromController} from 'src/schema-types';
-import type {ItemCode} from 'src/types';
+import type {StructFromController} from '../src/schema-types';
+import type {ItemCode} from '../src/types';
+import type {Vault} from '../src/vault';
 
 import {type NaiveBase64, text_to_base64} from '@blake.regalia/belt';
 
-import {ItemRef} from 'src/item-ref';
 
 import {ItemController} from '../src/controller';
+import {ItemRef} from '../src/item-ref';
 
 export enum Toggle {
 	OFF=0,

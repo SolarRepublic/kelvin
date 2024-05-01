@@ -1,7 +1,7 @@
-import type {A, F, L} from 'ts-toolbelt';
+import type {A} from 'ts-toolbelt';
 
 import type {PartableDatatype, PrimitiveDatatype, TaggedDatatype} from './schema-types';
-import type {Dict, IntStr, NaiveBase64, JsonObject, JsonValue, JsonArray, Subtype, NaiveBase93} from '@blake.regalia/belt';
+import type {Dict, IntStr, NaiveBase64, JsonArray, Subtype} from '@blake.regalia/belt';
 
 /**
  * App-controlled database version identifier

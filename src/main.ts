@@ -10,4 +10,7 @@ export type * from './schema-types';
 export type * from './controller';
 export type * from './item-ref';
 
-export type {ItemCode} from './types';
+export type {
+	ItemCode,
+	ItemPath,
+} from './types';

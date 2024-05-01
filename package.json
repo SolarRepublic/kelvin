@@ -31,33 +31,33 @@
     "build:cjs": "tsc -p tsconfig.cjs.json && npx tsc-esm-fix --target='dist/cjs'",
     "build": "pnpm run build:mjs && pnpm build:cjs",
     "preview": "js-beautify dist/main.mjs > dist/main-pretty.mjs",
-    "test": "node --loader ts-node/esm",
-    "test:all": "pnpm run test test/**.ts",
+    "test": "vitest",
     "debug": "node --inspect-brk --loader ts-node/esm"
   },
   "devDependencies": {
     "@blake.regalia/eslint-config-elite": "^0.4.4",
     "@blake.regalia/tsconfig": "^0.2.0",
-    "@solar-republic/types": "^0.2.9",
+    "@solar-republic/types": "^0.2.10",
     "@types/chai": "^4.3.14",
-    "@types/chrome": "^0.0.263",
-    "@types/node": "^20.12.2",
-    "@types/web": "^0.0.142",
-    "@typescript-eslint/parser": "^7.4.0",
+    "@types/chrome": "^0.0.267",
+    "@types/node": "^20.12.7",
+    "@types/web": "^0.0.143",
+    "@typescript-eslint/parser": "^7.8.0",
     "chai": "^5.1.0",
     "chai-bites": "^0.1.2",
     "esformatter": "^0.11.3",
     "eslint": "^8.57.0",
     "ts-node": "^10.9.2",
     "ts-toolbelt": "^9.6.0",
-    "tsc-esm-fix": "^2.20.26",
+    "tsc-esm-fix": "^2.20.27",
     "tsconfig-paths": "^4.2.0",
-    "typescript": "^5.4.3",
-    "vite": "^5.2.7",
-    "vitest": "^1.4.0"
+    "typescript": "^5.4.5",
+    "vite": "^5.2.10",
+    "vitest": "^1.5.3"
   },
   "dependencies": {
-    "@blake.regalia/belt": "^0.35.3"
+    "@blake.regalia/belt": "^0.35.6",
+    "@solar-republic/crypto": "^0.2.11"
   },
   "publishConfig": {
     "access": "public"

@@ -1,9 +1,11 @@
+import type {StorageChanges, CompatibleWriterClass} from '../store';
 import type {JsonValue, Dict, JsonObject} from '@blake.regalia/belt';
 
 import {__UNDEFINED, fold, entries} from '@blake.regalia/belt';
-import {SingleThreadedLockManager} from 'src/locks';
 
-import {KelvinKeyValueStore, type StorageChanges, CompliantChange, KelvinKeyValueWriter, type CompatibleWriterClass} from 'src/store';
+import {SingleThreadedLockManager} from '../locks';
+import {KelvinKeyValueStore, CompliantChange, KelvinKeyValueWriter} from '../store';
+
 
 type ListenerCallback = (h_changes: StorageChanges) => void;
 
