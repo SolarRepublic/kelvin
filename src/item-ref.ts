@@ -51,50 +51,48 @@ export class ItemRef<
 		protected _i_item: ItemCode
 	) {}
 
+	/**
+	 * Get the target item's code (scoped by its domain)
+	 */
 	get code(): ItemCode {
 		return this._i_item;
 	}
 
+	/**
+	 * Get the target item's string-based identifier (scoped by its domain)
+	 */
 	get ident(): ItemIdent | undefined {
 		return this._k_src.hub.decodeItem(this._i_item);
 	}
 
+	/**
+	 * Get the controller for the source item that holds this reference
+	 */
 	get controller(): GenericItemController {
 		return this._k_src;
 	}
 
+	/**
+	 * Get the domain's unique label
+	 */
 	get domain(): DomainLabel {
 		return this._k_src.domain;
 	}
 
-	// then<
-	// 	w_value=g_runtime,
-	// 	e_reason=never,
-	// >(
-	// 	fk_resolve?: ((w_value: g_runtime) => w_value | PromiseLike<w_value>) | null | undefined,
-	// 	fe_reject?: ((e_reason: any) => e_reason | PromiseLike<e_reason>) | null | undefined
-	// ): PromiseLike<w_value | e_reason> {
-	// 	const k_dst = this._k_src.hub.vault.controllerFor<g_dst, g_runtime>(this.domain);
-
-	// 	if(!k_dst) {
-	// 		throw new Error(`No item controller was registered for "${this.domain}" domain while trying to dereference item ${this.ident}`);
-	// 	}
-
-	// 	// load the item
-	// 	return k_dst.getByCode(this._i_item).then(
-	// 		fk_resolve as ((value: g_runtime | undefined) => w_value | PromiseLike<w_value>) | null | undefined,
-	// 		fe_reject);
-	// }
-
-	get item(): Promise<g_runtime | undefined> {
+	/**
+	 * Dereference this {@link ItemRef} to get a Promise that resolves to its {@link RuntimeItem}
+	 */
+	async item(): Promise<g_runtime | undefined> {
+		// lookup the controller class for the referenced item's domain
 		const k_dst = this._k_src.hub.vault.controllerFor<g_dst, g_runtime>(this.domain);
 
+		// controller wasn't found/registered
 		if(!k_dst) {
 			throw new Error(`No item controller was registered for "${this.domain}" domain while trying to dereference item ${this.ident}`);
 		}
 
 		// load the item
-		return k_dst.getByCode(this._i_item);
+		return await k_dst.getByCode(this._i_item);
 	}
 
 	get [Symbol.toStringTag](): string {

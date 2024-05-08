@@ -567,13 +567,13 @@ describe('baz-quxes', () => {
 
 			const g_read_bq1 = (await BazQuxes.get(g_bazqux_1))!;
 
-			const g_ref_round = g_read_bq1.ref;
+			const g_ref_round = g_read_bq1.ref!;
 
 			expect(g_ref_round.code).toEqual(g_ref_1.code);
 			expect(g_ref_round.ident).toEqual(g_ref_1.ident);
 			expect(g_ref_round.controller).toEqual(g_ref_1.controller);
 
-			await expect(g_ref_round.item).resolves.toMatchObject(g_runtime_1);
+			await expect(g_ref_round.item()).resolves.toMatchObject(g_runtime_1);
 		},
 
 		async 'put/get ref via struct'({FooBars, g_foobar_1, BazQuxes, g_bazqux_1, g_bazqux_2}) {
@@ -586,7 +586,7 @@ describe('baz-quxes', () => {
 
 			const g_read_bq1 = (await BazQuxes.get(g_bazqux_1))!;
 
-			const g_ref_round = g_read_bq1.ref;
+			const g_ref_round = g_read_bq1.ref!;
 
 			const g_ref_1 = ItemRef.fromItem(g_runtime_1);
 
@@ -594,7 +594,7 @@ describe('baz-quxes', () => {
 			expect(g_ref_round.ident).toEqual(g_ref_1.ident);
 			expect(g_ref_round.controller).toEqual(g_ref_1.controller);
 
-			await expect(g_ref_round.item).resolves.toMatchObject(g_runtime_1);
+			await expect(g_ref_round.item()).resolves.toMatchObject(g_runtime_1);
 		},
 
 		async 'put/get ref via setter'({FooBars, g_foobar_1, BazQuxes, g_bazqux_1, g_bazqux_2}) {
@@ -613,7 +613,7 @@ describe('baz-quxes', () => {
 
 			const g_read_bq2 = (await BazQuxes.get(g_bazqux_1))!;
 
-			const g_ref_round = g_read_bq2.ref;
+			const g_ref_round = g_read_bq2.ref!;
 
 			const g_ref_1 = ItemRef.fromItem(g_runtime_1);
 
@@ -621,7 +621,7 @@ describe('baz-quxes', () => {
 			expect(g_ref_round.ident).toEqual(g_ref_1.ident);
 			expect(g_ref_round.controller).toEqual(g_ref_1.controller);
 
-			await expect(g_ref_round.item).resolves.toMatchObject(g_runtime_1);
+			await expect(g_ref_round.item()).resolves.toMatchObject(g_runtime_1);
 		},
 
 		// console.warn(`##### FINDME ####\n${g_ref_round?.controller.domain} : ${g_ref_1.controller.domain}`);
