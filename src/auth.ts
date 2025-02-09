@@ -1,8 +1,8 @@
 import type {SerVaultHashParams} from './types';
 
-import {base93_to_bytes, bytes_to_base93, import_key, zero_out} from '@blake.regalia/belt';
+import {base93_to_bytes, bytes, bytes_to_base93, import_key, subtle_export_key, zero_out, zeroize} from '@blake.regalia/belt';
 
-import {ATU8_SHA256_STARSHELL, SensitiveBytes, aes_gcm_decrypt, aes_gcm_encrypt} from '@solar-republic/crypto';
+import {ATU8_SHA256_STARSHELL, aes_gcm_decrypt, aes_gcm_encrypt} from '@solar-republic/crypto';
 import {argon2id_hash} from '@solar-republic/crypto/argon2';
 
 
@@ -20,7 +20,6 @@ export interface RootKeyStruct {
 export interface RootKeysData {
 	old: RootKeyStruct;
 	new: RootKeyStruct;
-	export: SensitiveBytes | null;
 }
 
 
@@ -102,16 +101,17 @@ export const verify_root_key = async(
 export async function derive_root_bits_argon2id(
 	atu8_phrase: Uint8Array,
 	atu8_nonce: Uint8Array,
-	g_params: SerVaultHashParams
-): Promise<SensitiveBytes> {
-	return new SensitiveBytes(await argon2id_hash({
+	g_params: SerVaultHashParams,
+	b_exportable=false,
+): Promise<CryptoKey> {
+	return import_key(await argon2id_hash({
 		phrase: atu8_phrase,
 		salt: atu8_nonce,
 		iterations: g_params.iterations,
 		memory: g_params.memory,
 		parallelism: g_params.parallelism,
 		hashLen: 32,  // 256 bits
-	}));
+	}), {name:'HKDF'}, ['deriveBits'], b_exportable);
 }
 
 
@@ -208,30 +208,15 @@ export async function derive_tandem_root_keys(
 
 	// derive the two root byte sequences for this session
 	const [
-		kn_root_old,
-		kn_root_new,
-	] = await Promise.all([
-		derive_root_bits_argon2id(atu8_phrase, atu8_vector_old, g_params_old),
-		derive_root_bits_argon2id(atu8_phrase, atu8_vector_new, g_params_new),
-	]);
-
-	// zero out passphrase data
-	zero_out(atu8_phrase);
-
-	// derive root keys
-	const [
 		dk_root_old,
 		dk_root_new,
 	] = await Promise.all([
-		import_key(kn_root_old.data, 'HKDF', ['deriveKey']),
-		import_key(kn_root_new.data, 'HKDF', ['deriveKey']),
+		derive_root_bits_argon2id(atu8_phrase, atu8_vector_old, g_params_old),
+		derive_root_bits_argon2id(atu8_phrase, atu8_vector_new, g_params_new, b_export_new),
 	]);
 
-	// wipe old root bits
-	kn_root_old.wipe();
-
-	// new root bits are not being exported; wipe them too
-	if(!b_export_new) kn_root_new.wipe();
+	// zero out passphrase data
+	zeroize(atu8_phrase);
 
 	return {
 		old: {
@@ -246,7 +231,6 @@ export async function derive_tandem_root_keys(
 			nonce: xg_nonce_new,
 			params: g_params_new,
 		},
-		export: b_export_new? kn_root_new: null,
 	};
 }
 

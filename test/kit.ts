@@ -8,10 +8,11 @@ import {text_to_bytes} from '@blake.regalia/belt';
 import {init_foobars} from './foo-bars';
 import {Vault} from '../src/vault';
 import {MemoryWrapper} from '../src/wrappers/memory';
+import { Kelvin } from 'src/kelvin';
 
 
 type TestContextExtension = {
-	k_client: Vault;
+	k_kelvin: Kelvin;
 	k_hub?: VaultHub;
 
 	FooBars: FooBarsController;
@@ -52,17 +53,17 @@ export const client = async(xc_stage: Stage) => {
 	const k_content = new MemoryWrapper();
 	const k_session = new MemoryWrapper();
 
-	const k_client: Vault = new Vault({
+	const k_kelvin = new Kelvin({
 		content: k_content,
 		session: k_session,
 	});
 
 	const g_context = {
-		k_client,
+		k_kelvin,
 	} as TestContextExtension;
 
 	if(xc_stage >= Stage.CONNECT) {
-		await k_client.connect({
+		const k_vault = await k_kelvin.connect({
 			id: SI_DATABASE,
 			version: 0,
 			migrations: {},
@@ -70,16 +71,16 @@ export const client = async(xc_stage: Stage) => {
 
 		if(xc_stage >= Stage.REGISTER) {
 			// data
-			const g_init = init_foobars(k_client);
+			const g_init = init_foobars(k_vault);
 			const {FooBars, g_foobar_1, g_foobar_2, g_foobar_3} = g_init;
 			if(xc_stage >= Stage.DATA) {
 				Object.assign(g_context, g_init);
 			}
 
-			await k_client.register(phrase());
+			await k_vault.register(phrase());
 
 			if(xc_stage >= Stage.OPEN) {
-				g_context.k_hub = await k_client.open();
+				g_context.k_hub = await k_vault.open();
 			}
 
 			if(xc_stage >= Stage.PUT_1) {

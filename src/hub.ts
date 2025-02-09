@@ -145,7 +145,7 @@ export class VaultHub {
 
 	async _init(kw_content: KelvinKeyValueWriter, h_migrations?: Record<number, Migration>): Promise<void> {
 		// db version the app is targetting
-		const n_db_version_app = this._k_vault.dbVersion;
+		const {version: n_db_version_app} = this._k_vault.databaseInfo;
 
 		// version of the database in storage
 		const n_db_version_storage = this._n_db_version;

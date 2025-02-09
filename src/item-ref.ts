@@ -40,7 +40,7 @@ export class ItemRef<
 > {
 	static fromItem<g_dst extends Dict<any>>(g_item: RuntimeItem<g_dst>): ItemRef<g_dst> {
 		if(!is_runtime_item(g_item)) {
-			throw TypeError(`Argument passed to ItemRef.to() must be a RuntimeItem`);
+			throw TypeError(`Argument passed to ItemRef.fromItem() must be a RuntimeItem`);
 		}
 
 		return new ItemRef(g_item[$_CONTROLLER], g_item[$_CODE]) as ItemRef<g_dst>;

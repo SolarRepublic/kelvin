@@ -6,7 +6,7 @@ import {Stage, client} from './kit';
 import {ATU8_DUMMY_PHRASE, ATU8_DUMMY_VECTOR} from '../src/constants';
 
 describe('vault', async() => {
-	const {k_client} = await client(Stage.OPEN);
+	const {k_kelvin: k_client} = await client(Stage.OPEN);
 
 	it('encrypts with automatic nonce', async() => {
 		const atu8_test_1 = await k_client.encryptBytes('test', ATU8_DUMMY_PHRASE);

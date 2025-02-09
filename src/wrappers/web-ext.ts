@@ -1,7 +1,7 @@
 import type {StorageChanges} from '../store';
 import type {Dict, JsonValue} from '@blake.regalia/belt';
 
-import {__UNDEFINED, fodemtv} from '@blake.regalia/belt';
+import {__UNDEFINED, cast, transform_values} from '@blake.regalia/belt';
 
 import {KelvinKeyValueStore, JsonBasedChange, KelvinKeyValueWriter} from '../store';
 
@@ -55,7 +55,7 @@ export class WebExtWrapper extends KelvinKeyValueStore<WebExtWriter> {
 			[si_key in keyof h_types]: h_types[si_key] | undefined;
 		},
 	>(a_keys: string[]): Promise<w_out> {
-		return this._d_area.get(a_keys) as Promise<w_out>;
+		return this._d_area.get(cast(a_keys)) as Promise<w_out>;
 	}
 
 	override onChanged(fk_changed: (h_changes: StorageChanges) => void): VoidFunction {
@@ -63,10 +63,11 @@ export class WebExtWrapper extends KelvinKeyValueStore<WebExtWriter> {
 		const d_event = this._d_area.onChanged;
 
 		// intermediary
-		const fk_handler = (h_changes: Record<string, chrome.storage.StorageChange>) => fk_changed(fodemtv(h_changes, g_change => ({
-			newValue: new JsonBasedChange(g_change.newValue),
-			oldValue: new JsonBasedChange(g_change.oldValue),
-		})));
+		const fk_handler = (h_changes: Record<string, chrome.storage.StorageChange>) => fk_changed(
+			transform_values(h_changes, g_change => ({
+				newValue: new JsonBasedChange(g_change.newValue),
+				oldValue: new JsonBasedChange(g_change.oldValue),
+			})));
 
 		// add listener
 		d_event.addListener(fk_handler);

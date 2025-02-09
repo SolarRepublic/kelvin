@@ -1,4 +1,5 @@
 
+import type {ConnectConfig, KelvinConfig} from './api';
 import type {GenericItemController} from './controller';
 import type {RuntimeItem} from './item-proto';
 import type {AcceptablePartTuples, PartFields, StructuredSchema} from './schema-types';
@@ -7,29 +8,24 @@ import type {SerVaultHub, SerVaultBase, SerVaultHashParams, BucketKey, SerBucket
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import type {NaiveBase64, NaiveBase93, Dict, Promisable} from '@blake.regalia/belt';
-import type {AesGcmDecryptionError, SensitiveBytes} from '@solar-republic/crypto';
+import type {AesGcmDecryptionError} from '@solar-republic/crypto';
 
-import {base64_to_bytes, bytes_to_base64, bytes_to_json, F_NOOP, is_dict_es, entries, text_to_bytes, defer, json_to_bytes, ATU8_NIL, concat2, __UNDEFINED, bytes, is_array, import_key} from '@blake.regalia/belt';
+import {base64_to_bytes, bytes_to_base64, bytes_to_json, F_NOOP, is_dict_es, entries, text_to_bytes, defer, json_to_bytes, ATU8_NIL, concat2, __UNDEFINED, bytes, is_array, import_key, try_sync, is_undefined, subtle_export_key} from '@blake.regalia/belt';
 
 import {aes_gcm_decrypt, aes_gcm_encrypt, random_bytes} from '@solar-republic/crypto';
-import {sha256_sync} from '@solar-republic/crypto/sha256';
 
-
-import {derive_cipher_key, derive_tandem_root_keys, generate_root_signature, verify_root_key, type RootKeyStruct, derive_cipher_nonce, test_encryption_integrity} from './auth';
-import {ATU8_DUMMY_PHRASE, B_VERBOSE, G_DEFAULT_HASHING_PARAMS, NB_CACHE_LIMIT_DEFAULT, NB_HUB_GROWTH, NB_HUB_MINIMUM, NB_RECRYPTION_THRESHOLD, NB_SHA256_SALT, N_SYSTEM_VERSION, XB_CHAR_PAD, XB_NONCE_PREFIX_VERSION, XT_CONFIRMATION_TIMEOUT} from './constants';
+import {derive_cipher_key, derive_tandem_root_keys, generate_root_signature, verify_root_key} from './auth';
+import {B_VERBOSE, G_DEFAULT_HASHING_PARAMS, NB_CACHE_LIMIT_DEFAULT, NB_HUB_GROWTH, NB_HUB_MINIMUM, NB_SHA256_SALT, N_SYSTEM_VERSION, XB_CHAR_PAD, XB_NONCE_PREFIX_VERSION, XT_CONFIRMATION_TIMEOUT} from './constants';
+import {write_nonce_for_entry, create_cipher_nonce, read_nonce_for_entry, rotate_root_key} from './crypto';
+import {ConnectionState} from './enums';
 import {Bug, InvalidPassphraseError, InvalidSessionError, RecoverableVaultError, RefuseDestructiveActionError, StorageError, VaultClosedError, VaultCorruptedError} from './errors';
 import {VaultHub} from './hub';
 import {SI_KEY_STORAGE_BASE, SI_KEY_STORAGE_HUB, SI_KEY_SESSION_ROOT, SI_KEY_SESSION_VECTOR, SI_KEY_SESSION_AUTH} from './ids';
 
+export type VaultConfig<n_version extends number=number> = KelvinConfig & ConnectConfig<n_version>;
 
 type SerSessionRootKey = number[];
 
-enum ConnectionState {
-	NOT_CONNECTED='not-connected',
-	CONNECTING='connecting',
-	NON_EXISTANT='non-existant',
-	CONNECTED='connected',
-}
 
 // the private fields of a Vault instance
 type VaultFields = {
@@ -133,138 +129,12 @@ const awaiter_from = <w_value>(a_awaiters: ((w_value: w_value) => void)[]) => {
 };
 
 
-// test encryption integrity
-async function _test_integrity(
-	dk_root_old: CryptoKey,
-	atu8_vector_old: Uint8Array,
-	atu8_vector_new: Uint8Array,
-	atu8_salt: Uint8Array,
-	dk_aes_new: CryptoKey
-) {
-	// prepare nonces
-	const [atu8_nonce_old, atu8_nonce_new] = await Promise.all([
-		derive_cipher_nonce(atu8_vector_old, sha256_sync(text_to_bytes('dummy')), 96),
-		derive_cipher_nonce(atu8_vector_new, sha256_sync(text_to_bytes('dummy')), 96),
-	]);
-
-	// derive temporary old cipher key capable of encrypting, scoped to this block only
-	const dk_aes_old_tmp = await derive_cipher_key(dk_root_old, atu8_salt, true);
-
-	// run integrity tests
-	await test_encryption_integrity(ATU8_DUMMY_PHRASE, dk_aes_old_tmp, atu8_nonce_old);
-	await test_encryption_integrity(ATU8_DUMMY_PHRASE, dk_aes_new, atu8_nonce_new);
-}
-
-// creates cipher nonce for the given key
-function _create_cipher_nonce(
-	si_key: string,
-	atu8_ent: Uint8Array,
-	atu8_vector: Uint8Array
-): Promise<Uint8Array> {
-	// create salt
-	const atu8_salt = sha256_sync(concat2(text_to_bytes(si_key), atu8_ent));
-
-	// derive nonce for aes
-	return derive_cipher_nonce(atu8_vector, atu8_salt, 96);
-}
-
-// consistent method for producing the nonce to use when decrypting
-async function _read_nonce_for_entry(
-	si_key: string,
-	atu8_value: Uint8Array,
-	atu8_vector: Uint8Array
-): Promise<[
-	atu8_nonce: Uint8Array,
-	atu8_cipher: Uint8Array,
-]> {
-	// extra entropy if needed
-	let atu8_ent = ATU8_NIL;
-
-	// output ciphertext (default to contents)
-	let atu8_cipher = atu8_value;
-
-	// key is plaintext
-	if('#' === si_key[0]) {
-		// check version byte
-		if(atu8_value[0] > XB_NONCE_PREFIX_VERSION) {
-			throw new VaultCorruptedError(`Database was encoded using a newer version of the software (${atu8_ent[0]}) or it is corrupted. Unable to decode`);
-		}
-
-		// get extra entropy from beginning of value
-		atu8_ent = atu8_value.subarray(1, 17);
-
-		// adjust ciphertext
-		atu8_cipher = atu8_value.subarray(17);
-	}
-
-	// derive nonce
-	const atu8_nonce = await _create_cipher_nonce(si_key, atu8_ent, atu8_vector);
-
-	// return nonce and cipher
-	return [atu8_nonce, atu8_cipher];
-}
-
-// consistent method for producing the nonce to use when encrypting
-async function _write_nonce_for_entry(
-	si_key: string,
-	atu8_vector: Uint8Array
-): Promise<[
-	atu8_nonce: Uint8Array,
-	atu8_prefix: Uint8Array | undefined,
-]> {
-	// extra entropy if needed
-	let atu8_ent = ATU8_NIL;
-
-	// prefix value
-	let atu8_prefix: Uint8Array | undefined;
-
-	// key is plaintext
-	if('#' === si_key[0]) {
-		// create extra entropy
-		atu8_ent = random_bytes(16);
-
-		// construct prefix as version byte plus entropy
-		atu8_prefix = concat2(Uint8Array.from([XB_NONCE_PREFIX_VERSION]), atu8_ent);
-	}
-
-	// derive nonce
-	const atu8_nonce = await _create_cipher_nonce(si_key, atu8_ent, atu8_vector);
-
-	// return nonce and value
-	return [atu8_nonce, atu8_prefix];
-}
-
-
-export type VaultConfig = {
-	content: KelvinKeyValueStore;
-	session: KelvinKeyValueStore;
-
-	/**
-	 * Limit how much memory is consumed by the bucket cache by specifying the maximum size in bytes
-	 * which is calculated using the plaintext serialized JSON in UTF-8. Actual memory footprint
-	 * is the deserialized data structs in memory, which will be different than this value, so it's
-	 * important to understand this is only a proxy. Defaults to {@link NB_CACHE_LIMIT_DEFAULT}
-	 */
-	cacheLimit?: number;
-
-	/**
-	 * Specify the maximum amount of time to wait for a confirmation of a write/delete operation
-	 * from the storage backend. Defaults to {@link XT_CONFIRMATION_TIMEOUT}.
-	 */
-	confirmationTimeout?: number;
-};
-
-export type ConnectConfig<n_db_version extends number> = {
-	id: string;
-	version: n_db_version;
-	migrations: MigrationRouter<n_db_version>;
-};
-
 export type UnlockConfig = {
 	passphrase: Uint8Array;
 	recovery?: boolean;
 	info?: ((s_state: string) => void);
 };
+
 
 /**
  * 
@@ -277,7 +147,22 @@ export type UnlockConfig = {
  *   - "@base": stores encryption metadata
  *   - "@params": tunable parameters to password hashing function
  */
-export class Vault {
+export class Vault<n_version extends number=number> {
+	
+// 	/**
+// 	 * Connects to the given database
+// 	 * @param si_database - id of the database
+// 	 * @returns 
+// 	 */
+// 	async connect<
+// 	n_db_version extends number,
+// >(gc_connect: ConnectConfig<n_db_version>): Promise<this> {
+
+	static async create(gc_vault: VaultConfig): Promise<Vault> {
+		// create,initialize, and return new Vault instance
+		return await new Vault(gc_vault)._init();
+	}
+
 	// storage
 	protected _k_content: StoreContent;
 	protected _k_session: StoreSession;
@@ -286,10 +171,10 @@ export class Vault {
 	protected _sc_connection = ConnectionState.NOT_CONNECTED;
 
 	// database name
-	protected _si_name!: string;
+	protected _si_id!: string;
 
 	// database version
-	protected _n_db_version = 0;
+	protected _n_db_version: n_version;
 
 	// migrations
 	protected _h_migrations: MigrationRouter = {};
@@ -329,22 +214,34 @@ export class Vault {
 	protected _nb_cache = 0;
 	protected _nb_cache_limit: number;
 
+	// scopes storage keys
+	protected _f_scoper = (si_prefix: string) => `${si_prefix}.${this._si_id}`;
 
 	constructor(
-		gc_vault: VaultConfig
+		gc_vault: VaultConfig<n_version>
 	) {
 		this._k_content = gc_vault.content as StoreContent;
 		this._k_session = gc_vault.session as StoreSession;
 		this._nb_cache_limit = gc_vault.cacheLimit ?? NB_CACHE_LIMIT_DEFAULT;
 		this._xt_confirmation_timeout = gc_vault.confirmationTimeout ?? XT_CONFIRMATION_TIMEOUT;
+
+		this._si_id = gc_vault.id;
+		this._n_db_version = gc_vault.version;
 	}
 
-	get dbVersion(): number {
-		if(![ConnectionState.CONNECTING, ConnectionState.CONNECTED].includes(this._sc_connection)) {
-			throw new Error(`Cannot access database version in '${this._sc_connection}' state`);
-		}
+	/**
+	 * Fetches the current database info
+	 * @returns 
+	 */
+	get databaseInfo(): {id: string; version: number} {
+		return {
+			id: this._si_id,
+			version: this._n_db_version,
+		};
+	}
 
-		return this._n_db_version;
+	get databaseTag(): `${string}:v${n_version}` {
+		return `${this._si_id}:v${this._n_db_version}`;
 	}
 
 	// access the raw content storage instance
@@ -357,8 +254,58 @@ export class Vault {
 		return this._k_session;
 	}
 
-	protected _fixed_storage_key(si_target: string): string {
-		return si_target+'.'+this._si_name;
+	protected async _init(): Promise<this> {
+		// destructure fields
+		const {
+			_k_content,
+			_k_session,
+			_f_scoper,
+		} = this;
+
+		// set connection state
+		this._sc_connection = ConnectionState.CONNECTING;
+
+		// start monitoring changes to base
+		this._fk_unlisten_base = _k_content.onEntryChanged(_f_scoper(SI_KEY_STORAGE_BASE), async(g_new, g_old) => {
+			// read as json
+			const g_base_new = g_new.asJson<SerVaultBase>();
+
+			// base was deleted
+			if(!g_base_new) {
+				// update existence
+				this._sc_connection = ConnectionState.NON_EXISTANT;
+
+				// throw
+				throw new VaultCorruptedError(`base was deleted. in case this was an accident, the previous value can be restored using the following JSON:\n${JSON.stringify(g_old)}`);
+			}
+
+			// load base
+			this._load_base(g_base_new);
+		});
+
+		// fetch base object
+		const g_base = await _k_content.getJson<SerVaultBase>(_f_scoper(SI_KEY_STORAGE_BASE));
+
+		// database exists
+		if(g_base) {
+			// load the base object
+			this._load_base(g_base);
+
+			// fetch root key
+			const a_root_key = await _k_session.getJson<SerSessionRootKey>(_f_scoper(SI_KEY_SESSION_ROOT));
+
+			// load the root key
+			await this._load_root_key(a_root_key);
+
+			// set connection state
+			this._sc_connection = ConnectionState.CONNECTED;
+		}
+		// not exists
+		else {
+			this._sc_connection = ConnectionState.NON_EXISTANT;
+		}
+
+		return this;
 	}
 
 	protected _next_base_update(): Promise<void> {
@@ -369,42 +316,32 @@ export class Vault {
 	// unmarshall base properties
 	protected _load_base(g_base: SerVaultBase): void {
 		// attempt to decode entropy
-		try {
-			this._atu8_entropy = base64_to_bytes(g_base.entropy);
-		}
-		catch(e_decode) {
-			throw new VaultCorruptedError('unable to decode entropy');
-		}
+		const [atu8_entropy, e_entropy] = try_sync(base64_to_bytes, g_base.entropy);
+		if(!atu8_entropy || e_entropy) throw new VaultCorruptedError('unable to decode entropy');
 
 		// attempt to decode nonce
-		try {
-			this._xg_nonce = BigInt(g_base.nonce);
-		}
-		catch(e_decode) {
-			throw new VaultCorruptedError('unable to decode nonce');
-		}
+		const [xg_nonce, e_nonce] = try_sync(() => BigInt(g_base.nonce));
+		if(is_undefined(xg_nonce) || e_nonce) throw new VaultCorruptedError('unable to decode nonce');
 
 		// attempt to decode signature
-		try {
-			this._atu8_signature = base64_to_bytes(g_base.signature);
-		}
-		catch(e_decode) {
-			throw new VaultCorruptedError('unable to decode signature');
-		}
+		const [atu8_signature, e_signature] = try_sync(base64_to_bytes, g_base.signature);
+		if(!atu8_signature || e_signature) throw new VaultCorruptedError('unable to decode signature');
 
 		// attempt to decode salt
-		try {
-			this._atu8_salt = base64_to_bytes(g_base.salt);
-		}
-		catch(e_decode) {
-			throw new VaultCorruptedError('unable to decode salt');
-		}
+		const [atu8_salt, e_salt] = try_sync(base64_to_bytes, g_base.salt);
+		if(!atu8_salt || e_salt) throw new VaultCorruptedError('unable to decode salt');
 
 		// attempt to read params
-		const h_params = this._g_params = g_base.params;
-		if(h_params && !is_dict_es(h_params)) {
+		const g_params = this._g_params = g_base.params;
+		if(g_params && !is_dict_es(g_params)) {
 			throw new VaultCorruptedError('invalid hash params value');
 		}
+
+		// save fields
+		this._atu8_entropy = atu8_entropy;
+		this._xg_nonce = xg_nonce;
+		this._atu8_signature = atu8_signature;
+		this._atu8_salt = atu8_salt;
 
 		// update success
 		callback_awaiters(this._a_awaiting_base, g_base);
@@ -452,7 +389,7 @@ export class Vault {
 		} = hm_privates.get(this)!;
 
 		// decrypt entry. let if fail if cipher key is wrongl
-		const atu8_hub_plain = await this._decrypt_entry(this._fixed_storage_key(SI_KEY_STORAGE_HUB), atu8_hub_cipher, atu8_vector, dk_cipher);
+		const atu8_hub_plain = await this._decrypt_entry(this._f_scoper(SI_KEY_STORAGE_HUB), atu8_hub_cipher, atu8_vector, dk_cipher);
 
 		// attempt to decode
 		let g_hub: SerVaultHub;
@@ -479,7 +416,7 @@ export class Vault {
 		const g_privates = hm_privates.get(this)!;
 
 		// derive the nonce
-		const [atu8_nonce, atu8_cipher] = await _read_nonce_for_entry(si_key, atu8_value, atu8_vector || g_privates.atu8_vector!);
+		const [atu8_nonce, atu8_cipher] = await read_nonce_for_entry(si_key, atu8_value, atu8_vector || g_privates.atu8_vector!);
 
 		// decrypt the value
 		return await aes_gcm_decrypt(atu8_cipher, dk_cipher || g_privates.dk_cipher!, atu8_nonce);
@@ -496,194 +433,13 @@ export class Vault {
 		const g_privates = hm_privates.get(this)!;
 
 		// derive the nonce
-		const [atu8_nonce, atu8_prefix] = await _write_nonce_for_entry(si_key, atu8_vector || g_privates.atu8_vector!);
+		const [atu8_nonce, atu8_prefix] = await write_nonce_for_entry(si_key, atu8_vector || g_privates.atu8_vector!);
 
 		// encrypt the value
 		const atu8_cipher = await aes_gcm_encrypt(atu8_plain, dk_cipher || g_privates.dk_cipher!, atu8_nonce);
 
 		// concat if prefix exists
 		return atu8_prefix? concat2(atu8_prefix, atu8_cipher): atu8_cipher;
-	}
-
-	/**
-	 * @internal
-	 * @param g_root_old 
-	 * @param g_root_new 
-	 * @param f_info 
-	 */
-	async _rotate_root_key(
-		kw_content: KelvinKeyValueWriter,
-		g_root_old: RootKeyStruct,
-		g_root_new: RootKeyStruct,
-		f_info: ((s_state: string) => void)=F_NOOP
-	): Promise<CryptoKey> {
-		// destructure field(s)
-		const {_atu8_salt} = this;
-
-		// ref reader
-		const k_reader = kw_content.reader;
-
-		// destructure old root key properties
-		const {
-			key: dk_root_old,
-			vector: atu8_vector_old,
-		} = g_root_old;
-
-		// destructure new root key properties
-		const {
-			key: dk_root_new,
-			vector: atu8_vector_new,
-		} = g_root_new;
-
-		// verbose
-		f_info('Rotating root key');
-
-		// prep list of async operations
-		const a_promises: Array<Promise<void>> = [];
-
-		// keep running total of bytes pending to be recrypted
-		let cb_pending = 0;
-
-		// derive aes keys
-		const [
-			dk_aes_old,
-			dk_aes_new,
-		] = await Promise.all([
-			derive_cipher_key(dk_root_old, _atu8_salt, false),
-			derive_cipher_key(dk_root_new, _atu8_salt, true),
-		]);
-
-		// test encryption integrity
-		await _test_integrity(dk_root_old, atu8_vector_old, atu8_vector_new, _atu8_salt, dk_aes_new);
-
-		// get keys of encrypted entries
-		const a_keys = (await k_reader.getAllKeys()).filter(si_key => /^[#_]/.test(si_key));
-
-		// load entries
-		const h_entries = await k_reader.getBytesMany(a_keys);
-
-		// each entry
-		for(const [si_key, atu8_value] of entries(h_entries)) {
-			// prepare old and new nonces
-			const [[atu8_nonce_old, atu8_cipher], [atu8_nonce_new]] = await Promise.all([
-				_read_nonce_for_entry(si_key, atu8_value, atu8_vector_old),
-				_read_nonce_for_entry(si_key, atu8_value, atu8_vector_new),
-			]);
-
-			// add to cumulative byte length
-			cb_pending += atu8_cipher.length;
-
-			// enqueue async operation
-			// eslint-disable-next-line @typescript-eslint/no-loop-func
-			a_promises.push((async() => {
-				// attempt to decrypt the value
-				let atu8_plain: Uint8Array;
-				try {
-					atu8_plain = await aes_gcm_decrypt(atu8_cipher, dk_aes_old, atu8_nonce_old);
-				}
-				// decryption failed; retry with new key (let it throw if it fails)
-				catch(e_decrypt) {
-					atu8_plain = await aes_gcm_decrypt(atu8_cipher, dk_aes_new, atu8_nonce_new);
-
-					// already encrypted; clear bytes from pending then skip
-					cb_pending -= atu8_plain.length;
-					return;
-				}
-
-				// encrypt with new cipher key
-				const atu8_replace = await aes_gcm_encrypt(atu8_plain, dk_aes_new, atu8_nonce_new);
-
-				// save encrypted data back to store
-				await kw_content.setBytes(si_key, atu8_replace);
-
-				// done; clear bytes from pending
-				cb_pending -= atu8_plain.length;
-			})());
-
-			// exceeded threshold
-			if(cb_pending > NB_RECRYPTION_THRESHOLD) {
-				// wait for operations to finish
-				await Promise.all(a_promises);
-
-				// continue
-				a_promises.length = 0;
-			}
-		}
-
-		// wait for all operations to finish
-		await Promise.all(a_promises);
-
-		// return new cipher key
-		return dk_aes_new;
-	}
-
-
-	/**
-	 * Connects to the given database
-	 * @param si_database - id of the database
-	 * @returns 
-	 */
-	async connect<
-		n_db_version extends number,
-	>(gc_connect: ConnectConfig<n_db_version>): Promise<this> {
-		// destructure field(s)
-		const {_k_content} = this;
-
-		// invalid connection state
-		if(![ConnectionState.NOT_CONNECTED, ConnectionState.NON_EXISTANT].includes(this._sc_connection)) {
-			throw new RefuseDestructiveActionError(`vault instance is not accepting connection requests while in state: ${this._sc_connection}`);
-		}
-
-		// set connection state
-		this._sc_connection = ConnectionState.CONNECTING;
-
-		// accept name
-		this._si_name = gc_connect.id;
-
-		// accept version and migrations
-		this._n_db_version = gc_connect.version;
-		this._h_migrations = gc_connect.migrations;
-
-		// start monitoring changes to base
-		this._fk_unlisten_base = _k_content.onEntryChanged(this._fixed_storage_key(SI_KEY_STORAGE_BASE), (g_new, g_old) => {
-			// read as json
-			const g_base_new = g_new.asJson<SerVaultBase>();
-
-			// base was deleted
-			if(!g_base_new) {
-				throw new VaultCorruptedError(`base was deleted. in case this was an accident, the previous value can be restored using the following JSON:\n${JSON.stringify(g_old)}`);
-			}
-
-			// load base
-			this._load_base(g_base_new);
-		});
-
-		// fetch base object
-		const g_base = await _k_content.getJson<SerVaultBase>(this._fixed_storage_key(SI_KEY_STORAGE_BASE));
-
-		// not exists
-		if(!g_base) {
-			// update state
-			this._sc_connection = ConnectionState.NON_EXISTANT;
-
-			// exit
-			return this;
-		}
-
-		// load the base object
-		this._load_base(g_base);
-
-		// fetch root key
-		const a_root_key = await this._k_session.getJson<SerSessionRootKey>(this._fixed_storage_key(SI_KEY_SESSION_ROOT));
-
-		// load the root key
-		await this._load_root_key(a_root_key);
-
-		// set connection state
-		this._sc_connection = ConnectionState.CONNECTED;
-
-		// done
-		return this;
 	}
 
 
@@ -697,7 +453,7 @@ export class Vault {
 			// busy or not yet started
 			case ConnectionState.CONNECTING:
 			case ConnectionState.NOT_CONNECTED: {
-				throw Error('Attempted to call `exists()` on Vault before it finished connecting; Promises must be awaited');
+				throw Error('Attempted to call `exists()` on Vault before it finished connecting somehow');
 			}
 
 			// non-existant
@@ -713,15 +469,27 @@ export class Vault {
 		}
 	}
 
+	/**
+	 * 
+	 * @returns 
+	 */
+	async onceExists(): Promise<void> {
+		// not yet connected; wait for next base update
+		if(ConnectionState.CONNECTED !== this._sc_connection) {
+			await this._next_base_update();
+		}
+	}
 
 	/**
 	 * Check if the vault is already unlocked, i.e., if it is ready to be opened.
-	 * @returns `true` if it is unlocked, `false` otherwise
+	 * @returns `true` if it is connected and unlocked, `false` otherwise
 	 */
 	isUnlocked(): boolean {
 		// not connected
 		if(ConnectionState.CONNECTED !== this._sc_connection) {
-			throw Error(`Cannot access vault which is not connected: ${this._sc_connection}`);
+			// throw Error(`Cannot access vault which is not connected: ${this._sc_connection}`);
+			console.warn(`kelvin: Cannot access vault which is not connected: ${this._sc_connection}`);
+			return false;
 		}
 
 		// get root key from private field
@@ -741,7 +509,6 @@ export class Vault {
 
 	async _unlock_subroutine(
 		kw_content: KelvinKeyValueWriter,
-		kn_root: SensitiveBytes,
 		dk_root: CryptoKey,
 		dk_cipher: CryptoKey,
 		atu8_vector: Uint8Array,
@@ -767,11 +534,17 @@ export class Vault {
 				atu8_auth,
 			});
 
+			// export key
+			if(!dk_root.extractable) throw new RecoverableVaultError(`Root key not extractable`);
+
+			// export new root key
+			const atu8_root_new = bytes(await subtle_export_key('raw', dk_root) as ArrayBuffer);
+
 			// save to session storage
 			await this._k_session.lockAll(kw_session => kw_session.setStringMany({
-				[this._fixed_storage_key(SI_KEY_SESSION_ROOT)]: bytes_to_base64(kn_root.data),
-				[this._fixed_storage_key(SI_KEY_SESSION_VECTOR)]: bytes_to_base64(atu8_vector),
-				[this._fixed_storage_key(SI_KEY_SESSION_AUTH)]: bytes_to_base64(atu8_auth),
+				[this._f_scoper(SI_KEY_SESSION_ROOT)]: bytes_to_base64(atu8_root_new),
+				[this._f_scoper(SI_KEY_SESSION_VECTOR)]: bytes_to_base64(atu8_vector),
+				[this._f_scoper(SI_KEY_SESSION_AUTH)]: bytes_to_base64(atu8_auth),
 			}));
 		}
 
@@ -798,7 +571,7 @@ export class Vault {
 		const dp_update = this._next_base_update();
 
 		// write to storage (this will trigger a change and call _load_base)
-		await kw_content.setJson(this._fixed_storage_key(SI_KEY_STORAGE_BASE), g_base);
+		await kw_content.setJson(this._f_scoper(SI_KEY_STORAGE_BASE), g_base);
 
 		// verbose
 		f_info('Waiting for confirmation');
@@ -815,7 +588,6 @@ export class Vault {
 	 * @returns 
 	 */
 	async unlock(atu8_phrase: Uint8Array, b_recovering=false, f_info: ((s_state: string) => void)=F_NOOP): Promise<void> {
-	// async unlock(gc_unlock: UnlockConfig<n_db_version>): Promise<void> {
 		// already unlocked
 		if(this.isUnlocked()) return;
 
@@ -851,43 +623,34 @@ export class Vault {
 			const {
 				old: g_root_old,
 				new: g_root_new,
-				export: kn_root_new,
 			} = await derive_tandem_root_keys(atu8_phrase, _atu8_entropy, _xg_nonce, _g_params, true);
 
-			// whether success or failure, zero out key material
-			try {
-				// invalid old root key
-				if(!await verify_root_key(g_root_old.key, _atu8_salt, _atu8_signature)) {
-					// new root does not work either; bad passphrase
-					if(!await verify_root_key(g_root_new.key, _atu8_salt, _atu8_signature)) {
-						throw new InvalidPassphraseError();
-					}
-					// program was for closed amid recryption
-					else if(!b_recovering) {
-						throw new RecoverableVaultError();
-					}
+			// invalid old root key
+			if(!await verify_root_key(g_root_old.key, _atu8_salt, _atu8_signature)) {
+				// new root does not work either; bad passphrase
+				if(!await verify_root_key(g_root_new.key, _atu8_salt, _atu8_signature)) {
+					throw new InvalidPassphraseError();
 				}
-
-				// rotate root key
-				const dk_cipher = await this._rotate_root_key(kw_content, g_root_old, g_root_new, f_info);
-
-				// 
-				await this._unlock_subroutine(
-					kw_content,
-					kn_root_new!,
-					g_root_new.key,
-					dk_cipher,
-					g_root_new.vector,
-					_atu8_entropy,
-					g_root_new.nonce,
-					_atu8_salt,
-					f_info
-				);
+				// program was for closed amid recryption
+				else if(!b_recovering) {
+					throw new RecoverableVaultError();
+				}
 			}
-			// before throwing, zero-out key material
-			finally {
-				kn_root_new?.wipe();
-			}
+
+			// rotate root key
+			const dk_cipher = await rotate_root_key(kw_content, g_root_old, g_root_new, _atu8_salt, f_info);
+
+			// 
+			await this._unlock_subroutine(
+				kw_content,
+				g_root_new.key,
+				dk_cipher,
+				g_root_new.vector,
+				_atu8_entropy,
+				g_root_new.nonce,
+				_atu8_salt,
+				f_info
+			);
 
 			// verbose
 			f_info('Done');
@@ -906,7 +669,7 @@ export class Vault {
 	): Promise<void> {
 		// cannot create on database that already exists
 		if(this.exists()) {
-			throw new RefuseDestructiveActionError(`attempted to register new vault "${this._si_name}" where one already exists`);
+			throw new RefuseDestructiveActionError(`attempted to register new vault "${this._si_id}" where one already exists`);
 		}
 
 		// verbose
@@ -932,34 +695,25 @@ export class Vault {
 					vector: atu8_vector,
 					nonce: xg_nonce_new,
 				},
-				export: kn_root,
 			} = await derive_tandem_root_keys(atu8_phrase, atu8_entropy, xg_nonce_init, G_DEFAULT_HASHING_PARAMS, true);
 
 			// create salt
 			const atu8_salt = this._atu8_salt = random_bytes(NB_SHA256_SALT);
 
-			// whether success or failure
-			try {
-				// derive aes cipher key
-				const dk_cipher = await derive_cipher_key(dk_root_new, atu8_salt, true);
+			// derive aes cipher key
+			const dk_cipher = await derive_cipher_key(dk_root_new, atu8_salt, true);
 
-				// 
-				await this._unlock_subroutine(
-					kw_content,
-					kn_root!,
-					dk_root_new,
-					dk_cipher,
-					atu8_vector,
-					atu8_entropy,
-					xg_nonce_new,
-					atu8_salt,
-					f_info
-				);
-			}
-			// zero-out rooy ket material
-			finally {
-				kn_root?.wipe();
-			}
+			// unlock the vault
+			await this._unlock_subroutine(
+				kw_content,
+				dk_root_new,
+				dk_cipher,
+				atu8_vector,
+				atu8_entropy,
+				xg_nonce_new,
+				atu8_salt,
+				f_info
+			);
 
 			// set connection state
 			this._sc_connection = ConnectionState.CONNECTED;
@@ -977,7 +731,12 @@ export class Vault {
 	 */
 	async open(): Promise<VaultHub> {
 		// destructure field(s)
-		const {_k_content, _k_hub, _h_bucket_cache} = this;
+		const {
+			_k_content,
+			_k_hub,
+			_h_bucket_cache,
+			_f_scoper,
+		} = this;
 
 		// vault is already open
 		if(_k_hub) return _k_hub;
@@ -991,7 +750,7 @@ export class Vault {
 		}
 
 		// listen for hub changes
-		this._fk_unlisten_hub = _k_content.onEntryChanged(this._fixed_storage_key(SI_KEY_STORAGE_HUB), async(g_new) => {
+		this._fk_unlisten_hub = _k_content.onEntryChanged(_f_scoper(SI_KEY_STORAGE_HUB), async(g_new) => {
 			// resolve value as bytes
 			const atu8_hub = g_new.asBytes();
 
@@ -1048,7 +807,7 @@ export class Vault {
 		const k_hub = this._k_hub = new VaultHub(this, this._h_controllers);
 
 		// fetch the hub data
-		const atu8_hub = await _k_content.getBytes(this._fixed_storage_key(SI_KEY_STORAGE_HUB));
+		const atu8_hub = await _k_content.getBytes(_f_scoper(SI_KEY_STORAGE_HUB));
 
 		// obtain a write lock
 		await this._k_content.lockAll(async(kw_content) => {
@@ -1127,7 +886,7 @@ export class Vault {
 		atu8_hub_padded.set(atu8_hub_plain, 0);
 
 		// construct hub key
-		const si_key_hub = this._fixed_storage_key(SI_KEY_STORAGE_HUB);
+		const si_key_hub = this._f_scoper(SI_KEY_STORAGE_HUB);
 
 		// encrypt entry
 		const atu8_hub_value = await this._encrypt_entry(si_key_hub, atu8_hub_padded);

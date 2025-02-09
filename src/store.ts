@@ -4,7 +4,7 @@ import type {SimpleLockManager} from './locks';
 
 import type {Promisable, Dict, JsonValue, NaiveBase93} from '@blake.regalia/belt';
 
-import {fodemtv, base93_to_bytes, bytes_to_base93, __UNDEFINED, bytes_to_json} from '@blake.regalia/belt';
+import {base93_to_bytes, bytes_to_base93, __UNDEFINED, bytes_to_json, transform_values} from '@blake.regalia/belt';
 
 import {VaultDamagedError} from './errors';
 
@@ -87,7 +87,7 @@ export abstract class KelvinKeyValueWriter<
 	/**
 	 * @internal
 	 */
-	_destroy() {
+	_destroy(): void {
 		this._b_destroyed = true;
 
 		// destroy instance to prevent out-of-scope writes
@@ -108,7 +108,7 @@ export abstract class KelvinKeyValueWriter<
 	}
 
 	setJsonMany(h_set: Dict<JsonValue>): Promise<void> {
-		return this.setStringMany(fodemtv(h_set, w_value => JSON.stringify(w_value)));
+		return this.setStringMany(transform_values(h_set, w_value => JSON.stringify(w_value)));
 	}
 
 	setBytes(si_key: string, atu8_value: Uint8Array): Promise<void> {
@@ -118,7 +118,7 @@ export abstract class KelvinKeyValueWriter<
 	}
 
 	setBytesMany(h_set: Dict<Uint8Array>): Promise<void> {
-		return this.setStringMany(fodemtv(h_set, atu8_value => bytes_to_base93(atu8_value)));
+		return this.setStringMany(transform_values(h_set, atu8_value => bytes_to_base93(atu8_value)));
 	}
 
 	remove(si_key: string): Promise<void> {
@@ -223,7 +223,7 @@ export abstract class KelvinKeyValueStore<
 			[si_key in keyof h_types]: h_types[si_key] | undefined;
 		},
 	>(a_keys: string[]): Promise<w_out> {
-		return fodemtv(await this.getStringMany(a_keys), (sx_data, si_key) => {
+		return transform_values(await this.getStringMany(a_keys), (sx_data, si_key) => {
 			try {
 				return 'undefined' === typeof sx_data? __UNDEFINED: JSON.parse(sx_data);
 			}
@@ -246,7 +246,7 @@ export abstract class KelvinKeyValueStore<
 			[si_key in keyof h_types]: h_types[si_key];
 		},
 	>(a_keys: string[]): Promise<w_out> {
-		return fodemtv(await this.getStringMany(a_keys), (sb93_data, si_key) => {
+		return transform_values(await this.getStringMany(a_keys), (sb93_data, si_key) => {
 			try {
 				return base93_to_bytes(sb93_data as NaiveBase93);
 			}

@@ -55,7 +55,7 @@ export class FieldArray<
 	static create<
 		w_member=any,
 	>(
-		a_members: JsonArray,
+		a_members: JsonValue[],
 		f_serializer: ItemSerializer,
 		f_deserializer: ItemDeserializer,
 		f_default: ItemDefaulter,
@@ -180,7 +180,7 @@ export class FieldArray<
 	/**
 	 * Basis iterator for all inherited read methods
 	 */
-	* [Symbol.iterator](): Generator<any, void, undefined> {
+	override * [Symbol.iterator](): Generator<any, undefined, undefined> {
 		const _a_path = this.#a_path;
 		const _g_runtime = this.#g_runtime;
 

@@ -755,6 +755,24 @@ export type RuntimeItemFromController<
 	infer g_parts
 >? g_runtime: w_else;
 
+/**
+ * Extracts the runtime item from a controller type
+ */
+export type PartsStructFromController<
+	k_controller,
+	w_else=never,
+> = k_controller extends ItemController<
+	infer g_schema,
+	infer g_item,
+	infer g_proto,
+	infer g_runtime,
+	infer s_domain,
+	infer si_domain,
+	infer a_parts,
+	infer f_schema,
+	infer g_parts
+>? g_parts: w_else;
+
 
 /* Tests */
 {

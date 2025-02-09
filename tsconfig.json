@@ -9,6 +9,7 @@
 		"declarationDir": "dist/nil",
 		"noImplicitReturns": false,
 		"moduleResolution": "Bundler",
+		"module": "Preserve",
 	},
 
 	"include": [

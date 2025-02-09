@@ -1,12 +1,12 @@
 import type {RuntimeItem, SerdefaultsTuple} from './item-proto';
 import type {Datatype} from './schema-types';
 import type {FieldLabel, FieldPath} from './types';
-import type {Dict, JsonArray} from '@blake.regalia/belt';
+import type {Dict, JsonValue} from '@blake.regalia/belt';
 
 export const FieldStruct = {
 	create<h_shape extends Dict<Datatype>>(
 		h_serdefs: Record<FieldLabel, SerdefaultsTuple>,
-		a_members: JsonArray,
+		a_members: JsonValue[],
 		a_path: FieldPath,
 		g_runtime: RuntimeItem
 	): h_shape {

@@ -17,6 +17,11 @@ export const SI_LOCK_SESSION_ALL = 'storage:session:*';
 export const SI_LOCK_CONTENT_ALL = 'storage:content:*';
 
 /**
+ * Controls access to the managing authority over the database connection
+ */
+export const SI_KEY_SESSION_SEMAPHORE = 'semaphore';
+
+/**
  * The `root` key's raw bytes, used to derive all keys for the current session.
  * This allows the application to access the unlocked vault from other contexts.
  */

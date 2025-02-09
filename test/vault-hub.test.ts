@@ -58,7 +58,7 @@ describe('nonexistant', () => {
 	});
 
 	describe('before connecting', async() => {
-		const {k_client} = await client(Stage.INIT);
+		const {k_kelvin: k_client} = await client(Stage.INIT);
 
 		tests({
 			'exists() throws'() {
@@ -74,7 +74,7 @@ describe('nonexistant', () => {
 	});
 
 	describe('after connecting', async() => {
-		const {k_client} = await client(Stage.CONNECT);
+		const {k_kelvin: k_client} = await client(Stage.CONNECT);
 
 		tests({
 			'exists() false'() {
@@ -94,11 +94,11 @@ describe('init', () => {
 	beforeEach(init(Stage.CONNECT));
 
 	tests({
-		async 'register no info'({k_client}) {
+		async 'register no info'({k_kelvin: k_client}) {
 			await expect(k_client.register(phrase())).resolves.toBeUndefined();
 		},
 
-		async 'register with info'({k_client}) {
+		async 'register with info'({k_kelvin: k_client}) {
 			const f_info = vi.fn();
 
 			await expect(k_client.register(phrase(), f_info)).resolves.toBeUndefined();
@@ -111,23 +111,23 @@ describe('open', () => {
 	beforeEach(init(Stage.REGISTER));
 
 	tests({
-		'exists() true'({k_client}) {
+		'exists() true'({k_kelvin: k_client}) {
 			expect(k_client.exists()).to.be.true;
 		},
 
-		'isUnlocked() true'({k_client}) {
+		'isUnlocked() true'({k_kelvin: k_client}) {
 			expect(k_client.isUnlocked()).to.be.true;
 		},
 
-		async 'redundant unlock OK'({k_client}) {
+		async 'redundant unlock OK'({k_kelvin: k_client}) {
 			await expect(k_client.unlock(phrase())).resolves.toBeUndefined();
 		},
 
-		async 'open() resolves'({k_client}) {
+		async 'open() resolves'({k_kelvin: k_client}) {
 			await expect(k_client.open()).resolves.toBeInstanceOf(VaultHub);
 		},
 
-		'hub() throws before open'({k_client}) {
+		'hub() throws before open'({k_kelvin: k_client}) {
 			expect(() => k_client.hub()).to.throw;
 		},
 	});
@@ -137,15 +137,15 @@ describe('after open', () => {
 	beforeEach(init(Stage.OPEN));
 
 	tests({
-		async 'redundant open() OK'({k_client, k_hub}) {
+		async 'redundant open() OK'({k_kelvin: k_client, k_hub}) {
 			await expect(k_client.open()).resolves.toEqual(k_hub);
 		},
 
-		'isUnlocked() after open still true'({k_client}) {
+		'isUnlocked() after open still true'({k_kelvin: k_client}) {
 			expect(k_client.isUnlocked()).to.be.true;
 		},
 
-		'hub() returns after open'({k_client, k_hub}) {
+		'hub() returns after open'({k_kelvin: k_client, k_hub}) {
 			expect(k_client.hub()).to.be.equal(k_hub);
 		},
 	});
@@ -486,7 +486,7 @@ describe('item', () => {
 describe('rotation', () => {
 	tests({
 		async 'rotation interrupt'() {
-			const {k_client, FooBars, g_foobar_1, g_foobar_2, g_foobar_3} = await init_destruct(Stage.PUT_3);
+			const {k_kelvin: k_client, FooBars, g_foobar_1, g_foobar_2, g_foobar_3} = await init_destruct(Stage.PUT_3);
 
 			// TODO: force an interrupt somehow
 			await k_client.withExclusive(async() => {

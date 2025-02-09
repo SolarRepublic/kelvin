@@ -298,7 +298,7 @@ const tagged_serdefaults = <
 				},
 
 				// deserializer
-				(a_items, a_path, g_runtime) => FieldArray.create(a_items as JsonArray, f_ser, f_deser, f_def, a_path, g_runtime),
+				(a_items, a_path, g_runtime) => FieldArray.create(a_items as JsonValue[], f_ser, f_deser, f_def, a_path, g_runtime),
 
 				// default
 				// (a_path, g_runtime) => FieldArray.create([], f_ser, f_deser, f_def, a_path, g_runtime),
@@ -324,7 +324,7 @@ const tagged_serdefaults = <
 				},
 
 				// deserializer
-				(a_items, a_path, g_runtime) => FieldSet.create(a_items as JsonArray, f_ser, f_deser, f_def, a_path, g_runtime),
+				(a_items, a_path, g_runtime) => FieldSet.create(a_items as JsonValue[], f_ser, f_deser, f_def, a_path, g_runtime),
 
 				// default
 				(a_path, g_runtime) => [],
@@ -363,7 +363,7 @@ const tagged_serdefaults = <
 					? f_ser(h_items[si_field], [...a_path, si_field], g_runtime): f_def(a_path, g_runtime))),
 
 				// deserializer
-				(a_items, a_path, g_runtime) => FieldStruct.create(h_serdefs, a_items as JsonArray, a_path, g_runtime),
+				(a_items, a_path, g_runtime) => FieldStruct.create(h_serdefs, a_items as JsonValue[], a_path, g_runtime),
 
 				// default
 				(a_path, g_runtime) => transform_values(h_serdefs, ([,, f_def]) => f_def(a_path, g_runtime)),
