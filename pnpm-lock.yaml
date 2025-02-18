@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@blake.regalia/belt':
-        specifier: ^0.56.2
-        version: 0.56.2(@typescript-eslint/parser@8.23.0(eslint@9.20.0)(typescript@5.7.3))(eslint@9.20.0)(ts-node@10.9.2(@types/node@22.13.1)(typescript@5.7.3))(typescript@5.7.3)
+        specifier: ^0.57.0
+        version: 0.57.0(@typescript-eslint/parser@8.23.0(eslint@9.20.0)(typescript@5.7.3))(eslint@9.20.0)(ts-node@10.9.2(@types/node@22.13.1)(typescript@5.7.3))(typescript@5.7.3)
       '@solar-republic/crypto':
         specifier: ^0.4.0
         version: 0.4.0(@typescript-eslint/parser@8.23.0(eslint@9.20.0)(typescript@5.7.3))(eslint@9.20.0)(ts-node@10.9.2(@types/node@22.13.1)(typescript@5.7.3))(typescript@5.7.3)
@@ -86,8 +86,8 @@ packages:
   '@blake.regalia/belt@0.52.5':
     resolution: {integrity: sha512-qc0JCAfs/uEbW65HhTCsKMO86mdZYoLzORWvGEVIpIEcUTHoBDMu4IxCh/rXmxMhGBKbsnGup4Jj+ozp93uoug==}
 
-  '@blake.regalia/belt@0.56.2':
-    resolution: {integrity: sha512-WMm9kuk4Lch0H3DXZpUZcsOZysdOAlBVigfQ+uIdAYjWairuMG0Hmw83SSldPf5R9m1YsatNVplbVxu/zQI1iQ==}
+  '@blake.regalia/belt@0.57.0':
+    resolution: {integrity: sha512-znilyNV7neT132Ju54+QxDE1XkxTGNiAFvRsCguk7pP2RlySebdLehfOdj9FhNL6zFodqml6JNyfIinLA3LpeQ==}
 
   '@blake.regalia/eslint-config-elite@0.5.22':
     resolution: {integrity: sha512-shIWIbRx0fDCKiW7WE8Rr2C9M9uOSGJ6juNsnkloUd+6K1HZQ+xdRO4T1TWCVNTOZpF5kafVKn8yMaV/hy0xLQ==}
@@ -1782,7 +1782,7 @@ snapshots:
       - ts-node
       - typescript
 
-  '@blake.regalia/belt@0.56.2(@typescript-eslint/parser@8.23.0(eslint@9.20.0)(typescript@5.7.3))(eslint@9.20.0)(ts-node@10.9.2(@types/node@22.13.1)(typescript@5.7.3))(typescript@5.7.3)':
+  '@blake.regalia/belt@0.57.0(@typescript-eslint/parser@8.23.0(eslint@9.20.0)(typescript@5.7.3))(eslint@9.20.0)(ts-node@10.9.2(@types/node@22.13.1)(typescript@5.7.3))(typescript@5.7.3)':
     dependencies:
       '@blake.regalia/eslint-config-elite': 0.5.22(@typescript-eslint/parser@8.23.0(eslint@9.20.0)(typescript@5.7.3))(eslint@9.20.0)(ts-node@10.9.2(@types/node@22.13.1)(typescript@5.7.3))(typescript@5.7.3)
       globals: 15.14.0

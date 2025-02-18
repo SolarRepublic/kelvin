@@ -11,7 +11,7 @@ import type {DomainLabel, ItemCode, ItemIdent, ItemPath, SchemaCode, SerFieldStr
 import type {Vault} from './vault';
 import type {Dict, JsonArray, JsonObject} from '@blake.regalia/belt';
 
-import {F_IDENTITY, __UNDEFINED, escape_regex, is_object, keys} from '@blake.regalia/belt';
+import {F_IDENTITY, __UNDEFINED, die, escape_regex, is_object, keys} from '@blake.regalia/belt';
 
 import {SX_KEY_PART_DELIMITER} from './constants';
 import {AppError} from './errors';
@@ -20,6 +20,7 @@ import {$_CODE, $_CONTROLLER, $_LINKS, $_TUPLE, is_runtime_item, item_prototype}
 import {ItemRef} from './item-ref';
 import {interpret_schema} from './schema-impl';
 import {DomainStorageStrategy} from './types';
+import type { Kelvin } from './kelvin';
 
 
 export interface GenericItemController<
@@ -78,7 +79,7 @@ export class ItemController<
 	// f_schema extends RootSchemaBuilder<a_parts>,
 	g_parts extends PartFields<g_schema>,
 > implements GenericItemController<g_item, g_runtime, g_schema, a_parts, g_parts> {
-	protected _k_vault: Vault;
+	protected _k_kelvin: Kelvin;
 	protected _si_domain!: si_domain;
 	protected _xc_strategy: DomainStorageStrategy;
 	protected _nl_parts: number;
@@ -100,7 +101,7 @@ export class ItemController<
 	_i_schema = -1 as SchemaCode;
 
 	constructor(gc_type: {
-		client: Vault;
+		client: Kelvin;
 		domain: s_domain;
 		strategy?: DomainStorageStrategy;
 		schema: F.NoInfer<f_schema>;
@@ -110,7 +111,7 @@ export class ItemController<
 	}) {
 		// destructure config arg
 		const {
-			client: k_vault,
+			client: k_kelvin,
 			domain: si_domain,
 			strategy: xc_strategy=DomainStorageStrategy.DEFAULT,
 			schema: f_builder,
@@ -118,12 +119,12 @@ export class ItemController<
 		} = gc_type;
 
 		// vault is already open
-		if(k_vault.isOpened()) {
+		if(k_kelvin.vault?.isOpened()) {
 			throw new AppError(`ItemController "${si_domain}" must be created before the vault is opened`);
 		}
 
 		// save to fields
-		this._k_vault = k_vault;
+		this._k_kelvin = k_kelvin;
 
 		// domain label
 		this._si_domain = si_domain as unknown as si_domain;
@@ -150,7 +151,7 @@ export class ItemController<
 		this._g_loader = Object.create({}, item_prototype(a_schema, k_generic, true));
 
 		// register controller with client
-		this._k_vault.registerController(this._si_domain, k_generic);
+		this._k_kelvin.registerController(this._si_domain, k_generic);
 
 		// cache part length
 		this._nl_parts = keys(a_schema[1]).length;
@@ -186,7 +187,7 @@ export class ItemController<
 	// access hub; memoized
 	protected get _k_hub(): VaultHub {
 		return Object.defineProperty(this, '_k_hub', {
-			value: this._k_vault.hub(),
+			value: this._k_kelvin.vault?.hub() ?? die('Cannot access Vault hub before it exists'),
 		})._k_hub;
 	}
 

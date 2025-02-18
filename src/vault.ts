@@ -8,11 +8,11 @@ import type {SerVaultHub, SerVaultBase, SerVaultHashParams, BucketKey, SerBucket
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import type {NaiveBase64, NaiveBase93, Dict, Promisable} from '@blake.regalia/belt';
-import type {AesGcmDecryptionError} from '@solar-republic/crypto';
+import type {AesGcmDecryptionError, RuntimeKeyHandle} from '@solar-republic/crypto';
 
 import {base64_to_bytes, bytes_to_base64, bytes_to_json, F_NOOP, is_dict_es, entries, text_to_bytes, defer, json_to_bytes, ATU8_NIL, concat2, __UNDEFINED, bytes, is_array, import_key, try_sync, is_undefined, subtle_export_key} from '@blake.regalia/belt';
 
-import {aes_gcm_decrypt, aes_gcm_encrypt, random_bytes} from '@solar-republic/crypto';
+import {aes_gcm_decrypt, aes_gcm_encrypt, random_bytes, runtime_key_access, runtime_key_destroy} from '@solar-republic/crypto';
 
 import {derive_cipher_key, derive_tandem_root_keys, generate_root_signature, verify_root_key} from './auth';
 import {B_VERBOSE, G_DEFAULT_HASHING_PARAMS, NB_CACHE_LIMIT_DEFAULT, NB_HUB_GROWTH, NB_HUB_MINIMUM, NB_SHA256_SALT, N_SYSTEM_VERSION, XB_CHAR_PAD, XB_NONCE_PREFIX_VERSION, XT_CONFIRMATION_TIMEOUT} from './constants';
@@ -21,6 +21,7 @@ import {ConnectionState} from './enums';
 import {Bug, InvalidPassphraseError, InvalidSessionError, RecoverableVaultError, RefuseDestructiveActionError, StorageError, VaultClosedError, VaultCorruptedError} from './errors';
 import {VaultHub} from './hub';
 import {SI_KEY_STORAGE_BASE, SI_KEY_STORAGE_HUB, SI_KEY_SESSION_ROOT, SI_KEY_SESSION_VECTOR, SI_KEY_SESSION_AUTH} from './ids';
+import type { Kelvin } from './kelvin';
 
 export type VaultConfig<n_version extends number=number> = KelvinConfig & ConnectConfig<n_version>;
 
@@ -158,10 +159,12 @@ export class Vault<n_version extends number=number> {
 // 	n_db_version extends number,
 // >(gc_connect: ConnectConfig<n_db_version>): Promise<this> {
 
-	static async create(gc_vault: VaultConfig): Promise<Vault> {
+	static async create(k_kelvin: Kelvin, gc_vault: VaultConfig): Promise<Vault> {
 		// create,initialize, and return new Vault instance
-		return await new Vault(gc_vault)._init();
+		return await new Vault(k_kelvin, gc_vault)._init();
 	}
+
+	protected _k_kelvin: Kelvin;
 
 	// storage
 	protected _k_content: StoreContent;
@@ -206,9 +209,6 @@ export class Vault<n_version extends number=number> {
 	// dirty indicator
 	protected _b_dirty = false;
 
-	// controllers
-	protected _h_controllers: Record<DomainLabel, GenericItemController> = {};
-
 	// cache
 	protected _h_bucket_cache: Dict<[SerBucket, number]> = {};
 	protected _nb_cache = 0;
@@ -218,8 +218,10 @@ export class Vault<n_version extends number=number> {
 	protected _f_scoper = (si_prefix: string) => `${si_prefix}.${this._si_id}`;
 
 	constructor(
+		k_kelvin: Kelvin,
 		gc_vault: VaultConfig<n_version>
 	) {
+		this._k_kelvin = k_kelvin;
 		this._k_content = gc_vault.content as StoreContent;
 		this._k_session = gc_vault.session as StoreSession;
 		this._nb_cache_limit = gc_vault.cacheLimit ?? NB_CACHE_LIMIT_DEFAULT;
@@ -227,6 +229,10 @@ export class Vault<n_version extends number=number> {
 
 		this._si_id = gc_vault.id;
 		this._n_db_version = gc_vault.version;
+	}
+
+	get kelvin(): Kelvin {
+		return this._k_kelvin;
 	}
 
 	/**
@@ -509,6 +515,7 @@ export class Vault<n_version extends number=number> {
 
 	async _unlock_subroutine(
 		kw_content: KelvinKeyValueWriter,
+		gk_root_new: RuntimeKeyHandle,
 		dk_root: CryptoKey,
 		dk_cipher: CryptoKey,
 		atu8_vector: Uint8Array,
@@ -534,15 +541,12 @@ export class Vault<n_version extends number=number> {
 				atu8_auth,
 			});
 
-			// export key
-			if(!dk_root.extractable) throw new RecoverableVaultError(`Root key not extractable`);
-
 			// export new root key
-			const atu8_root_new = bytes(await subtle_export_key('raw', dk_root) as ArrayBuffer);
+			const sb64_root_new = await runtime_key_access(gk_root_new, atu8 => bytes_to_base64(atu8));
 
 			// save to session storage
 			await this._k_session.lockAll(kw_session => kw_session.setStringMany({
-				[this._f_scoper(SI_KEY_SESSION_ROOT)]: bytes_to_base64(atu8_root_new),
+				[this._f_scoper(SI_KEY_SESSION_ROOT)]: sb64_root_new,
 				[this._f_scoper(SI_KEY_SESSION_VECTOR)]: bytes_to_base64(atu8_vector),
 				[this._f_scoper(SI_KEY_SESSION_AUTH)]: bytes_to_base64(atu8_auth),
 			}));
@@ -623,6 +627,7 @@ export class Vault<n_version extends number=number> {
 			const {
 				old: g_root_old,
 				new: g_root_new,
+				export: gk_root_new,
 			} = await derive_tandem_root_keys(atu8_phrase, _atu8_entropy, _xg_nonce, _g_params, true);
 
 			// invalid old root key
@@ -637,20 +642,28 @@ export class Vault<n_version extends number=number> {
 				}
 			}
 
-			// rotate root key
-			const dk_cipher = await rotate_root_key(kw_content, g_root_old, g_root_new, _atu8_salt, f_info);
+			// whether success or failure
+			try {
+				// rotate root key
+				const dk_cipher = await rotate_root_key(kw_content, g_root_old, g_root_new, _atu8_salt, f_info);
 
-			// 
-			await this._unlock_subroutine(
-				kw_content,
-				g_root_new.key,
-				dk_cipher,
-				g_root_new.vector,
-				_atu8_entropy,
-				g_root_new.nonce,
-				_atu8_salt,
-				f_info
-			);
+				// 
+				await this._unlock_subroutine(
+					kw_content,
+					gk_root_new,
+					g_root_new.key,
+					dk_cipher,
+					g_root_new.vector,
+					_atu8_entropy,
+					g_root_new.nonce,
+					_atu8_salt,
+					f_info
+				);
+			}
+			// zeroize root key material
+			finally {
+				runtime_key_destroy(gk_root_new);
+			}
 
 			// verbose
 			f_info('Done');
@@ -695,6 +708,7 @@ export class Vault<n_version extends number=number> {
 					vector: atu8_vector,
 					nonce: xg_nonce_new,
 				},
+				export: gk_root_new,
 			} = await derive_tandem_root_keys(atu8_phrase, atu8_entropy, xg_nonce_init, G_DEFAULT_HASHING_PARAMS, true);
 
 			// create salt
@@ -706,6 +720,7 @@ export class Vault<n_version extends number=number> {
 			// unlock the vault
 			await this._unlock_subroutine(
 				kw_content,
+				gk_root_new,
 				dk_root_new,
 				dk_cipher,
 				atu8_vector,
@@ -804,7 +819,7 @@ export class Vault<n_version extends number=number> {
 		// TODO: obtain a read lock?
 
 		// create hub
-		const k_hub = this._k_hub = new VaultHub(this, this._h_controllers);
+		const k_hub = this._k_hub = new VaultHub(this, this._k_kelvin.controllers);
 
 		// fetch the hub data
 		const atu8_hub = await _k_content.getBytes(_f_scoper(SI_KEY_STORAGE_HUB));
@@ -1099,38 +1114,6 @@ export class Vault<n_version extends number=number> {
 	 */
 	async withExclusive(f_use: (k_writer: KelvinKeyValueWriter, y_lock: Lock | null) => Promisable<any>): Promise<ReturnType<typeof f_use>> {
 		return await this._k_content.lockAll(f_use);
-	}
-
-	/**
-	 * @internal
-	 * Registers an item controller instance for its domain
-	 */
-	registerController(si_domain: DomainLabel, k_controller: GenericItemController): void {
-		// destructure
-		const {_h_controllers} = this;
-
-		// already registered
-		if(_h_controllers[si_domain]) {
-			throw Error(`An item controller for the "${si_domain}" domain has already been registered`);
-		}
-
-		// accept
-		_h_controllers[si_domain] = k_controller;
-	}
-
-
-	/**
-	 * @internal
-	 * Retrieves the registered (weakly typed) item controller for a given domain
-	 */
-	controllerFor<
-		g_item extends Dict<any>=Dict<any>,
-		g_runtime extends RuntimeItem<g_item>=RuntimeItem<g_item>,
-		g_schema extends StructuredSchema=StructuredSchema,
-		a_parts extends AcceptablePartTuples=AcceptablePartTuples,
-		g_parts extends PartFields<g_schema>=PartFields<g_schema>,
-	>(si_domain: DomainLabel): GenericItemController<g_item, g_runtime, g_schema, a_parts, g_parts> | undefined {
-		return this._h_controllers[si_domain] as unknown as GenericItemController<g_item, g_runtime, g_schema, a_parts, g_parts>;
 	}
 
 

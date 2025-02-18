@@ -1,4 +1,5 @@
-export {Vault} from './vault';
+export {Kelvin} from './kelvin';
+export type {Vault} from './vault';
 
 export {
 	derive_root_bits_argon2id,

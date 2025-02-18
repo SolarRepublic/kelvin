@@ -274,7 +274,7 @@ const tagged_serdefaults = <
 			(k_ref: RuntimeItem | ItemRef, a_path, g_runtime) => serialize_ref(k_ref, a_path, w_info as DomainLabel, g_runtime),
 
 			// ref deserializer
-			(i_code, a_path, g_runtime) => i_code? new ItemRef(w_info? k_item.hub.vault.controllerFor(w_info as DomainLabel)!: g_runtime[$_CONTROLLER], i_code as ItemCode): null,
+			(i_code, a_path, g_runtime) => i_code? new ItemRef(w_info? k_item.hub.vault.kelvin.controllerFor(w_info as DomainLabel)!: g_runtime[$_CONTROLLER], i_code as ItemCode): null,
 
 			// ref default
 			F_DEFAULT_ZERO,
@@ -419,7 +419,7 @@ const tagged_serdefaults = <
 				// deserializer
 				(h_items, a_path, g_runtime) => {
 					// lookup controller for target domain
-					const k_controller = g_runtime[$_CONTROLLER].hub.vault.controllerFor(w_info as DomainLabel);
+					const k_controller = g_runtime[$_CONTROLLER].hub.vault.kelvin.controllerFor(w_info as DomainLabel);
 					if(!k_controller) {
 						throw Error(`Failed to find item controller while attempting to deserialize MapRef for domain "${w_info as string}"`);
 					}
@@ -644,7 +644,7 @@ const H_DESCRIPTORS_TAGGED_PARTS: {
 			const i_code = this[$_TUPLE][i_field] as ItemCode;
 
 			// lookup controller
-			const k_controller = this[$_CONTROLLER].hub.vault.controllerFor(si_domain);
+			const k_controller = this[$_CONTROLLER].hub.vault.kelvin.controllerFor(si_domain);
 
 			// controller not found
 			if(!k_controller) {

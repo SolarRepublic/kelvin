@@ -84,7 +84,7 @@ export class ItemRef<
 	 */
 	async item(): Promise<g_runtime | undefined> {
 		// lookup the controller class for the referenced item's domain
-		const k_dst = this._k_src.hub.vault.controllerFor<g_dst, g_runtime>(this.domain);
+		const k_dst = this._k_src.hub.vault.kelvin.controllerFor<g_dst, g_runtime>(this.domain);
 
 		// controller wasn't found/registered
 		if(!k_dst) {

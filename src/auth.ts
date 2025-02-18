@@ -1,8 +1,8 @@
 import type {SerVaultHashParams} from './types';
 
-import {base93_to_bytes, bytes, bytes_to_base93, import_key, subtle_export_key, zero_out, zeroize} from '@blake.regalia/belt';
+import {base93_to_bytes, bytes, bytes_to_base93, import_key, subtle_derive_bits, subtle_derive_key, subtle_export_key, subtle_sign, subtle_verify, zero_out, zeroize} from '@blake.regalia/belt';
 
-import {ATU8_SHA256_STARSHELL, aes_gcm_decrypt, aes_gcm_encrypt} from '@solar-republic/crypto';
+import {ATU8_SHA256_STARSHELL, aes_gcm_decrypt, aes_gcm_encrypt, runtime_key_create, type RuntimeKeyHandle} from '@solar-republic/crypto';
 import {argon2id_hash} from '@solar-republic/crypto/argon2';
 
 
@@ -20,8 +20,8 @@ export interface RootKeyStruct {
 export interface RootKeysData {
 	old: RootKeyStruct;
 	new: RootKeyStruct;
+	export: RuntimeKeyHandle;
 }
-
 
 /**
  * Derive a cipher key from a root key
@@ -30,15 +30,14 @@ export interface RootKeysData {
  * @param b_encrypt - if `true`, enables the key to be used for encryption
  * @returns the derived cipher key able to decrypt (and possibly encrypt depending on arg)
  */
-export const derive_cipher_key = (
+export const derive_cipher_key = async(
 	dk_root: CryptoKey,
 	atu8_salt: Uint8Array,
 	b_encrypt=false
-): Promise<CryptoKey> => crypto.subtle.deriveKey({
+): Promise<CryptoKey> => subtle_derive_key({
 	...GC_HKDF_COMMON,
 	salt: atu8_salt,
 }, dk_root, GC_DERIVE_ROOT_CIPHER, true, b_encrypt? ['encrypt', 'decrypt']: ['decrypt']);
-
 
 /**
  * Derive a signing key from a root key
@@ -47,11 +46,11 @@ export const derive_cipher_key = (
  * @param b_signer - if `true`, enables the key to be used for signing
  * @returns the derived signing key able to either sign or verify (depending on arg)
  */
-export const derive_signing_key = (
+export const derive_signing_key = async(
 	dk_root: CryptoKey,
 	atu8_salt: Uint8Array,
 	b_signer: boolean
-): Promise<CryptoKey> => crypto.subtle.deriveKey({
+): Promise<CryptoKey> => subtle_derive_key({
 	...GC_HKDF_COMMON,
 	salt: atu8_salt,
 }, dk_root, GC_DERIVE_ROOT_SIGNING, false, b_signer? ['sign']: ['verify']);
@@ -71,7 +70,7 @@ export const generate_root_signature = async(
 	const dk_sign = await derive_signing_key(dk_root, atu8_salt, true);
 
 	// return signature
-	return new Uint8Array(await crypto.subtle.sign('HMAC', dk_sign, ATU8_SHA256_STARSHELL));
+	return new Uint8Array(await subtle_sign('HMAC', dk_sign, ATU8_SHA256_STARSHELL));
 };
 
 
@@ -87,7 +86,7 @@ export const verify_root_key = async(
 	const dk_verify = await derive_signing_key(dk_root, atu8_salt, false);
 
 	// return verification test result
-	return await crypto.subtle.verify('HMAC', dk_verify, atu8_test, ATU8_SHA256_STARSHELL);
+	return await subtle_verify('HMAC', dk_verify, atu8_test, ATU8_SHA256_STARSHELL);
 };
 
 
@@ -102,16 +101,15 @@ export async function derive_root_bits_argon2id(
 	atu8_phrase: Uint8Array,
 	atu8_nonce: Uint8Array,
 	g_params: SerVaultHashParams,
-	b_exportable=false,
-): Promise<CryptoKey> {
-	return import_key(await argon2id_hash({
+): Promise<Uint8Array> {
+	return await argon2id_hash({
 		phrase: atu8_phrase,
 		salt: atu8_nonce,
 		iterations: g_params.iterations,
 		memory: g_params.memory,
 		parallelism: g_params.parallelism,
 		hashLen: 32,  // 256 bits
-	}), {name:'HKDF'}, ['deriveBits'], b_exportable);
+	});
 }
 
 
@@ -208,15 +206,30 @@ export async function derive_tandem_root_keys(
 
 	// derive the two root byte sequences for this session
 	const [
+		atu8_root_old,
+		atu8_root_new,
+	] = await Promise.all([
+		derive_root_bits_argon2id(atu8_phrase, atu8_vector_old, g_params_old),
+		derive_root_bits_argon2id(atu8_phrase, atu8_vector_new, g_params_new),
+	]);
+
+	// zeroize passphrase data
+	zeroize(atu8_phrase);
+
+	// import keys
+	const [
 		dk_root_old,
 		dk_root_new,
 	] = await Promise.all([
-		derive_root_bits_argon2id(atu8_phrase, atu8_vector_old, g_params_old),
-		derive_root_bits_argon2id(atu8_phrase, atu8_vector_new, g_params_new, b_export_new),
+		import_key(atu8_root_old, {name:'HKDF'}, ['deriveKey']),
+		import_key(atu8_root_new, {name:'HKDF'}, ['deriveKey']),
 	]);
 
-	// zero out passphrase data
-	zeroize(atu8_phrase);
+	// zeroize old root key
+	zeroize(atu8_root_old);
+
+	// create new runtime key (automatically zeroizes bytes)
+	const gk_root_new = await runtime_key_create(atu8_root_new, 256);
 
 	return {
 		old: {
@@ -231,6 +244,7 @@ export async function derive_tandem_root_keys(
 			nonce: xg_nonce_new,
 			params: g_params_new,
 		},
+		export: gk_root_new,
 	};
 }
 
@@ -250,7 +264,7 @@ export async function derive_cipher_nonce(
 	const dk_derive = await import_key(atu8_vector, 'HKDF', ['deriveBits']);
 
 	// derive nonce bytes
-	return new Uint8Array(await crypto.subtle.deriveBits({
+	return new Uint8Array(await subtle_derive_bits({
 		name: 'HKDF',
 		hash: 'SHA-256',
 		salt: atu8_salt,
